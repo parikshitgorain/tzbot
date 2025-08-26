@@ -1,0 +1,11 @@
+modules = ["python-3.12"]
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "python bot_clean.py"]
+
+[[ports]]
+localPort = 8080
+externalPort = 80
