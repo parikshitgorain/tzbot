@@ -6,7 +6,11 @@ from bot import bot
 async def run_with_timeout():
     try:
         # Start the bot
-        await bot.start('MTQwODg5NzI2NzUxOTE5MzI4Mg.GWukYU.u7EOQvyxmE3yhjbpOHDeODREHqEFm9drKtU3t4')
+        token = os.getenv('BOT_TOKEN')
+        if not token:
+            print("Error: BOT_TOKEN environment variable not set!")
+            return
+        await bot.start(token)
     except Exception as e:
         print(f"Bot error: {e}")
 
