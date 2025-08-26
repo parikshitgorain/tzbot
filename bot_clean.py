@@ -198,4 +198,9 @@ async def on_message(message):
 
 # Run bot
 if __name__ == "__main__":
-    bot.run('MTQwODg5NzI2NzUxOTE5MzI4Mg.GWukYU.u7EOQvyxmE3yhjbpOHDeODREHqEFm9drKtU3t4')
+    import os
+    token = os.getenv('BOT_TOKEN')
+    if not token:
+        print("Error: BOT_TOKEN environment variable not set!")
+        exit(1)
+    bot.run(token)

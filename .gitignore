@@ -24,3 +24,4 @@ coverage.xml
 # Bot token (if you store it in a file)
 token.txt
 config.json
+.env
