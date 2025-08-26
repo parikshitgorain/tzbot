@@ -3,6 +3,7 @@ from discord.ext import commands
 import json
 import os
 import asyncio
+from keep_alive import keep_alive
 
 # Bot setup
 intents = discord.Intents.default()
@@ -198,6 +199,7 @@ async def on_message(message):
 
 # Run bot
 if __name__ == "__main__":
+    keep_alive()  # Start web server to keep Replit awake
     import os
     token = os.getenv('BOT_TOKEN')
     if not token:
