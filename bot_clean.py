@@ -13,6 +13,7 @@ bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 # Data files
 RESTRICTED_CHANNELS_FILE = 'restricted_channels.json'
 CUSTOM_COMMANDS_FILE = 'custom_commands.json'
+WHITELIST_FILE = 'whitelist.json'
 
 def load_data(filename):
     if os.path.exists(filename):
@@ -27,6 +28,7 @@ def save_data(filename, data):
 # Load data
 restricted_channels = load_data(RESTRICTED_CHANNELS_FILE)
 custom_commands = load_data(CUSTOM_COMMANDS_FILE)
+whitelist_users = load_data(WHITELIST_FILE)
 
 @bot.event
 async def on_ready():
@@ -120,6 +122,41 @@ async def clear_allowed_list(ctx):
 
 @bot.command()
 @commands.has_permissions(administrator=True)
+async def whitelist_user(ctx, user_id):
+    """Add user to whitelist - their messages will never be deleted"""
+    whitelist_users[user_id] = True
+    save_data(WHITELIST_FILE, whitelist_users)
+    await ctx.send(f"User {user_id} added to whitelist.")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def remove_whitelist(ctx, user_id):
+    """Remove user from whitelist"""
+    if user_id in whitelist_users:
+        del whitelist_users[user_id]
+        save_data(WHITELIST_FILE, whitelist_users)
+        await ctx.send(f"User {user_id} removed from whitelist.")
+    else:
+        await ctx.send(f"User {user_id} is not in whitelist.")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def list_whitelist(ctx):
+    """List all whitelisted users"""
+    if whitelist_users:
+        users = ', '.join(whitelist_users.keys())
+        await ctx.send(f"Whitelisted users: {users}")
+    else:
+        await ctx.send("No users in whitelist.")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def get_user_id(ctx, *, user: discord.Member):
+    """Get user ID by mentioning them"""
+    await ctx.send(f"User ID for {user.name}: {user.id}")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
 async def add_command(ctx, command_name, *, response):
     """Add a custom command"""
     custom_commands[command_name] = response
@@ -171,6 +208,11 @@ async def on_message(message):
     
     # Check restrictions for non-bot-command messages
     channel_id = str(message.channel.id)
+    user_id = str(message.author.id)
+    
+    # Skip restrictions if user is whitelisted
+    if user_id in whitelist_users:
+        return
     
     # Only delete if channel is restricted
     if channel_id in restricted_channels:
