@@ -25,7 +25,9 @@ async function runMigrations() {
     const migrations = [
       '001_initial_schema.sql',
       '002_offense_tracking.sql',
-      '003_giveaway_enhancements.sql'
+      '003_giveaway_enhancements.sql',
+      '004_giveaway_winner_confirmation.sql',
+      '005_add_guild_id_to_giveaways.sql'
     ];
 
     for (const migrationFile of migrations) {
@@ -55,6 +57,8 @@ async function runMigrations() {
     console.log('  - schema_migrations');
     console.log('  - offense_records');
     console.log('  - offense_entries');
+    console.log('  - giveaway_winners');
+    console.log('  - giveaway_config');
     
   } catch (error) {
     console.error('❌ Migration failed:', error);

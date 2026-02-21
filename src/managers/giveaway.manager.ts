@@ -17,6 +17,8 @@ import type { GiveawayRepository } from '@/core/database/repositories/GiveawayRe
 import type { Giveaway } from '@/types/models.js';
 import { GiveawayStatus } from '@/types/models.js';
 import { logger, logError } from '@/core/logger/logger.js';
+import { ConfirmationSystem } from '@/giveaway/confirmation-system.js';
+import { ConfigManager } from '@/giveaway/config-manager.js';
 
 /**
  * Options for creating a giveaway
@@ -46,11 +48,37 @@ export interface EntryValidationResult {
  */
 export class GiveawayManager {
   private activeGiveaways: Map<string, NodeJS.Timeout> = new Map();
+  private confirmationSystem: ConfirmationSystem | null = null;
+  private configManager: ConfigManager | null = null;
 
   constructor(
     private discordClient: IDiscordClient,
     private giveawayRepository: GiveawayRepository
   ) {}
+
+  /**
+   * Set the confirmation system (called during initialization)
+   */
+  setConfirmationSystem(confirmationSystem: ConfirmationSystem): void {
+    this.confirmationSystem = confirmationSystem;
+  }
+
+  /**
+   * Set the config manager (called during initialization)
+   */
+  setConfigManager(configManager: ConfigManager): void {
+    this.configManager = configManager;
+  }
+
+  /**
+   * Get the config manager
+   */
+  getConfigManager(): ConfigManager {
+    if (!this.configManager) {
+      throw new Error('ConfigManager not initialized');
+    }
+    return this.configManager;
+  }
 
   /**
    * Create a new giveaway with interactive button
@@ -93,6 +121,7 @@ export class GiveawayManager {
       // Create giveaway object
       const giveaway: Giveaway = {
         id: giveawayId,
+        guildId: options.guildId,
         title: options.title,
         description: options.description,
         channelId: options.channelId,
@@ -430,13 +459,46 @@ export class GiveawayManager {
     guildId: string
   ): Promise<void> {
     try {
+      // If confirmation system is available, use it
+      if (this.confirmationSystem) {
+        // Fetch User objects for winners
+        const winnerUsers = [];
+        for (const winnerId of winners) {
+          try {
+            const member = await this.discordClient.getMember(guildId, winnerId);
+            if (member) {
+              winnerUsers.push(member.user);
+            }
+          } catch (error) {
+            logger.warn('Failed to fetch winner user', { winnerId, error });
+          }
+        }
+
+        // Start confirmation process
+        await this.confirmationSystem.startConfirmation(giveaway.id, winnerUsers);
+
+        // Store winners in database
+        await this.giveawayRepository.updateWinners(giveaway.id, winners);
+
+        // Update original giveaway message
+        await this.updateGiveawayMessageEnded(giveaway, winners);
+
+        logger.info('Giveaway ended with confirmation system', {
+          giveawayId: giveaway.id,
+          winnerCount: winners.length,
+        });
+
+        return;
+      }
+
+      // Fallback to original announcement (if confirmation system not available)
       const winnerMentions = winners.map((id) => `<@${id}>`).join(', ');
 
       // Build announcement description with reroll command
       let description = `Congratulations to the winners!\n\n**Winners:** ${winnerMentions}`;
       
       if (winners.length > 0) {
-        description += `\n\n**Moderators:** To reroll a winner, use:\n\`\`\`\n/giveaway reroll giveaway_id:${giveaway.id} winner:@user\n\`\`\``;
+        description += `\n\n**Moderators:** To reroll a winner, use:\n\`\`\`\n/giveaway reroll giveaway_id:${giveaway.id} winner: @user\n\`\`\``;
       }
 
       const embed = new EmbedBuilder()
@@ -553,11 +615,8 @@ export class GiveawayManager {
     entryCount: number
   ): Promise<void> {
     try {
-      const channel = await this.discordClient.sendMessage(giveaway.channelId, {
-        content: '',
-      });
-
-      const message = await channel.channel.messages.fetch(giveaway.messageId);
+      // Fetch the message
+      const message = await this.discordClient.getMessage(giveaway.channelId, giveaway.messageId);
 
       if (message.embeds.length > 0) {
         const embed = EmbedBuilder.from(message.embeds[0]);
@@ -589,11 +648,8 @@ export class GiveawayManager {
     winners: string[]
   ): Promise<void> {
     try {
-      const channel = await this.discordClient.sendMessage(giveaway.channelId, {
-        content: '',
-      });
-
-      const message = await channel.channel.messages.fetch(giveaway.messageId);
+      // Fetch the message
+      const message = await this.discordClient.getMessage(giveaway.channelId, giveaway.messageId);
 
       const embed = new EmbedBuilder()
         .setTitle(`🎉 ${giveaway.title} - Ended`)
@@ -705,6 +761,13 @@ export class GiveawayManager {
    */
   async rerollWinner(giveawayId: string, oldWinnerId: string, guildId: string): Promise<void> {
     try {
+      // If confirmation system is available, use it
+      if (this.confirmationSystem) {
+        await this.confirmationSystem.manualReroll(giveawayId, oldWinnerId, guildId);
+        return;
+      }
+
+      // Fallback to original reroll logic
       // Get giveaway from database
       const giveaway = await this.giveawayRepository.get(giveawayId);
 
@@ -726,8 +789,18 @@ export class GiveawayManager {
         .map(e => e.userId)
         .filter(userId => !giveaway.winners?.includes(userId));
 
+      logger.debug('Reroll winner - entry analysis', {
+        giveawayId,
+        totalEntries: allEntries.length,
+        currentWinners: giveaway.winners?.length || 0,
+        availableForReroll: availableEntries.length,
+        oldWinnerId,
+      });
+
       if (availableEntries.length === 0) {
-        throw new Error('No remaining entries available for reroll');
+        throw new Error(
+          `No remaining entries available for reroll. Total entries: ${allEntries.length}, Current winners: ${giveaway.winners?.length || 0}. All participants have already won.`
+        );
       }
 
       // Select new winner using CSPRNG
@@ -800,11 +873,8 @@ export class GiveawayManager {
    */
   private async updateGiveawayMessageCancelled(giveaway: Giveaway): Promise<void> {
     try {
-      const channel = await this.discordClient.sendMessage(giveaway.channelId, {
-        content: '',
-      });
-
-      const message = await channel.channel.messages.fetch(giveaway.messageId);
+      // Fetch the message
+      const message = await this.discordClient.getMessage(giveaway.channelId, giveaway.messageId);
 
       const embed = new EmbedBuilder()
         .setTitle(`${giveaway.title} - Cancelled`)

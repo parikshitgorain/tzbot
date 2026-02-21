@@ -49,6 +49,7 @@ export interface OffenseEntry {
 
 export interface Giveaway {
   id: string;
+  guildId: string; // Discord guild/server ID
   title: string;
   description: string;
   channelId: string;
@@ -117,4 +118,41 @@ export enum EventType {
   NEW_VIP = 'new_vip',
   RAID = 'raid',
   HOST = 'host',
+}
+
+/**
+ * Winner status for giveaway winner confirmation system
+ */
+export enum WinnerStatus {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  REROLLED = 'REROLLED',
+}
+
+/**
+ * Winner record for giveaway winner confirmation system
+ */
+export interface WinnerRecord {
+  id: string;
+  giveawayId: string;
+  userId: string;
+  status: WinnerStatus;
+  selectedAt: Date;
+  confirmedAt?: Date;
+  rerolledAt?: Date;
+  timerStartTime: Date;
+  timerActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Giveaway configuration for permission management
+ */
+export interface GiveawayConfig {
+  guildId: string;
+  allowedRoles: string[];
+  allowedUsers: string[];
+  createdAt: Date;
+  updatedAt: Date;
 }

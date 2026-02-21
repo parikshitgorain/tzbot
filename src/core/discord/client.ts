@@ -57,6 +57,7 @@ export interface IDiscordClient {
   sendMessage(channelId: string, content: MessageContent): Promise<Message>;
   deleteMessage(channelId: string, messageId: string): Promise<void>;
   sendDirectMessage(userId: string, content: MessageContent): Promise<Message>;
+  getMessage(channelId: string, messageId: string): Promise<Message>;
 
   // Moderation operations
   banUser(guildId: string, userId: string, reason: string): Promise<void>;
@@ -284,6 +285,30 @@ export class DiscordClient implements IDiscordClient {
       logger.debug('Message deleted', { channelId, messageId });
     } catch (error) {
       logError('Failed to delete message', error as Error, {
+        channelId,
+        messageId,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get a message from a channel
+   */
+  async getMessage(channelId: string, messageId: string): Promise<Message> {
+    try {
+      const channel = await this.client.channels.fetch(channelId);
+
+      if (!channel || !channel.isTextBased()) {
+        throw new Error(`Channel ${channelId} is not a text channel`);
+      }
+
+      const message = await (channel as TextChannel).messages.fetch(messageId);
+
+      logger.debug('Message fetched', { channelId, messageId });
+      return message;
+    } catch (error) {
+      logError('Failed to fetch message', error as Error, {
         channelId,
         messageId,
       });

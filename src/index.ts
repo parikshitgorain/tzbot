@@ -25,7 +25,7 @@ import { CommandManager } from '@/managers/command.manager.js';
 import { NotificationManager, type PremiumEmbedData } from '@/managers/notification.manager.js';
 import { GiveawayManager } from '@/managers/giveaway.manager.js';
 // import { ChatRainManager } from '@/managers/chat-rain.manager.js';
-// import { AnnouncementRelayManager } from '@/managers/announcement-relay.manager.js';
+import { AnnouncementRelayManager } from '@/managers/announcement-relay.manager.js';
 // import { RewardSystem } from '@/managers/reward-system.js';
 import { kickChatClient } from '@/services/kick/chat-client.js';
 import { KickWebhookHandler } from '@/webhooks/kick-webhook.js';
@@ -40,6 +40,7 @@ import { ChannelAccessEnforcer } from '@/moderation/channel-access.js';
 import { createModerationCommands } from '@/commands/moderation.commands.js';
 import { createUtilityCommands } from '@/commands/utility.commands.js';
 import { createGiveawayCommands } from '@/commands/giveaway.commands.js';
+import { createAnnouncementCommands } from '@/commands/announcement.commands.js';
 import type { Message, ButtonInteraction } from 'discord.js';
 import type { NotificationEvent } from '@/types/models.js';
 
@@ -77,7 +78,7 @@ class TZBotApplication {
   private notificationManager!: NotificationManager;
   private giveawayManager!: GiveawayManager;
   // private chatRainManager!: ChatRainManager; // Initialized but not actively used in event routing yet
-  // private announcementRelay!: AnnouncementRelayManager; // Optional - only if configured
+  private announcementRelay: AnnouncementRelayManager | null = null; // Optional - only if configured
   // private rewardSystem!: RewardSystem;
 
   // Moderation
@@ -603,9 +604,61 @@ class TZBotApplication {
       this.database.repositories.giveaways
     );
 
+    // Initialize giveaway confirmation system
+    const { ConfirmationSystem } = await import('@/giveaway/confirmation-system.js');
+    const { ConfigManager } = await import('@/giveaway/config-manager.js');
+    const { GiveawayConfigRepository } = await import('@/core/database/repositories/GiveawayConfigRepository.js');
+    
+    const giveawayConfigRepo = new GiveawayConfigRepository(this.database.getPool());
+    const configManager = new ConfigManager(giveawayConfigRepo);
+    
+    const confirmationSystem = new ConfirmationSystem(
+      this.database.repositories.winnerState,
+      this.database.repositories.giveaways,
+      configManager
+    );
+    
+    // Initialize confirmation system with Discord client
+    confirmationSystem.initialize(this.discordClient.client);
+    
+    // Set confirmation system and config manager on giveaway manager
+    this.giveawayManager.setConfirmationSystem(confirmationSystem);
+    this.giveawayManager.setConfigManager(configManager);
+    
+    // Restore active confirmations on startup
+    await confirmationSystem.restoreActiveConfirmations();
+
     // Announcement relay manager (optional - only if configured)
-    // Note: This would need proper configuration in config
-    // this.announcementRelay = new AnnouncementRelayManager(...);
+    try {
+      const privateChannelId = await this.database.getConfig('privateAnnouncementChannelId');
+      const publicChannelsStr = await this.database.getConfig('publicAnnouncementChannelIds');
+      
+      if (privateChannelId && publicChannelsStr) {
+        const publicChannelIds = String(publicChannelsStr).split(',').filter((id) => id.length > 0);
+        
+        if (publicChannelIds.length > 0) {
+          this.announcementRelay = new AnnouncementRelayManager(this.discordClient, {
+            privateChannelId: String(privateChannelId),
+            publicChannelIds,
+            guildId: config.guildId,
+            moderatorRoleId: config.moderatorRoleId,
+          });
+          
+          this.announcementRelay.start();
+          
+          logger.info('Announcement relay initialized and started', {
+            privateChannel: privateChannelId,
+            publicChannelCount: publicChannelIds.length,
+          });
+        } else {
+          logger.info('Announcement relay not configured - no public channels specified');
+        }
+      } else {
+        logger.info('Announcement relay not configured - use /announcement-setup to configure');
+      }
+    } catch (error) {
+      logger.warn('Failed to initialize announcement relay', { error });
+    }
 
     logger.info('Managers initialized');
   }
@@ -1592,6 +1645,14 @@ class TZBotApplication {
     // Register giveaway commands
     const giveawayCommands = createGiveawayCommands(this.discordClient, this.giveawayManager);
     this.commandManager.registerCommands(giveawayCommands);
+
+    // Register announcement commands
+    const announcementCommands = createAnnouncementCommands(
+      this.discordClient,
+      this.database,
+      this.announcementRelay
+    );
+    this.commandManager.registerCommands(announcementCommands);
 
     logger.info('Slash commands registered');
   }

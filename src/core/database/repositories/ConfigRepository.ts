@@ -25,11 +25,24 @@ export class ConfigRepository {
         return null;
       }
 
+      const rawValue = result.rows[0].value;
+
+      // If it's a Discord snowflake ID (18-19 digit number string), keep as string
+      // Discord IDs are 64-bit integers that lose precision in JavaScript
+      if (/^\d{18,19}$/.test(rawValue)) {
+        return rawValue;
+      }
+
+      // If it looks like a comma-separated list of Discord IDs, keep as string
+      if (/^\d{18,19}(,\d{18,19})*$/.test(rawValue)) {
+        return rawValue;
+      }
+
       // Try to parse as JSON, fall back to string if parsing fails
       try {
-        return JSON.parse(result.rows[0].value);
+        return JSON.parse(rawValue);
       } catch {
-        return result.rows[0].value;
+        return rawValue;
       }
     } catch (error) {
       throw new Error(`Failed to get config: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -75,10 +88,24 @@ export class ConfigRepository {
 
       const configMap = new Map<string, unknown>();
       for (const row of result.rows) {
+        const rawValue = row.value;
+
+        // If it's a Discord snowflake ID (18-19 digit number string), keep as string
+        if (/^\d{18,19}$/.test(rawValue)) {
+          configMap.set(row.key, rawValue);
+          continue;
+        }
+
+        // If it looks like a comma-separated list of Discord IDs, keep as string
+        if (/^\d{18,19}(,\d{18,19})*$/.test(rawValue)) {
+          configMap.set(row.key, rawValue);
+          continue;
+        }
+
         try {
-          configMap.set(row.key, JSON.parse(row.value));
+          configMap.set(row.key, JSON.parse(rawValue));
         } catch {
-          configMap.set(row.key, row.value);
+          configMap.set(row.key, rawValue);
         }
       }
 
@@ -167,10 +194,24 @@ export class ConfigRepository {
 
       const configMap = new Map<string, unknown>();
       for (const row of result.rows) {
+        const rawValue = row.value;
+
+        // If it's a Discord snowflake ID (18-19 digit number string), keep as string
+        if (/^\d{18,19}$/.test(rawValue)) {
+          configMap.set(row.key, rawValue);
+          continue;
+        }
+
+        // If it looks like a comma-separated list of Discord IDs, keep as string
+        if (/^\d{18,19}(,\d{18,19})*$/.test(rawValue)) {
+          configMap.set(row.key, rawValue);
+          continue;
+        }
+
         try {
-          configMap.set(row.key, JSON.parse(row.value));
+          configMap.set(row.key, JSON.parse(rawValue));
         } catch {
-          configMap.set(row.key, row.value);
+          configMap.set(row.key, rawValue);
         }
       }
 

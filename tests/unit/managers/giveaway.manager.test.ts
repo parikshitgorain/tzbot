@@ -31,6 +31,10 @@ describe('GiveawayManager', () => {
           },
         },
       }),
+      getMessage: vi.fn().mockResolvedValue({
+        embeds: [{ data: { fields: [{ name: 'Entries', value: '0' }] } }],
+        edit: vi.fn().mockResolvedValue({}),
+      }),
       getMember: vi.fn(),
     } as unknown as IDiscordClient;
 

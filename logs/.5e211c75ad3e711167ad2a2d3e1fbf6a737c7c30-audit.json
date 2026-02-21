@@ -9,6 +9,11 @@
             "date": 1771649117146,
             "name": "E:\\Servers\\tzbot\\logs\\moderation-2026-02-21.log",
             "hash": "8f898639ff4f4901e78ba028de45cc0bd2642f7d727bed887176530750b2ca95"
+        },
+        {
+            "date": 1771698674499,
+            "name": "E:\\Servers\\tzbot\\logs\\moderation-2026-02-22.log",
+            "hash": "554f67342d88183fe17279099d260677ad1993ceeb10107e0b29e08a24b57fec"
         }
     ],
     "hashType": "sha256"

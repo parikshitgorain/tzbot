@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 .env.local
+.env.production
 *.log
 .DS_Store
 coverage/
@@ -10,3 +11,48 @@ coverage/
 *.swp
 *.swo
 .vitest/
+
+# Build artifacts
+*.tsbuildinfo
+build/
+out/
+
+# Deployment
+deployment/
+deployment.tar.gz
+*.zip
+
+# CI/CD
+.github/workflows/*.local.yml
+
+# Logs
+logs/*.log
+!logs/.gitkeep
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/settings.json
+.idea/workspace.xml
+
+# Testing
+.nyc_output/
+test-results/
+
+# Secrets
+secrets/
+*.pem
+*.key
+*.cert

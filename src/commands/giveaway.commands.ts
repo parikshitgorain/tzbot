@@ -136,6 +136,41 @@ function createGiveawayCommand(
             .setDescription('The winner to reroll/replace')
             .setRequired(true)
         )
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('config')
+        .setDescription('Configure giveaway command permissions')
+        .addBooleanOption((option) =>
+          option
+            .setName('show')
+            .setDescription('Show current configuration (leave empty to show)')
+            .setRequired(false)
+        )
+        .addRoleOption((option) =>
+          option
+            .setName('add_role')
+            .setDescription('Add a role that can use giveaway commands')
+            .setRequired(false)
+        )
+        .addRoleOption((option) =>
+          option
+            .setName('remove_role')
+            .setDescription('Remove a role from giveaway command permissions')
+            .setRequired(false)
+        )
+        .addUserOption((option) =>
+          option
+            .setName('add_user')
+            .setDescription('Add a user that can use giveaway commands')
+            .setRequired(false)
+        )
+        .addUserOption((option) =>
+          option
+            .setName('remove_user')
+            .setDescription('Remove a user from giveaway command permissions')
+            .setRequired(false)
+        )
     );
 
   const handler = async (interaction: ChatInputCommandInteraction) => {
@@ -149,6 +184,8 @@ function createGiveawayCommand(
       await handleListGiveaways(interaction, giveawayManager);
     } else if (subcommand === 'reroll') {
       await handleRerollWinner(interaction, giveawayManager);
+    } else if (subcommand === 'config') {
+      await handleConfigGiveaway(interaction, giveawayManager);
     }
   };
 
@@ -411,6 +448,116 @@ async function handleRerollWinner(
     });
 
     const errorMessage = `❌ Failed to reroll winner. ${(error as Error).message}`;
+    if (interaction.deferred) {
+      await interaction.editReply({ content: errorMessage });
+    } else {
+      await interaction.reply({ content: errorMessage, ephemeral: true });
+    }
+  }
+}
+
+/**
+ * Handle /giveaway config subcommand
+ */
+async function handleConfigGiveaway(
+  interaction: ChatInputCommandInteraction,
+  giveawayManager: GiveawayManager
+): Promise<void> {
+  if (!interaction.guildId) {
+    await interaction.reply({
+      content: '❌ This command can only be used in a server.',
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const addRole = interaction.options.getRole('add_role');
+  const removeRole = interaction.options.getRole('remove_role');
+  const addUser = interaction.options.getUser('add_user');
+  const removeUser = interaction.options.getUser('remove_user');
+  const show = interaction.options.getBoolean('show');
+
+  try {
+    await interaction.deferReply({ ephemeral: true });
+
+    // Get config manager from giveaway manager
+    const configManager = giveawayManager.getConfigManager();
+
+    // Show current configuration
+    if (show || (!addRole && !removeRole && !addUser && !removeUser)) {
+      const config = await configManager.getGiveawayPermissions(interaction.guildId);
+
+      const embed = new EmbedBuilder()
+        .setTitle('🎉 Giveaway Command Permissions')
+        .setColor(0x00ff00)
+        .setDescription('Users and roles that can use giveaway commands')
+        .setTimestamp();
+
+      const roleList = config.allowedRoles.length > 0
+        ? config.allowedRoles.map(id => `<@&${id}>`).join(', ')
+        : 'None (administrators only)';
+
+      const userList = config.allowedUsers.length > 0
+        ? config.allowedUsers.map(id => `<@${id}>`).join(', ')
+        : 'None';
+
+      embed.addFields(
+        { name: 'Allowed Roles', value: roleList, inline: false },
+        { name: 'Allowed Users', value: userList, inline: false }
+      );
+
+      await interaction.editReply({ embeds: [embed] });
+      return;
+    }
+
+    // Update configuration
+    const config = await configManager.getGiveawayPermissions(interaction.guildId);
+
+    if (addRole) {
+      if (!config.allowedRoles.includes(addRole.id)) {
+        config.allowedRoles.push(addRole.id);
+      }
+    }
+
+    if (removeRole) {
+      config.allowedRoles = config.allowedRoles.filter(id => id !== removeRole.id);
+    }
+
+    if (addUser) {
+      if (!config.allowedUsers.includes(addUser.id)) {
+        config.allowedUsers.push(addUser.id);
+      }
+    }
+
+    if (removeUser) {
+      config.allowedUsers = config.allowedUsers.filter(id => id !== removeUser.id);
+    }
+
+    await configManager.updateGiveawayPermissions(
+      interaction.guildId,
+      config.allowedRoles,
+      config.allowedUsers
+    );
+
+    logger.info('Giveaway config updated', {
+      guildId: interaction.guildId,
+      moderator: interaction.user.username,
+      moderatorId: interaction.user.id,
+      addRole: addRole?.id,
+      removeRole: removeRole?.id,
+      addUser: addUser?.id,
+      removeUser: removeUser?.id,
+    });
+
+    await interaction.editReply({
+      content: '✅ Giveaway command permissions updated successfully!',
+    });
+  } catch (error) {
+    logError('Failed to update giveaway config', error as Error, {
+      guildId: interaction.guildId,
+    });
+
+    const errorMessage = `❌ Failed to update configuration. ${(error as Error).message}`;
     if (interaction.deferred) {
       await interaction.editReply({ content: errorMessage });
     } else {

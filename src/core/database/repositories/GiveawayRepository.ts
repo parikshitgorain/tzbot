@@ -15,11 +15,11 @@ export class GiveawayRepository {
   async save(giveaway: Giveaway): Promise<void> {
     const query = `
       INSERT INTO giveaways (
-        id, title, description, channel_id, message_id, 
+        id, guild_id, title, description, channel_id, message_id, 
         required_roles, winner_count, status, ends_at, created_at,
         condition, winners
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       ON CONFLICT (id) 
       DO UPDATE SET 
         title = EXCLUDED.title,
@@ -33,6 +33,7 @@ export class GiveawayRepository {
     try {
       await this.pool.query(query, [
         giveaway.id,
+        giveaway.guildId,
         giveaway.title,
         giveaway.description,
         giveaway.channelId,
@@ -57,7 +58,7 @@ export class GiveawayRepository {
   async get(giveawayId: string): Promise<Giveaway | null> {
     const query = `
       SELECT 
-        g.id, g.title, g.description, g.channel_id, g.message_id,
+        g.id, g.guild_id, g.title, g.description, g.channel_id, g.message_id,
         g.required_roles, g.winner_count, g.status, g.ends_at, g.created_at,
         g.condition, g.winners
       FROM giveaways g
@@ -78,6 +79,7 @@ export class GiveawayRepository {
 
       return {
         id: row.id,
+        guildId: row.guild_id,
         title: row.title,
         description: row.description,
         channelId: row.channel_id,
@@ -103,7 +105,7 @@ export class GiveawayRepository {
   async getActive(): Promise<Giveaway[]> {
     const query = `
       SELECT 
-        id, title, description, channel_id, message_id,
+        id, guild_id, title, description, channel_id, message_id,
         required_roles, winner_count, status, ends_at, created_at,
         condition, winners
       FROM giveaways
@@ -120,6 +122,7 @@ export class GiveawayRepository {
         
         giveaways.push({
           id: row.id,
+          guildId: row.guild_id,
           title: row.title,
           description: row.description,
           channelId: row.channel_id,
@@ -227,7 +230,7 @@ export class GiveawayRepository {
   async getByChannel(channelId: string, status?: GiveawayStatus): Promise<Giveaway[]> {
     let query = `
       SELECT 
-        id, title, description, channel_id, message_id,
+        id, guild_id, title, description, channel_id, message_id,
         required_roles, winner_count, status, ends_at, created_at,
         condition, winners
       FROM giveaways
@@ -252,6 +255,7 @@ export class GiveawayRepository {
         
         giveaways.push({
           id: row.id,
+          guildId: row.guild_id,
           title: row.title,
           description: row.description,
           channelId: row.channel_id,

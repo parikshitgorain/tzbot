@@ -9,6 +9,7 @@ import {
   GiveawayRepository,
   ChatActivityRepository,
   ConfigRepository,
+  WinnerStateRepository,
 } from './repositories/index.js';
 
 /**
@@ -23,6 +24,7 @@ export class Database implements IDatabase {
   private giveawayRepo: GiveawayRepository | null = null;
   private chatActivityRepo: ChatActivityRepository | null = null;
   private configRepo: ConfigRepository | null = null;
+  private winnerStateRepo: WinnerStateRepository | null = null;
 
   /**
    * Connect to the database and initialize repositories
@@ -74,6 +76,7 @@ export class Database implements IDatabase {
     this.giveawayRepo = new GiveawayRepository(this.pool);
     this.chatActivityRepo = new ChatActivityRepository(this.pool);
     this.configRepo = new ConfigRepository(this.pool);
+    this.winnerStateRepo = new WinnerStateRepository(this.pool);
   }
 
   /**
@@ -88,6 +91,7 @@ export class Database implements IDatabase {
     this.giveawayRepo = null;
     this.chatActivityRepo = null;
     this.configRepo = null;
+    this.winnerStateRepo = null;
   }
 
   // User operations
@@ -227,7 +231,17 @@ export class Database implements IDatabase {
       giveaways: this.giveawayRepo!,
       chatActivity: this.chatActivityRepo!,
       config: this.configRepo!,
+      winnerState: this.winnerStateRepo!,
     };
+  }
+
+  /**
+   * Get direct access to the connection pool
+   * Use with caution - prefer using repository methods
+   */
+  getPool(): Pool {
+    this.ensureConnected();
+    return this.pool!;
   }
 
   /**

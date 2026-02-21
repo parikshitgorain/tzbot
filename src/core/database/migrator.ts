@@ -55,6 +55,24 @@ const MIGRATIONS: Migration[] = [
     upPath: join(__dirname, 'schema', '002_offense_tracking.sql'),
     downPath: join(__dirname, 'schema', '002_offense_tracking_down.sql'),
   },
+  {
+    version: 3,
+    name: '003_giveaway_enhancements',
+    upPath: join(__dirname, 'schema', '003_giveaway_enhancements.sql'),
+    downPath: join(__dirname, 'schema', '003_giveaway_enhancements_down.sql'),
+  },
+  {
+    version: 4,
+    name: '004_giveaway_winner_confirmation',
+    upPath: join(__dirname, 'schema', '004_giveaway_winner_confirmation.sql'),
+    downPath: join(__dirname, 'schema', '004_giveaway_winner_confirmation_down.sql'),
+  },
+  {
+    version: 5,
+    name: '005_add_guild_id_to_giveaways',
+    upPath: join(__dirname, 'schema', '005_add_guild_id_to_giveaways.sql'),
+    downPath: join(__dirname, 'schema', '005_add_guild_id_to_giveaways_down.sql'),
+  },
 ];
 
 /**

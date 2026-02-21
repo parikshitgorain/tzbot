@@ -10,3 +10,5 @@ export { GiveawayRepository } from './GiveawayRepository.js';
 export { ChatActivityRepository } from './ChatActivityRepository.js';
 export { ConfigRepository } from './ConfigRepository.js';
 export { OffenseRepository } from './OffenseRepository.js';
+export { WinnerStateRepository } from './WinnerStateRepository.js';
+export { GiveawayConfigRepository } from './GiveawayConfigRepository.js';
