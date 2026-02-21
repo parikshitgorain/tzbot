@@ -637,47 +637,50 @@ class TZBotApplication {
       [] // Read-only channel configs will be loaded from config
     );
 
-    // Channel text rate limiter
-    if (config.rateLimiterRestrictedChannels && Object.keys(config.rateLimiterRestrictedChannels).length > 0) {
-      const { ChannelTextRateLimiter } = await import('@/moderation/rate-limiter/channel-text-rate-limiter.js');
-      const { RedisStateStore, InMemoryStateStore } = await import('@/moderation/rate-limiter/state-store.js');
-      
-      // Create state store (Redis with in-memory fallback)
-      const isRedisConnected = await redisClient.testConnection();
-      const stateStore = isRedisConnected
-        ? new RedisStateStore(redisClient)
-        : new InMemoryStateStore();
+    // Channel text rate limiter - ALWAYS initialize (even with empty channels)
+    // This allows hot-reload to work when channels are added via commands
+    const { ChannelTextRateLimiter } = await import('@/moderation/rate-limiter/channel-text-rate-limiter.js');
+    const { RedisStateStore, InMemoryStateStore } = await import('@/moderation/rate-limiter/state-store.js');
+    
+    // Create state store (Redis with in-memory fallback)
+    const isRedisConnected = await redisClient.testConnection();
+    const stateStore = isRedisConnected
+      ? new RedisStateStore(redisClient)
+      : new InMemoryStateStore();
 
-      // Convert config object to Map
-      const restrictedChannelsMap = new Map(Object.entries(config.rateLimiterRestrictedChannels));
+    // Convert config object to Map (empty if no channels configured)
+    const restrictedChannelsMap = config.rateLimiterRestrictedChannels
+      ? new Map(Object.entries(config.rateLimiterRestrictedChannels))
+      : new Map<string, string>();
 
-      this.rateLimiter = new ChannelTextRateLimiter();
-      await this.rateLimiter.initialize(
-        {
-          restrictedChannels: restrictedChannelsMap,
-          rateLimitWindowMs: config.rateLimiterWindowMs || 60000,
-          violationWindowMs: config.rateLimiterViolationWindowMs || 300000,
-          warningDeleteDelayMs: config.rateLimiterWarningDeleteDelayMs || 10000,
-          cleanupIntervalMs: config.rateLimiterCleanupIntervalMs || 60000,
-        },
-        {
-          discordClient: this.discordClient.client,
-          stateStore,
-          logger,
-          configManager: null as any, // Not used in current implementation
-        }
-      );
+    this.rateLimiter = new ChannelTextRateLimiter();
+    await this.rateLimiter.initialize(
+      {
+        restrictedChannels: restrictedChannelsMap,
+        rateLimitWindowMs: config.rateLimiterWindowMs || 60000,
+        violationWindowMs: config.rateLimiterViolationWindowMs || 300000,
+        warningDeleteDelayMs: config.rateLimiterWarningDeleteDelayMs || 10000,
+        cleanupIntervalMs: config.rateLimiterCleanupIntervalMs || 60000,
+      },
+      {
+        discordClient: this.discordClient.client,
+        stateStore,
+        logger,
+        configManager: null as any, // Not used in current implementation
+      }
+    );
 
-      // Register cleanup
-      this.shutdownManager.registerCleanup('rate-limiter', async () => {
-        await this.rateLimiter.shutdown();
-      });
+    // Register cleanup
+    this.shutdownManager.registerCleanup('rate-limiter', async () => {
+      await this.rateLimiter.shutdown();
+    });
 
+    if (restrictedChannelsMap.size > 0) {
       logger.info('Channel text rate limiter initialized', {
         restrictedChannels: Array.from(restrictedChannelsMap.keys()),
       });
     } else {
-      logger.info('Channel text rate limiter disabled (no restricted channels configured)');
+      logger.info('Channel text rate limiter initialized (no channels configured yet - use /ratelimit-add to add channels)');
     }
 
     logger.info('Moderation systems initialized');
