@@ -51,6 +51,13 @@ export interface BotConfig {
   linkScanningEnabled: boolean;
   googleSafeBrowsingApiKey?: string;
 
+  // Rate limiter settings
+  rateLimiterRestrictedChannels?: Record<string, string>; // channelId -> redirectChannelId
+  rateLimiterWindowMs?: number;
+  rateLimiterViolationWindowMs?: number;
+  rateLimiterWarningDeleteDelayMs?: number;
+  rateLimiterCleanupIntervalMs?: number;
+
   // AI settings
   aiEnabled: boolean;
   aiProvider: 'local' | 'openai' | 'anthropic';

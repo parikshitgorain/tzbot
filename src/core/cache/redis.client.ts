@@ -350,6 +350,24 @@ export class RedisClient {
   }
 
   /**
+   * Get keys matching a pattern
+   */
+  async keys(pattern: string): Promise<string[]> {
+    try {
+      if (!this.client || !this.isConnected) {
+        throw new Error('Redis client not connected');
+      }
+
+      return await this.client.keys(pattern);
+    } catch (error) {
+      logError('Redis KEYS operation failed', error as Error, {
+        additionalContext: { pattern },
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get connection status
    */
   getConnectionStatus(): { connected: boolean; reconnectAttempts: number } {

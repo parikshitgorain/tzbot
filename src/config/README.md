@@ -90,6 +90,14 @@ await configManager.triggerReload();
 - `AI_ENABLED`: Enable AI auto-responder (default: false)
 - `CHAT_RAIN_ENABLED`: Enable chat rain system (default: false)
 
+### Rate Limiter Settings
+
+- `RATE_LIMITER_RESTRICTED_CHANNELS`: Channel mappings in format `channelId1:redirectId1,channelId2:redirectId2`
+- `RATE_LIMITER_WINDOW_MS`: Rate limit window in milliseconds (default: 60000 = 1 minute)
+- `RATE_LIMITER_VIOLATION_WINDOW_MS`: Violation window duration in milliseconds (default: 300000 = 5 minutes)
+- `RATE_LIMITER_WARNING_DELETE_DELAY_MS`: Warning message auto-delete delay in milliseconds (default: 10000 = 10 seconds)
+- `RATE_LIMITER_CLEANUP_INTERVAL_MS`: Cleanup interval in milliseconds (default: 60000 = 1 minute)
+
 See `types.ts` for complete list of configuration options.
 
 ## Hot-Reload Behavior

@@ -81,7 +81,7 @@ export interface IDiscordClient {
  * Discord client wrapper implementation
  */
 export class DiscordClient implements IDiscordClient {
-  private client: Client;
+  public client: Client;
   private connected: boolean = false;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;

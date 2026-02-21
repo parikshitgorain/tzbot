@@ -259,6 +259,13 @@ export class ConfigManager extends EventEmitter {
       linkScanningEnabled: parseBoolean(env.LINK_SCANNING_ENABLED, true),
       googleSafeBrowsingApiKey: env.GOOGLE_SAFE_BROWSING_API_KEY,
 
+      // Rate limiter settings
+      rateLimiterRestrictedChannels: this.parseChannelMapping(env.RATE_LIMITER_RESTRICTED_CHANNELS),
+      rateLimiterWindowMs: parseNumber(env.RATE_LIMITER_WINDOW_MS, 60000),
+      rateLimiterViolationWindowMs: parseNumber(env.RATE_LIMITER_VIOLATION_WINDOW_MS, 300000),
+      rateLimiterWarningDeleteDelayMs: parseNumber(env.RATE_LIMITER_WARNING_DELETE_DELAY_MS, 10000),
+      rateLimiterCleanupIntervalMs: parseNumber(env.RATE_LIMITER_CLEANUP_INTERVAL_MS, 60000),
+
       // AI settings
       aiEnabled: parseBoolean(env.AI_ENABLED, false),
       aiProvider: (env.AI_PROVIDER as 'local' | 'openai' | 'anthropic') || 'openai',
@@ -287,6 +294,28 @@ export class ConfigManager extends EventEmitter {
       maxMessagesPerSecond: parseNumber(env.MAX_MESSAGES_PER_SECOND, 100),
       cacheEnabled: parseBoolean(env.CACHE_ENABLED, true),
     };
+  }
+
+  /**
+   * Parse channel mapping from environment variable
+   * Format: "channelId1:redirectId1,channelId2:redirectId2"
+   */
+  private parseChannelMapping(value: string | undefined): Record<string, string> | undefined {
+    if (!value || value.trim() === '') {
+      return undefined;
+    }
+
+    const mapping: Record<string, string> = {};
+    const pairs = value.split(',').map((pair) => pair.trim()).filter(Boolean);
+
+    for (const pair of pairs) {
+      const [channelId, redirectId] = pair.split(':').map((id) => id.trim());
+      if (channelId && redirectId) {
+        mapping[channelId] = redirectId;
+      }
+    }
+
+    return Object.keys(mapping).length > 0 ? mapping : undefined;
   }
 
   /**
