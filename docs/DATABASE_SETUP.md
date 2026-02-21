@@ -16,16 +16,18 @@ Your Discord bot is now connected to a Neon Postgres database.
 The following tables have been created:
 
 1. **users** - Discord user profiles with Kick username linking
-2. **violations** - User violation tracking for moderation
-3. **giveaways** - Giveaway management
-4. **giveaway_entries** - User entries for giveaways
-5. **chat_activity** - Chat activity tracking for chat rain
-6. **chat_rain_winners** - Winners of chat rain events
-7. **config** - Bot configuration storage
-8. **moderation_logs** - Moderation action logs
-9. **message_content** - Message content (7-day retention)
-10. **notification_queue** - Notification retry queue
-11. **schema_migrations** - Migration tracking
+2. **violations** - User violation tracking for moderation (legacy)
+3. **offense_records** - Progressive spam punishment offense tracking
+4. **offense_entries** - Individual offense records with timestamps
+5. **giveaways** - Giveaway management
+6. **giveaway_entries** - User entries for giveaways
+7. **chat_activity** - Chat activity tracking for chat rain
+8. **chat_rain_winners** - Winners of chat rain events
+9. **config** - Bot configuration storage
+10. **moderation_logs** - Moderation action logs
+11. **message_content** - Message content (7-day retention)
+12. **notification_queue** - Notification retry queue
+13. **schema_migrations** - Migration tracking
 
 ### Running Migrations
 
@@ -34,6 +36,11 @@ To run database migrations:
 ```bash
 npm run db:migrate
 ```
+
+### Migration History
+
+- **001_initial_schema.sql** - Initial database schema with users, violations, giveaways, etc.
+- **002_offense_tracking.sql** - Progressive spam punishment system (offense_records, offense_entries)
 
 ### Accessing the Database
 

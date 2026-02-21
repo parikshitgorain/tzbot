@@ -220,7 +220,7 @@ Reason: Disruptive behavior in chat
 
 ### `/warn`
 
-Issue a warning to a user.
+Issue a warning to a user and record an offense.
 
 **Syntax:**
 ```
@@ -241,14 +241,243 @@ Issue a warning to a user.
 **Response:**
 ```
 ✅ Successfully warned NewUser (123456789012345678).
+Offense #1: Warning
+Next punishment: Warning
 Reason: Please avoid posting links without permission
 ```
 
 **What happens:**
-- User receives a DM with warning and rules reminder
-- Warning is recorded in database
-- Action is logged in moderation logs
-- Warnings contribute to automatic escalation
+- Offense is recorded in database
+- Appropriate punishment is applied based on offense count
+- User receives a DM with warning, offense count, and next punishment
+- Ephemeral message sent in channel
+- Action is logged in mod-log channel
+
+**Progressive Punishment:**
+- 1st-2nd offense: Warning only
+- 3rd offense: 1-hour timeout
+- 4th offense: 2-hour timeout
+- 5th offense: 4-hour timeout
+- 6th offense: 8-hour timeout
+- 7th offense: 16-hour timeout
+- 8th+ offense: Permanent ban
+
+**Required Permission:** MODERATE_MEMBERS
+
+---
+
+### `/warnlist`
+
+View a user's complete offense history.
+
+**Syntax:**
+```
+/warnlist user:<@user>
+```
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| user | User | Yes | The user to check |
+
+**Example:**
+```
+/warnlist user:@Spammer
+```
+
+**Response:**
+```
+📋 Offense History for Spammer
+
+Total Offenses: 3
+Current Status: 1-hour timeout
+Last Offense: 2 hours ago
+Next Punishment: 2-hour timeout
+
+Offense History:
+1. 3 days ago - Warning
+   Reason: Spam messages
+   Moderator: @ModName
+
+2. 2 days ago - Warning
+   Reason: Repeated spam
+   Moderator: @ModName
+
+3. 2 hours ago - 1-hour timeout
+   Reason: Continued spam behavior
+   Moderator: @ModName
+```
+
+**Required Permission:** MODERATE_MEMBERS
+
+---
+
+### `/warnall`
+
+View all users with active offenses.
+
+**Syntax:**
+```
+/warnall
+```
+
+**Parameters:** None
+
+**Example:**
+```
+/warnall
+```
+
+**Response:**
+```
+📋 All Active Offenses
+
+User: @Spammer
+Offenses: 3 | Status: 1h timeout | Last: 2h ago
+
+User: @Troublemaker
+Offenses: 2 | Status: Warning | Last: 1d ago
+
+User: @NewUser
+Offenses: 1 | Status: Warning | Last: 3h ago
+
+Total: 3 users with active offenses
+```
+
+**Required Permission:** MODERATE_MEMBERS
+
+---
+
+### `/clearwarn`
+
+Remove the most recent offense from a user's history.
+
+**Syntax:**
+```
+/clearwarn user:<@user>
+```
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| user | User | Yes | The user whose last offense to clear |
+
+**Example:**
+```
+/clearwarn user:@NewUser
+```
+
+**Response:**
+```
+✅ Cleared last offense for NewUser
+
+Previous: 3 offenses (1-hour timeout)
+Current: 2 offenses (Warning)
+```
+
+**What happens:**
+- Most recent offense is removed from database
+- Punishment status is recalculated based on remaining offenses
+- Action is logged in mod-log channel
+
+**Use Cases:**
+- Correcting mistakes
+- Showing leniency
+- Removing accidental warnings
+
+**Required Permission:** MODERATE_MEMBERS
+
+---
+
+### `/resetoffenses`
+
+Clear all offenses for a user (moderator override).
+
+**Syntax:**
+```
+/resetoffenses user:<@user>
+```
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| user | User | Yes | The user whose offenses to reset |
+
+**Example:**
+```
+/resetoffenses user:@ReformedUser
+```
+
+**Response:**
+```
+✅ Reset all offenses for ReformedUser
+
+Cleared: 5 offenses
+Previous status: 4-hour timeout
+New status: Clean record
+```
+
+**What happens:**
+- All offense records are permanently deleted
+- User's punishment status is cleared
+- Ban status is removed (if applicable)
+- Action is logged in mod-log channel
+
+**Use Cases:**
+- User has reformed after long period
+- Correcting major mistakes
+- Fresh start after appeal
+
+**Warning:** This action is permanent and cannot be undone!
+
+**Required Permission:** MODERATE_MEMBERS
+
+---
+
+### `/modlog`
+
+View all moderation actions taken against a user.
+
+**Syntax:**
+```
+/modlog user:<@user>
+```
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| user | User | Yes | The user to check |
+
+**Example:**
+```
+/modlog user:@Spammer
+```
+
+**Response:**
+```
+📜 Moderation Log for Spammer
+
+Total Actions: 5
+
+1. 5 days ago - Warning
+   Reason: First spam warning
+   Moderator: @Mod1
+
+2. 4 days ago - Warning
+   Reason: Repeated spam
+   Moderator: @Mod1
+
+3. 3 days ago - 1-hour timeout
+   Reason: Third spam offense
+   Moderator: @Mod2
+
+4. 2 days ago - Offense cleared
+   Moderator: @Mod1
+
+5. 1 hour ago - 1-hour timeout
+   Reason: Spam after warning
+   Moderator: @Mod2
+```
 
 **Required Permission:** MODERATE_MEMBERS
 
@@ -528,6 +757,11 @@ Bot: 🎉 Giveaway Ended!
 | /ban | Moderator Role | BAN_MEMBERS |
 | /timeout | Moderator Role | MODERATE_MEMBERS |
 | /warn | Moderator Role | MODERATE_MEMBERS |
+| /warnlist | Moderator Role | MODERATE_MEMBERS |
+| /warnall | Moderator Role | MODERATE_MEMBERS |
+| /clearwarn | Moderator Role | MODERATE_MEMBERS |
+| /resetoffenses | Moderator Role | MODERATE_MEMBERS |
+| /modlog | Moderator Role | MODERATE_MEMBERS |
 | /kick | Moderator Role | KICK_MEMBERS |
 
 ### Admin Commands

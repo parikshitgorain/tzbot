@@ -21,17 +21,26 @@ async function runMigrations() {
   try {
     console.log('🔄 Connecting to database...');
     
-    // Read the migration file
-    const migrationPath = join(__dirname, '../src/core/database/schema/001_initial_schema.sql');
-    const migrationSQL = readFileSync(migrationPath, 'utf-8');
+    // Run migrations in order
+    const migrations = [
+      '001_initial_schema.sql',
+      '002_offense_tracking.sql'
+    ];
 
-    console.log('📝 Running migration: 001_initial_schema');
+    for (const migrationFile of migrations) {
+      const migrationPath = join(__dirname, '../src/core/database/schema', migrationFile);
+      const migrationSQL = readFileSync(migrationPath, 'utf-8');
+
+      console.log(`📝 Running migration: ${migrationFile}`);
+      
+      // Execute the migration
+      await pool.query(migrationSQL);
+      
+      console.log(`✅ ${migrationFile} completed successfully!`);
+    }
     
-    // Execute the migration
-    await pool.query(migrationSQL);
-    
-    console.log('✅ Migration completed successfully!');
-    console.log('\n📊 Database tables created:');
+    console.log('\n📊 All migrations completed!');
+    console.log('Database tables:');
     console.log('  - users');
     console.log('  - violations');
     console.log('  - giveaways');
@@ -43,6 +52,8 @@ async function runMigrations() {
     console.log('  - message_content');
     console.log('  - notification_queue');
     console.log('  - schema_migrations');
+    console.log('  - offense_records');
+    console.log('  - offense_entries');
     
   } catch (error) {
     console.error('❌ Migration failed:', error);

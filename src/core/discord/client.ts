@@ -56,6 +56,7 @@ export interface IDiscordClient {
   // Message operations
   sendMessage(channelId: string, content: MessageContent): Promise<Message>;
   deleteMessage(channelId: string, messageId: string): Promise<void>;
+  sendDirectMessage(userId: string, content: MessageContent): Promise<Message>;
 
   // Moderation operations
   banUser(guildId: string, userId: string, reason: string): Promise<void>;
@@ -107,8 +108,8 @@ export class DiscordClient implements IDiscordClient {
    * Set up internal event handlers for connection management
    */
   private setupInternalEventHandlers(): void {
-    // Handle ready event
-    this.client.on('ready', () => {
+    // Handle clientReady event (renamed from 'ready' in Discord.js v14+)
+    this.client.on('clientReady', () => {
       this.connected = true;
       this.reconnectAttempts = 0;
       logger.info('Discord client connected', {
@@ -286,6 +287,34 @@ export class DiscordClient implements IDiscordClient {
         channelId,
         messageId,
       });
+      throw error;
+    }
+  }
+
+  /**
+   * Send a direct message to a user
+   */
+  async sendDirectMessage(userId: string, content: MessageContent): Promise<Message> {
+    try {
+      const user = await this.client.users.fetch(userId);
+      const dmChannel = await user.createDM();
+
+      const message = await dmChannel.send({
+        content: content.content,
+        embeds: content.embeds,
+        files: content.files,
+      });
+
+      logger.debug('Direct message sent', {
+        userId,
+        messageId: message.id,
+        hasContent: !!content.content,
+        embedCount: content.embeds?.length || 0,
+      });
+
+      return message;
+    } catch (error) {
+      logError('Failed to send direct message', error as Error, { userId });
       throw error;
     }
   }

@@ -82,3 +82,22 @@ export interface EscalationResult {
   reason: string;
   shouldNotify: boolean;
 }
+
+/**
+ * Punishment result from progressive spam punishment system
+ */
+export interface Punishment {
+  type: import('./models.js').PunishmentType;
+  duration?: number; // in hours, undefined for warnings and bans
+  nextPunishment: string; // description of next punishment
+}
+
+/**
+ * Result of notification delivery attempts
+ */
+export interface NotificationResult {
+  dmSent: boolean;
+  ephemeralSent: boolean;
+  modLogSent: boolean;
+  failures: string[];
+}

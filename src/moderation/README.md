@@ -78,28 +78,30 @@ npm test -- tests/unit/moderation/spam-detector.test.ts
 
 ### Integration with Moderation System
 
-The spam detector is designed to integrate with the violation tracking and escalation system:
+The spam detector is designed to integrate with the offense tracking system:
 
 ```typescript
 // In your message handler
 const spamResult = detector.checkSpam(userId, message.content);
 
 if (spamResult.isSpam) {
-  // Record violation
-  await violationRepository.saveViolation({
-    id: generateId(),
-    userId,
-    type: spamResult.violationType,
-    severity: 1,
-    timestamp: new Date(),
-    details: spamResult.reason,
-  });
-  
-  // Apply escalation matrix punishment
-  await moderationManager.applyPunishment(userId);
-  
   // Delete the spam message
   await message.delete();
+  
+  // Process offense and apply punishment
+  const punishment = await offenseManager.processOffense(
+    userId,
+    spamResult.reason,
+    'system', // moderatorId
+    message.channel.id
+  );
+  
+  // Apply punishment
+  if (punishment.type === 'TIMEOUT' && punishment.duration) {
+    await member.timeout(punishment.duration * 3600000, punishment.reason);
+  } else if (punishment.type === 'PERMANENT_BAN') {
+    await member.ban({ reason: punishment.reason });
+  }
 }
 ```
 
@@ -127,56 +129,79 @@ The violation tracking system implements the escalation matrix as specified in R
 
 The system automatically escalates punishments based on violation frequency:
 
-1. **1st violation**: Warning
-2. **2nd violation (within 24 hours)**: 1-hour timeout
-3. **3rd violation (within 24 hours)**: 24-hour timeout
-4. **4th violation (within 7 days)**: Permanent ban
+1. **1st offense**: Warning
+2. **2nd offense**: Warning
+3. **3rd offense**: 1-hour timeout
+4. **4th offense**: 2-hour timeout
+5. **5th offense**: 4-hour timeout
+6. **6th offense**: 8-hour timeout
+7. **7th offense**: 16-hour timeout
+8. **8th+ offense**: Permanent ban (when timeout would be ≥24 hours)
 
-Violations automatically expire after 7 days of no violations (Requirement 4.6).
+Offenses automatically reset after 30 days of good behavior.
 
 ### Usage
 
 ```typescript
-import { ViolationTracker } from './moderation/violation-tracker.js';
-import { ViolationRepository } from './core/database/repositories/ViolationRepository.js';
+import { OffenseManager } from './moderation/offense-manager.js';
+import { OffenseRepository } from './core/database/repositories/OffenseRepository.js';
+import { PunishmentCalculator } from './moderation/punishment-calculator.js';
+import { NotificationService } from './managers/notification.manager.js';
 
-// Create tracker with violation repository
-const violationRepo = new ViolationRepository(pool);
-const tracker = new ViolationTracker(violationRepo);
+// Create offense manager with dependencies
+const offenseRepo = new OffenseRepository(pool);
+const punishmentCalc = new PunishmentCalculator();
+const notificationService = new NotificationService(client);
 
-// Record a violation and get the appropriate punishment
-const escalation = await tracker.recordViolation(
-  userId,
-  'spam',
-  'Sent 5 identical messages within 10 seconds'
+const offenseManager = new OffenseManager(
+  pool,
+  offenseRepo,
+  punishmentCalc,
+  notificationService
 );
 
-console.log(`Punishment: ${escalation.punishmentLevel}`);
-console.log(`Reason: ${escalation.reason}`);
-console.log(`Violation count: ${escalation.violationCount}`);
+// Process an offense and get the appropriate punishment
+const punishment = await offenseManager.processOffense(
+  userId,
+  'Sent 5 identical messages within 10 seconds',
+  moderatorId,
+  channelId
+);
+
+console.log(`Punishment: ${punishment.type}`);
+console.log(`Duration: ${punishment.duration} hours`);
+console.log(`Next punishment: ${punishment.nextPunishment}`);
 
 // Apply the punishment
-if (escalation.shouldNotify) {
-  await applyPunishment(userId, escalation.punishmentLevel);
+if (punishment.type === 'TIMEOUT' && punishment.duration) {
+  await member.timeout(punishment.duration * 3600000, punishment.reason);
+} else if (punishment.type === 'PERMANENT_BAN') {
+  await member.ban({ reason: punishment.reason });
 }
 ```
 
 ### Features
 
-- **Automatic escalation**: Punishment level is automatically determined based on violation history
-- **Time-based windows**: Tracks violations within 24-hour and 7-day windows
-- **Violation expiry**: Automatically clears violations after 7 days of no violations
-- **Multiple violation types**: Supports spam, malicious links, unauthorized posts, and other violations
-- **Database persistence**: All violations are stored in the database for audit trails
-- **Preview mode**: Check what punishment would be applied without recording a violation
+- **Progressive punishment ladder**: Automatic escalation from warnings to timeouts to permanent ban
+- **30-day reset**: Offenses automatically reset after 30 days of good behavior
+- **Triple notification**: Sends DM, ephemeral message, and mod-log notification for each punishment
+- **Database persistence**: All offense records survive bot restarts
+- **Moderator commands**: Full suite of commands for managing offenses (/warn, /warnlist, /clearwarn, etc.)
+- **Transaction safety**: All operations are atomic and handle concurrent offenses correctly
 
 ### API Methods
 
-#### `recordViolation(userId, type, details, timestamp?)`
-Records a violation and returns the appropriate punishment level based on the escalation matrix.
+#### `processOffense(userId, reason, moderatorId, channelId)`
+Records an offense and returns the appropriate punishment based on offense history.
 
-#### `shouldClearViolations(userId, currentTime?)`
-Checks if a user's violations have expired (7 days of no violations).
+#### `getOffenseHistory(userId)`
+Retrieves the complete offense record for a user.
+
+#### `clearLastOffense(userId)`
+Removes the most recent offense and recalculates punishment status.
+
+#### `resetAllOffenses(userId)`
+Clears all offenses for a user (moderator override).
 
 #### `clearExpiredViolations(userId)`
 Clears expired violations for a user.
@@ -405,23 +430,23 @@ if (linkResult.isMalicious) {
   // Delete the message immediately (Requirement 7.1, 7.2)
   await message.delete();
   
-  // Record violation
-  await violationRepository.saveViolation({
-    id: generateId(),
-    userId: message.author.id,
-    type: 'malicious_link',
-    severity: 2, // Higher severity than spam
-    timestamp: new Date(),
-    details: linkResult.reason,
-  });
-  
-  // Apply 24-hour timeout (Requirement 7.3)
-  await message.member?.timeout(24 * 60 * 60 * 1000, linkResult.reason);
-  
-  // Send DM notification
-  await message.author.send(
-    `Your message was deleted because it contained a malicious link: ${linkResult.reason}`
+  // Process offense and apply punishment
+  const punishment = await offenseManager.processOffense(
+    message.author.id,
+    `Malicious link: ${linkResult.reason}`,
+    'system', // moderatorId
+    message.channel.id
   );
+  
+  // Apply punishment
+  if (punishment.type === 'TIMEOUT' && punishment.duration) {
+    await message.member?.timeout(
+      punishment.duration * 3600000,
+      punishment.reason
+    );
+  } else if (punishment.type === 'PERMANENT_BAN') {
+    await message.member?.ban({ reason: punishment.reason });
+  }
   
   // Log the incident (Requirement 7.6)
   logger.warn('Malicious link detected', {
@@ -521,14 +546,26 @@ Each component is:
 Complete moderation system integration:
 
 ```typescript
-import { SpamDetector, LinkScanner, ViolationTracker } from './moderation/index.js';
-import { ViolationRepository } from './core/database/repositories/ViolationRepository.js';
+import { SpamDetector, LinkScanner } from './moderation/index.js';
+import { OffenseManager } from './moderation/offense-manager.js';
+import { OffenseRepository } from './core/database/repositories/OffenseRepository.js';
+import { PunishmentCalculator } from './moderation/punishment-calculator.js';
+import { NotificationService } from './managers/notification.manager.js';
 
 // Initialize components
 const spamDetector = new SpamDetector();
 const linkScanner = new LinkScanner();
-const violationRepo = new ViolationRepository(pool);
-const violationTracker = new ViolationTracker(violationRepo);
+
+const offenseRepo = new OffenseRepository(pool);
+const punishmentCalc = new PunishmentCalculator();
+const notificationService = new NotificationService(client);
+
+const offenseManager = new OffenseManager(
+  pool,
+  offenseRepo,
+  punishmentCalc,
+  notificationService
+);
 
 // Message handler
 client.on('messageCreate', async (message) => {
@@ -553,41 +590,49 @@ client.on('messageCreate', async (message) => {
 });
 
 async function handleSpamViolation(message, spamResult) {
-  // Record violation and get escalation
-  const escalation = await violationTracker.recordViolation(
-    message.author.id,
-    spamResult.violationType,
-    spamResult.reason
-  );
-  
   // Delete message
   await message.delete();
   
+  // Process offense and get punishment
+  const punishment = await offenseManager.processOffense(
+    message.author.id,
+    spamResult.reason,
+    'system', // moderatorId
+    message.channel.id
+  );
+  
   // Apply punishment
-  await applyPunishment(message, escalation);
+  if (punishment.type === 'TIMEOUT' && punishment.duration) {
+    await message.member?.timeout(
+      punishment.duration * 3600000,
+      punishment.reason
+    );
+  } else if (punishment.type === 'PERMANENT_BAN') {
+    await message.member?.ban({ reason: punishment.reason });
+  }
 }
 
 async function handleLinkViolation(message, linkResult) {
   // Delete message immediately
   await message.delete();
   
-  // Record violation
-  await violationRepository.saveViolation({
-    id: generateId(),
-    userId: message.author.id,
-    type: 'malicious_link',
-    severity: 2,
-    timestamp: new Date(),
-    details: linkResult.reason,
-  });
-  
-  // Apply 24-hour timeout
-  await message.member?.timeout(24 * 60 * 60 * 1000, linkResult.reason);
-  
-  // Send DM
-  await message.author.send(
-    `Your message was deleted because it contained a malicious link: ${linkResult.reason}`
+  // Process as offense
+  const punishment = await offenseManager.processOffense(
+    message.author.id,
+    `Malicious link: ${linkResult.reason}`,
+    'system',
+    message.channel.id
   );
+  
+  // Apply punishment
+  if (punishment.type === 'TIMEOUT' && punishment.duration) {
+    await message.member?.timeout(
+      punishment.duration * 3600000,
+      punishment.reason
+    );
+  } else if (punishment.type === 'PERMANENT_BAN') {
+    await message.member?.ban({ reason: punishment.reason });
+  }
 }
 ```
 

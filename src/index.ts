@@ -103,15 +103,25 @@ class TZBotApplication {
 
   /**
    * Retry message deletion with exponential backoff
-   * Keeps trying every second until message is deleted or max retries reached
+   * Retries with delays: 1s, 2s, 4s, 8s, 16s...
    */
   private async deleteMessageWithRetry(
     message: any,
     maxRetries: number = 5,
-    retryDelayMs: number = 1000
+    initialDelayMs: number = 1000
   ): Promise<boolean> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        // Check if message still exists and is deletable
+        if (!message || !message.deletable) {
+          logger.warn('Message is not deletable or does not exist', {
+            messageId: message?.id,
+            deletable: message?.deletable,
+            attempt,
+          });
+          return false;
+        }
+
         await message.delete();
         logger.debug('Message deleted successfully', {
           messageId: message.id,
@@ -119,22 +129,48 @@ class TZBotApplication {
         });
         return true;
       } catch (error) {
+        const errorMessage = (error as Error).message;
+        
+        // Check if message was already deleted
+        if (errorMessage.includes('Unknown Message') || errorMessage.includes('10008')) {
+          logger.debug('Message already deleted', {
+            messageId: message?.id,
+            attempt,
+          });
+          return true; // Consider this a success
+        }
+        
+        // Check if we don't have permission
+        if (errorMessage.includes('Missing Permissions') || errorMessage.includes('50013')) {
+          logger.error('Bot lacks permission to delete messages', {
+            messageId: message?.id,
+            error: errorMessage,
+          });
+          return false; // Don't retry if we lack permissions
+        }
+        
         logger.warn('Failed to delete message, retrying...', {
-          messageId: message.id,
+          messageId: message?.id,
           attempt,
           maxRetries,
-          error: (error as Error).message,
+          error: errorMessage,
         });
         
         if (attempt < maxRetries) {
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+          // Exponential backoff: 1s, 2s, 4s, 8s, 16s...
+          const delay = initialDelayMs * Math.pow(2, attempt - 1);
+          logger.debug('Waiting before retry', {
+            messageId: message?.id,
+            delayMs: delay,
+            nextAttempt: attempt + 1,
+          });
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
     
     logger.error('Failed to delete message after all retries', {
-      messageId: message.id,
+      messageId: message?.id,
       maxRetries,
     });
     return false;
@@ -721,15 +757,33 @@ class TZBotApplication {
 
             // Send warning message only if not already issued in this cooldown period
             if (!this.hasWarningBeenIssued(message.author.id)) {
-              // Send DM reminder
+              // Get offense information to show in reminder
+              const { getPool } = await import('@/core/database/pool.js');
+              const { OffenseRepository } = await import('@/core/database/repositories/OffenseRepository.js');
+              const { PunishmentCalculator } = await import('@/moderation/punishment-calculator.js');
+              
+              const pool = getPool();
+              const offenseRepo = new OffenseRepository(pool);
+              const punishmentCalc = new PunishmentCalculator();
+              
+              const offenseRecord = await offenseRepo.getOffenseRecord(message.author.id);
+              const currentOffenseCount = offenseRecord?.total_offenses || 0;
+              const nextPunishment = punishmentCalc.calculatePunishment(currentOffenseCount + 1, 0);
+              
+              // Send DM reminder with details
               try {
                 await message.author.send(
-                  `<@${message.author.id}> ⚠️ **Please don't spam!** You are in a 1-minute cooldown. Your messages will be automatically deleted until the cooldown expires.`
+                  `<@${message.author.id}> ⚠️ **Cooldown Active - Please Stop Spamming!**\n\n` +
+                  `You are in a 1-minute cooldown. Your messages will be automatically deleted.\n\n` +
+                  `**Current Warnings:** ${currentOffenseCount}\n` +
+                  `**Next Offense:** ${nextPunishment.nextPunishment}\n\n` +
+                  `Please wait for the cooldown to expire before sending messages.`
                 );
                 
                 logger.debug('Cooldown reminder DM sent', {
                   userId: message.author.id,
                   username: message.author.username,
+                  offenseCount: currentOffenseCount,
                 });
               } catch (error) {
                 logger.warn('Failed to send cooldown reminder DM', {
@@ -742,7 +796,9 @@ class TZBotApplication {
               if (message.channel.isTextBased() && 'send' in message.channel) {
                 try {
                   const cooldownReminder = await message.channel.send(
-                    `<@${message.author.id}> ⚠️ **Cooldown Active** - Please don't spam! Your messages will be deleted for 1 minute.`
+                    `<@${message.author.id}> ⚠️ **Cooldown Active**\n` +
+                    `**Warnings:** ${currentOffenseCount} | **Next Offense:** ${nextPunishment.nextPunishment}\n` +
+                    `Your messages will be deleted for 1 minute. Please stop spamming!`
                   );
                   
                   // Calculate delete time AFTER message is sent
@@ -751,7 +807,9 @@ class TZBotApplication {
                   // Edit message to add countdown
                   try {
                     await cooldownReminder.edit(
-                      `<@${message.author.id}> ⚠️ **Cooldown Active** - Please don't spam! Your messages will be deleted for 1 minute.\n` +
+                      `<@${message.author.id}> ⚠️ **Cooldown Active**\n` +
+                      `**Warnings:** ${currentOffenseCount} | **Next Offense:** ${nextPunishment.nextPunishment}\n` +
+                      `Your messages will be deleted for 1 minute. Please stop spamming!\n` +
                       `*This message will be deleted <t:${deleteTime}:R>*`
                     );
                   } catch (editError) {
@@ -766,6 +824,7 @@ class TZBotApplication {
                   logger.debug('Cooldown reminder sent in channel', {
                     userId: message.author.id,
                     username: message.author.username,
+                    offenseCount: currentOffenseCount,
                   });
                 } catch (error) {
                   logger.warn('Failed to send channel cooldown reminder', {
@@ -780,6 +839,7 @@ class TZBotApplication {
               logger.info('Cooldown reminder sent', {
                 userId: message.author.id,
                 username: message.author.username,
+                offenseCount: currentOffenseCount,
               });
             }
             
@@ -815,17 +875,29 @@ class TZBotApplication {
           const pool = getPool();
           const offenseRepo = new OffenseRepository(pool);
           const punishmentCalc = new PunishmentCalculator();
+          
+          // Create a custom notification service that doesn't send channel messages
+          // We handle channel notifications manually below
+          const customNotificationService = {
+            sendPunishmentNotification: async () => ({
+              dmSent: false,
+              ephemeralSent: false,
+              modLogSent: false,
+              failures: [],
+            }),
+          };
+          
           const offenseManager = new OffenseManager(
             pool,
             offenseRepo,
             punishmentCalc,
-            this.notificationManager
+            customNotificationService as any
           );
 
           // Process offense and get punishment
           const punishment = await offenseManager.processOffense(
             message.author.id,
-            spamResult.reason || 'Spam detected',
+            'Spam',
             'system', // System-detected spam
             message.channel.id
           );
@@ -895,58 +967,62 @@ class TZBotApplication {
             this.startWarningCooldown(message.author.id);
             
             // Send warning message to user via DM
+            let dmSent = false;
             try {
               await message.author.send(
-                `<@${message.author.id}> ⚠️ **Warning: Spam Detected**\n\n` +
-                `You have been warned for: ${spamResult.reason || 'Spam detected'}\n\n` +
+                `⚠️ **Warning: Spam Detected**\n\n` +
+                `You have been warned for: Spam\n\n` +
                 `**Offense Count:** ${offenseCount}\n` +
                 `**Cooldown:** 1 minute - Your messages will be auto-deleted during this time.\n` +
                 `**Next Offense:** ${punishment.nextPunishment}`
               );
               
-              logger.debug('Warning DM sent', {
+              dmSent = true;
+              logger.info('Warning DM sent successfully', {
                 userId: message.author.id,
                 username: message.author.username,
               });
             } catch (error) {
-              logger.warn('Failed to send warning DM', {
+              logger.error('Failed to send warning DM - user may have DMs disabled', {
                 userId: message.author.id,
-                error,
+                username: message.author.username,
+                error: (error as Error).message,
               });
             }
 
-            // Also send warning in channel (auto-delete after 5 seconds with retry)
+            // Send a single warning in channel (auto-delete after 10 seconds)
             if (message.channel.isTextBased() && 'send' in message.channel) {
               try {
-                const channelWarning = await message.channel.send(
-                  `<@${message.author.id}> ⚠️ **Warning: Spam Detected**\n` +
-                  `You have been warned for spam. Check your DMs for details.\n` +
-                  `**Cooldown:** 1 minute - Your messages will be auto-deleted.`
-                );
+                const warningText = dmSent 
+                  ? `<@${message.author.id}> ⚠️ **Warning: Spam Detected** - Check your DMs for details. **Cooldown:** 1 minute.`
+                  : `<@${message.author.id}> ⚠️ **Warning: Spam Detected**\n**Reason:** Spam\n**Offense Count:** ${offenseCount}\n**Cooldown:** 1 minute - Your messages will be auto-deleted.\n**Next Offense:** ${punishment.nextPunishment}`;
                 
-                // Calculate delete time AFTER message is sent to ensure accuracy
-                const deleteTime = Math.floor(Date.now() / 1000) + 5;
+                const channelWarning = await message.channel.send(warningText);
+                
+                // Wait a moment to ensure message is fully sent
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Calculate delete time AFTER message is sent (10 seconds from NOW)
+                const deleteTime = Math.floor(Date.now() / 1000) + 10;
                 
                 // Edit message to add countdown
                 try {
                   await channelWarning.edit(
-                    `<@${message.author.id}> ⚠️ **Warning: Spam Detected**\n` +
-                    `You have been warned for spam. Check your DMs for details.\n` +
-                    `**Cooldown:** 1 minute - Your messages will be auto-deleted.\n` +
-                    `*This message will be deleted <t:${deleteTime}:R>*`
+                    warningText + `\n*This message will be deleted <t:${deleteTime}:R>*`
                   );
                 } catch (editError) {
                   logger.debug('Failed to edit warning message with countdown', { error: editError });
                 }
                 
-                // Delete the warning message after 5 seconds with retry
+                // Delete the warning message after 10 seconds with exponential backoff retry
                 setTimeout(async () => {
                   await this.deleteMessageWithRetry(channelWarning, 5, 1000);
-                }, 5000);
+                }, 10000);
                 
-                logger.debug('Warning sent in channel', {
+                logger.info('Warning sent in channel', {
                   userId: message.author.id,
                   username: message.author.username,
+                  dmSent,
                 });
               } catch (error) {
                 logger.warn('Failed to send channel warning', {
@@ -963,21 +1039,22 @@ class TZBotApplication {
               username: message.author.username,
               deletedCount,
               offenseCount,
-              reason: spamResult.reason
+              reason: 'Spam',
+              dmSent,
             });
             
           } else if (punishment.type === PunishmentType.TIMEOUT && punishment.duration && message.member) {
             // Apply timeout
             const durationMs = punishment.duration * 60 * 60 * 1000; // Convert hours to ms
             try {
-              await message.member.timeout(durationMs, spamResult.reason || 'Spam detected');
+              await message.member.timeout(durationMs, 'Spam');
               
               logger.info('User timed out for spam', {
                 userId: message.author.id,
                 username: message.author.username,
                 duration: punishment.duration,
                 offenseCount,
-                reason: spamResult.reason
+                reason: 'Spam'
               });
             } catch (error) {
               logger.error('Failed to timeout user', { error });
@@ -987,7 +1064,7 @@ class TZBotApplication {
             // Apply ban
             try {
               await message.member.ban({
-                reason: spamResult.reason || 'Spam detected - repeated offenses',
+                reason: 'Spam',
                 deleteMessageSeconds: 60 * 60 * 24 // Delete last 24 hours of messages
               });
               
@@ -995,7 +1072,7 @@ class TZBotApplication {
                 userId: message.author.id,
                 username: message.author.username,
                 offenseCount,
-                reason: spamResult.reason
+                reason: 'Spam'
               });
             } catch (error) {
               logger.error('Failed to ban user', { error });
@@ -1011,7 +1088,7 @@ class TZBotApplication {
               channelId: message.channel.id,
               punishmentType: punishment.type,
               duration: punishment.duration,
-              reason: spamResult.reason || 'Spam detected',
+              reason: 'Spam',
               deletedCount,
               offenseCount,
               timestamp: new Date(),
@@ -1049,11 +1126,23 @@ class TZBotApplication {
           const pool = getPool();
           const offenseRepo = new OffenseRepository(pool);
           const punishmentCalc = new PunishmentCalculator();
+          
+          // Create a custom notification service that doesn't send channel messages
+          // We handle notifications manually for consistency
+          const customNotificationService = {
+            sendPunishmentNotification: async () => ({
+              dmSent: false,
+              ephemeralSent: false,
+              modLogSent: false,
+              failures: [],
+            }),
+          };
+          
           const offenseManager = new OffenseManager(
             pool,
             offenseRepo,
             punishmentCalc,
-            this.notificationManager
+            customNotificationService as any
           );
 
           // Process offense and get punishment

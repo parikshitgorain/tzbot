@@ -19,8 +19,8 @@ async function basicExample() {
   // Connect to Discord
   await client.connect(config.discordToken);
 
-  // Subscribe to ready event
-  client.on('ready', () => {
+  // Subscribe to clientReady event
+  client.on('clientReady', () => {
     console.log('Bot is ready!');
   });
 
@@ -121,7 +121,7 @@ async function reconnectExample() {
     console.log('Disconnected from Discord');
   });
 
-  client.on('ready', () => {
+  client.on('clientReady', () => {
     console.log('Connected to Discord');
   });
 }
@@ -184,7 +184,7 @@ async function completeBotExample() {
   await client.connect(config.discordToken);
 
   // Log when ready
-  client.on('ready', () => {
+  client.on('clientReady', () => {
     console.log('TZBOT is online!');
   });
 

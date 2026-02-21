@@ -39,6 +39,10 @@ const createMockDiscordClient = (): IDiscordClient => {
       id: 'message-123',
       channelId: 'channel-123',
     }),
+    sendDirectMessage: vi.fn().mockResolvedValue({
+      id: 'dm-message-123',
+      channelId: 'dm-channel-123',
+    }),
     deleteMessage: vi.fn(),
     banUser: vi.fn(),
     kickUser: vi.fn(),
@@ -517,6 +521,282 @@ describe('NotificationManager', () => {
       const embed = sendMessageCall[1].embeds[0];
 
       expect(embed.data.fields).toBeUndefined();
+    });
+  });
+
+  describe('sendPunishmentNotification', () => {
+    beforeEach(() => {
+      mockClient = createMockDiscordClient();
+      config = {
+        primaryChannelId: 'primary-channel-123',
+        fallbackChannelId: 'fallback-channel-456',
+        modLogChannelId: 'mod-log-channel-789',
+        maxRetries: 3,
+        retryDelayMs: 100,
+      };
+      manager = new NotificationManager(mockClient, config);
+    });
+
+    it('should call all three notification methods', async () => {
+      const punishment = {
+        type: 'WARNING' as any,
+        duration: undefined,
+        nextPunishment: 'Next offense: Final warning',
+      };
+
+      const result = await manager.sendPunishmentNotification(
+        'user-123',
+        'channel-456',
+        punishment,
+        'Spam detected',
+        1
+      );
+
+      expect(mockClient.sendDirectMessage).toHaveBeenCalledWith(
+        'user-123',
+        expect.objectContaining({
+          embeds: expect.arrayContaining([expect.any(EmbedBuilder)]),
+        })
+      );
+
+      expect(mockClient.sendMessage).toHaveBeenCalledWith(
+        'channel-456',
+        expect.objectContaining({
+          content: '<@user-123>',
+          embeds: expect.arrayContaining([expect.any(EmbedBuilder)]),
+        })
+      );
+
+      expect(mockClient.sendMessage).toHaveBeenCalledWith(
+        'mod-log-channel-789',
+        expect.objectContaining({
+          embeds: expect.arrayContaining([expect.any(EmbedBuilder)]),
+        })
+      );
+
+      expect(result.dmSent).toBe(true);
+      expect(result.ephemeralSent).toBe(true);
+      expect(result.modLogSent).toBe(true);
+      expect(result.failures).toHaveLength(0);
+    });
+
+    it('should handle DM failure without preventing ephemeral/mod-log', async () => {
+      (mockClient.sendDirectMessage as any).mockRejectedValueOnce(
+        new Error('DM failed')
+      );
+
+      const punishment = {
+        type: 'TIMEOUT' as any,
+        duration: 1,
+        nextPunishment: 'Next offense: 2 hour timeout',
+      };
+
+      const result = await manager.sendPunishmentNotification(
+        'user-123',
+        'channel-456',
+        punishment,
+        'Spam detected',
+        3
+      );
+
+      expect(result.dmSent).toBe(false);
+      expect(result.ephemeralSent).toBe(true);
+      expect(result.modLogSent).toBe(true);
+      expect(result.failures).toHaveLength(1);
+      expect(result.failures[0]).toContain('Failed to send DM');
+    });
+
+    it('should handle ephemeral failure without preventing DM/mod-log', async () => {
+      (mockClient.sendMessage as any)
+        .mockRejectedValueOnce(new Error('Ephemeral failed'))
+        .mockResolvedValueOnce({ id: 'mod-log-message' });
+
+      const punishment = {
+        type: 'TIMEOUT' as any,
+        duration: 2,
+        nextPunishment: 'Next offense: 4 hour timeout',
+      };
+
+      const result = await manager.sendPunishmentNotification(
+        'user-123',
+        'channel-456',
+        punishment,
+        'Repeated spam',
+        4
+      );
+
+      expect(result.dmSent).toBe(true);
+      expect(result.ephemeralSent).toBe(false);
+      expect(result.modLogSent).toBe(true);
+      expect(result.failures).toHaveLength(1);
+      expect(result.failures[0]).toContain('Failed to send ephemeral message');
+    });
+
+    it('should handle mod-log failure without preventing DM/ephemeral', async () => {
+      (mockClient.sendMessage as any)
+        .mockResolvedValueOnce({ id: 'ephemeral-message' })
+        .mockRejectedValueOnce(new Error('Mod-log failed'));
+
+      const punishment = {
+        type: 'PERMANENT_BAN' as any,
+        duration: undefined,
+        nextPunishment: 'Permanent ban - no further escalation',
+      };
+
+      const result = await manager.sendPunishmentNotification(
+        'user-123',
+        'channel-456',
+        punishment,
+        'Excessive spam',
+        8
+      );
+
+      expect(result.dmSent).toBe(true);
+      expect(result.ephemeralSent).toBe(true);
+      expect(result.modLogSent).toBe(false);
+      expect(result.failures).toHaveLength(1);
+      expect(result.failures[0]).toContain('Failed to send mod-log notification');
+    });
+
+    it('should track all failures in NotificationResult', async () => {
+      (mockClient.sendDirectMessage as any).mockRejectedValueOnce(
+        new Error('DM failed')
+      );
+      (mockClient.sendMessage as any)
+        .mockRejectedValueOnce(new Error('Ephemeral failed'))
+        .mockRejectedValueOnce(new Error('Mod-log failed'));
+
+      const punishment = {
+        type: 'WARNING' as any,
+        duration: undefined,
+        nextPunishment: 'Next offense: Final warning',
+      };
+
+      const result = await manager.sendPunishmentNotification(
+        'user-123',
+        'channel-456',
+        punishment,
+        'Spam',
+        2
+      );
+
+      expect(result.dmSent).toBe(false);
+      expect(result.ephemeralSent).toBe(false);
+      expect(result.modLogSent).toBe(false);
+      expect(result.failures).toHaveLength(3);
+    });
+
+    it('should format notification content correctly for WARNING', async () => {
+      const punishment = {
+        type: 'WARNING' as any,
+        duration: undefined,
+        nextPunishment: 'Next offense: Final warning',
+      };
+
+      await manager.sendPunishmentNotification(
+        'user-123',
+        'channel-456',
+        punishment,
+        'Spam detected',
+        1
+      );
+
+      const dmCall = (mockClient.sendDirectMessage as any).mock.calls[0];
+      const dmEmbed = dmCall[1].embeds[0];
+
+      expect(dmEmbed.data.title).toBe('⚠️ Moderation Action');
+      expect(dmEmbed.data.description).toContain('warning');
+      expect(dmEmbed.data.fields).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'Reason', value: 'Spam detected' }),
+          expect.objectContaining({ name: 'Offense Count', value: '1' }),
+          expect.objectContaining({
+            name: 'Next Offense',
+            value: 'Next offense: Final warning',
+          }),
+        ])
+      );
+    });
+
+    it('should format notification content correctly for TIMEOUT', async () => {
+      const punishment = {
+        type: 'TIMEOUT' as any,
+        duration: 4,
+        nextPunishment: 'Next offense: 8 hour timeout',
+      };
+
+      await manager.sendPunishmentNotification(
+        'user-123',
+        'channel-456',
+        punishment,
+        'Repeated spam',
+        5
+      );
+
+      const dmCall = (mockClient.sendDirectMessage as any).mock.calls[0];
+      const dmEmbed = dmCall[1].embeds[0];
+
+      expect(dmEmbed.data.description).toContain('4 hour timeout');
+      expect(dmEmbed.data.fields).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'Offense Count', value: '5' }),
+        ])
+      );
+    });
+
+    it('should format notification content correctly for PERMANENT_BAN', async () => {
+      const punishment = {
+        type: 'PERMANENT_BAN' as any,
+        duration: undefined,
+        nextPunishment: 'Permanent ban - no further escalation',
+      };
+
+      await manager.sendPunishmentNotification(
+        'user-123',
+        'channel-456',
+        punishment,
+        'Excessive violations',
+        8
+      );
+
+      const dmCall = (mockClient.sendDirectMessage as any).mock.calls[0];
+      const dmEmbed = dmCall[1].embeds[0];
+
+      expect(dmEmbed.data.description).toContain('permanent ban');
+      expect(dmEmbed.data.color).toBe(0x8b0000); // Dark red
+    });
+
+    it('should handle missing mod-log channel configuration', async () => {
+      const configNoModLog: NotificationManagerConfig = {
+        primaryChannelId: 'primary-channel-123',
+        maxRetries: 3,
+        retryDelayMs: 100,
+      };
+
+      const managerNoModLog = new NotificationManager(
+        mockClient,
+        configNoModLog
+      );
+
+      const punishment = {
+        type: 'WARNING' as any,
+        duration: undefined,
+        nextPunishment: 'Next offense: Final warning',
+      };
+
+      const result = await managerNoModLog.sendPunishmentNotification(
+        'user-123',
+        'channel-456',
+        punishment,
+        'Spam',
+        1
+      );
+
+      expect(result.dmSent).toBe(true);
+      expect(result.ephemeralSent).toBe(true);
+      expect(result.modLogSent).toBe(false);
+      expect(result.failures).toHaveLength(1);
+      expect(result.failures[0]).toContain('Mod-log channel not configured');
     });
   });
 });

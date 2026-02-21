@@ -11,6 +11,11 @@ Quick reference guide for moderators using TZBOT.
 /timeout user:@User duration:60 reason:Reason
 /warn user:@User reason:Reason
 /kick user:@User reason:Reason
+/warnlist user:@User              # View user's offense history
+/warnall                          # View all users with active offenses
+/clearwarn user:@User             # Remove last offense
+/resetoffenses user:@User         # Clear all offenses
+/modlog user:@User                # View moderation action history
 ```
 
 ### Utility Commands
@@ -73,13 +78,22 @@ Quick reference guide for moderators using TZBOT.
 - 5+ identical messages in 10 seconds
 - 10+ messages in 5 seconds
 
-**Escalation:**
-1. First violation → Warning
-2. Second (24h) → 1-hour timeout
-3. Third (24h) → 24-hour timeout
-4. Fourth (7d) → Permanent ban
+**Progressive Punishment Ladder:**
+1. 1st offense → Warning
+2. 2nd offense → Warning
+3. 3rd offense → 1-hour timeout
+4. 4th offense → 2-hour timeout
+5. 5th offense → 4-hour timeout
+6. 6th offense → 8-hour timeout
+7. 7th offense → 16-hour timeout
+8. 8th+ offense → Permanent ban
 
-**Reset:** 7 days of no violations
+**Reset:** 30 days of good behavior automatically clears offense history
+
+**Notifications:** Each punishment triggers:
+- Direct message to user
+- Ephemeral in-channel message
+- Mod-log channel entry
 
 ### Link Scanning
 
@@ -598,12 +612,18 @@ logrotate -f /etc/logrotate.d/tzbot
 
 ### Spam Escalation
 
-| Violation | Time Window | Punishment |
-|-----------|-------------|------------|
-| 1st | - | Warning |
-| 2nd | 24 hours | 1-hour timeout |
-| 3rd | 24 hours | 24-hour timeout |
-| 4th | 7 days | Permanent ban |
+| Offense | Punishment | Duration |
+|---------|------------|----------|
+| 1st | Warning | - |
+| 2nd | Warning | - |
+| 3rd | Timeout | 1 hour |
+| 4th | Timeout | 2 hours |
+| 5th | Timeout | 4 hours |
+| 6th | Timeout | 8 hours |
+| 7th | Timeout | 16 hours |
+| 8th+ | Permanent Ban | - |
+
+**Reset:** 30 days of good behavior
 
 ### Chat Rain Timing
 

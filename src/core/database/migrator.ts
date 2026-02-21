@@ -49,6 +49,12 @@ const MIGRATIONS: Migration[] = [
     upPath: join(__dirname, 'schema', '001_initial_schema.sql'),
     downPath: join(__dirname, 'schema', '001_initial_schema_down.sql'),
   },
+  {
+    version: 2,
+    name: '002_offense_tracking',
+    upPath: join(__dirname, 'schema', '002_offense_tracking.sql'),
+    downPath: join(__dirname, 'schema', '002_offense_tracking_down.sql'),
+  },
 ];
 
 /**

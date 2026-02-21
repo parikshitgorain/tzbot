@@ -71,22 +71,6 @@ export function verifyBotPermissions(guild: Guild): PermissionsCheckResult {
 
   const hasAllPermissions = missingPermissions.length === 0;
 
-  // Log results
-  if (hasAllPermissions) {
-    logger.info('Bot has all required permissions', {
-      guildId: guild.id,
-      guildName: guild.name,
-      permissions: grantedPermissions,
-    });
-  } else {
-    logger.warn('Bot is missing required permissions', {
-      guildId: guild.id,
-      guildName: guild.name,
-      missingPermissions,
-      grantedPermissions,
-    });
-  }
-
   return {
     hasAllPermissions,
     missingPermissions,
@@ -165,7 +149,7 @@ export function verifyPermissionsOnStartup(guild: Guild): void {
       guildId: guild.id,
       guildName: guild.name,
       missingPermissions: result.missingPermissions,
-      errorMessage,
+      grantedPermissions: result.grantedPermissions,
     });
 
     // Log to console for visibility
@@ -174,6 +158,7 @@ export function verifyPermissionsOnStartup(guild: Guild): void {
     logger.info('Bot has all required permissions', {
       guildId: guild.id,
       guildName: guild.name,
+      permissions: result.grantedPermissions,
     });
   }
 }

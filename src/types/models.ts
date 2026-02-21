@@ -24,6 +24,29 @@ export interface Violation {
   punishmentApplied?: PunishmentLevel;
 }
 
+/**
+ * Offense record for progressive spam punishment system
+ */
+export interface OffenseRecord {
+  user_id: string;
+  total_offenses: number;
+  last_offense_timestamp: Date | null;
+  current_timeout_duration: number; // in hours
+  is_banned: boolean;
+  warning_history: OffenseEntry[];
+}
+
+/**
+ * Individual offense entry in warning history
+ */
+export interface OffenseEntry {
+  timestamp: Date;
+  reason: string;
+  punishment_applied: string; // PunishmentType as string
+  moderator_id: string;
+  timeout_duration?: number; // in hours
+}
+
 export interface Giveaway {
   id: string;
   title: string;
@@ -61,10 +84,22 @@ export enum ViolationType {
 
 export enum PunishmentLevel {
   WARNING = 'warning',
-  TIMEOUT_5M = 'timeout_5m',
   TIMEOUT_1H = 'timeout_1h',
+  TIMEOUT_2H = 'timeout_2h',
+  TIMEOUT_4H = 'timeout_4h',
+  TIMEOUT_8H = 'timeout_8h',
+  TIMEOUT_16H = 'timeout_16h',
   TIMEOUT_24H = 'timeout_24h',
   BAN = 'ban',
+}
+
+/**
+ * Punishment type for progressive spam punishment system
+ */
+export enum PunishmentType {
+  WARNING = 'WARNING',
+  TIMEOUT = 'TIMEOUT',
+  PERMANENT_BAN = 'PERMANENT_BAN',
 }
 
 export enum GiveawayStatus {

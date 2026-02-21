@@ -9,6 +9,9 @@ import type { IDiscordClient } from '@/core/discord/client.js';
 import type { NotificationEvent } from '@/types/models.js';
 import { logger, logError } from '@/core/logger/logger.js';
 import { v4 as uuidv4 } from 'uuid';
+import type { Punishment } from '@/moderation/punishment-calculator.js';
+import { PunishmentType } from '@/moderation/punishment-calculator.js';
+import type { NotificationResult } from '@/moderation/offense-manager.js';
 
 /**
  * Premium embed data structure
@@ -43,6 +46,8 @@ export interface NotificationManagerConfig {
   retryDelayMs?: number;
   getChannelId?: () => string; // Dynamic channel ID getter
   getFallbackChannelId?: () => string | undefined; // Dynamic fallback channel ID getter
+  modLogChannelId?: string; // Mod-log channel for punishment notifications
+  getModLogChannelId?: () => string | undefined; // Dynamic mod-log channel ID getter
 }
 
 /**
@@ -93,6 +98,13 @@ export class NotificationManager {
    */
   private getFallbackChannelId(): string | undefined {
     return this.config.getFallbackChannelId?.() || this.config.fallbackChannelId;
+  }
+
+  /**
+   * Get the mod-log channel ID for punishment notifications
+   */
+  private getModLogChannelId(): string | undefined {
+    return this.config.getModLogChannelId?.() || this.config.modLogChannelId;
   }
 
   /**
@@ -466,6 +478,157 @@ export class NotificationManager {
       logger.info('No stale notifications found in queue', {
         queueSize: this.notificationQueue.size
       });
+    }
+  }
+
+  /**
+   * Send punishment notification through triple notification system
+   * Requirement 3.1-3.4: DM, ephemeral message, and mod-log notification
+   * 
+   * @param userId - Discord user ID
+   * @param channelId - Channel where offense occurred
+   * @param punishment - Calculated punishment
+   * @param reason - Reason for the offense
+   * @param offenseCount - Current offense count
+   * @returns NotificationResult with success flags and failures
+   */
+  async sendPunishmentNotification(
+    userId: string,
+    channelId: string,
+    punishment: Punishment,
+    reason: string,
+    offenseCount: number
+  ): Promise<NotificationResult> {
+    const result: NotificationResult = {
+      dmSent: false,
+      ephemeralSent: false,
+      modLogSent: false,
+      failures: [],
+    };
+
+    // Format punishment description
+    const punishmentDescription = this.formatPunishmentDescription(punishment);
+
+    // 1. Send DM to user
+    try {
+      const dmEmbed = new EmbedBuilder()
+        .setTitle('⚠️ Moderation Action')
+        .setDescription(`You have received a ${punishmentDescription}`)
+        .addFields(
+          { name: 'Reason', value: reason, inline: false },
+          { name: 'Offense Count', value: offenseCount.toString(), inline: true },
+          { name: 'Current Punishment', value: punishmentDescription, inline: true },
+          { name: 'Next Offense', value: punishment.nextPunishment, inline: false }
+        )
+        .setColor(this.getPunishmentColor(punishment.type))
+        .setTimestamp();
+
+      await this.discordClient.sendDirectMessage(userId, {
+        embeds: [dmEmbed],
+      });
+
+      result.dmSent = true;
+      logger.info('DM notification sent', { userId, offenseCount });
+    } catch (error) {
+      const errorMsg = `Failed to send DM: ${(error as Error).message}`;
+      result.failures.push(errorMsg);
+      logError('Failed to send DM notification', error as Error, { userId });
+    }
+
+    // 2. Send ephemeral message in channel
+    try {
+      const ephemeralEmbed = new EmbedBuilder()
+        .setTitle('⚠️ Moderation Action')
+        .setDescription(`You have received a ${punishmentDescription} for: ${reason}`)
+        .addFields(
+          { name: 'Offense Count', value: offenseCount.toString(), inline: true },
+          { name: 'Next Offense', value: punishment.nextPunishment, inline: false }
+        )
+        .setColor(this.getPunishmentColor(punishment.type))
+        .setTimestamp();
+
+      // Note: Ephemeral messages require interaction context
+      // For now, we'll send a regular message that can be deleted
+      await this.discordClient.sendMessage(channelId, {
+        content: `<@${userId}>`,
+        embeds: [ephemeralEmbed],
+      });
+
+      result.ephemeralSent = true;
+      logger.info('Ephemeral notification sent', { userId, channelId, offenseCount });
+    } catch (error) {
+      const errorMsg = `Failed to send ephemeral message: ${(error as Error).message}`;
+      result.failures.push(errorMsg);
+      logError('Failed to send ephemeral notification', error as Error, { userId, channelId });
+    }
+
+    // 3. Send mod-log notification
+    try {
+      const modLogChannelId = this.getModLogChannelId();
+      
+      if (modLogChannelId) {
+        const modLogEmbed = new EmbedBuilder()
+          .setTitle('🔨 Moderation Action Applied')
+          .setDescription(`Punishment applied to <@${userId}>`)
+          .addFields(
+            { name: 'User', value: `<@${userId}>`, inline: true },
+            { name: 'Action', value: punishmentDescription, inline: true },
+            { name: 'Offense Count', value: offenseCount.toString(), inline: true },
+            { name: 'Reason', value: reason, inline: false },
+            { name: 'Channel', value: `<#${channelId}>`, inline: true }
+          )
+          .setColor(this.getPunishmentColor(punishment.type))
+          .setTimestamp();
+
+        await this.discordClient.sendMessage(modLogChannelId, {
+          embeds: [modLogEmbed],
+        });
+
+        result.modLogSent = true;
+        logger.info('Mod-log notification sent', { userId, offenseCount, modLogChannelId });
+      } else {
+        const errorMsg = 'Mod-log channel not configured';
+        result.failures.push(errorMsg);
+        logger.warn('Mod-log channel not configured, skipping notification');
+      }
+    } catch (error) {
+      const errorMsg = `Failed to send mod-log notification: ${(error as Error).message}`;
+      result.failures.push(errorMsg);
+      logError('Failed to send mod-log notification', error as Error, { userId });
+    }
+
+    return result;
+  }
+
+  /**
+   * Format punishment description for display
+   */
+  private formatPunishmentDescription(punishment: Punishment): string {
+    switch (punishment.type) {
+      case PunishmentType.WARNING:
+        return 'warning';
+      case PunishmentType.TIMEOUT:
+        return `${punishment.duration} hour timeout`;
+      case PunishmentType.PERMANENT_BAN:
+        return 'permanent ban';
+      default:
+        return 'unknown punishment';
+    }
+  }
+
+  /**
+   * Get color for punishment type
+   */
+  private getPunishmentColor(type: PunishmentType): number {
+    switch (type) {
+      case PunishmentType.WARNING:
+        return 0xffa500; // Orange
+      case PunishmentType.TIMEOUT:
+        return 0xff6b6b; // Red
+      case PunishmentType.PERMANENT_BAN:
+        return 0x8b0000; // Dark red
+      default:
+        return 0x5865f2; // Discord blurple
     }
   }
 }
