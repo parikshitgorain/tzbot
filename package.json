@@ -11,6 +11,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "commands:clear": "tsx scripts/clear-commands.ts",
+    "logs:cleanup": "tsx scripts/cleanup-old-logs.ts",
     "test": "vitest",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
