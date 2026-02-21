@@ -61,6 +61,9 @@ export function createModerationCommands(
     createClearWarnCommand(_client, database),
     createResetOffensesCommand(_client, database),
     createModLogCommand(_client, database),
+    createRateLimitAddCommand(_client, database),
+    createRateLimitRemoveCommand(_client, database),
+    createRateLimitListCommand(_client, database),
   ];
 }
 
@@ -396,6 +399,35 @@ function createWarnCommand(
       // Get offense history for confirmation message
       const offenseRecord = await offenseManager.getOffenseHistory(user.id);
       const offenseCount = offenseRecord?.total_offenses || 0;
+
+      // Send DM notification to user
+      try {
+        let dmMessage = `<@${user.id}> ⚠️ **Warning Issued**\n\n`;
+        dmMessage += `**Reason:** ${reason}\n`;
+        dmMessage += `**Offense Count:** ${offenseCount}\n`;
+        dmMessage += `**Next Offense:** ${punishment.nextPunishment}\n\n`;
+        
+        if (punishment.type === PunishmentType.WARNING) {
+          dmMessage += `You have been warned. Please follow the server rules to avoid further action.`;
+        } else if (punishment.type === PunishmentType.TIMEOUT && punishment.duration) {
+          dmMessage += `You have been timed out for ${punishment.duration} hour${punishment.duration > 1 ? 's' : ''}.`;
+        } else if (punishment.type === PunishmentType.PERMANENT_BAN) {
+          dmMessage += `You have been permanently banned from the server.`;
+        }
+        
+        await user.send(dmMessage);
+        
+        logger.debug('Warn command DM sent', {
+          userId: user.id,
+          username: user.username,
+          punishmentType: punishment.type,
+        });
+      } catch (dmError) {
+        logger.warn('Failed to send warn command DM to user', {
+          userId: user.id,
+          error: (dmError as Error).message,
+        });
+      }
 
       // Format punishment description
       let punishmentDesc = '';
@@ -783,6 +815,52 @@ function createClearWarnCommand(
       const afterRecord = await offenseManager.getOffenseHistory(user.id);
       const afterCount = afterRecord?.total_offenses || 0;
 
+      // Check if user should still be timed out based on new offense count
+      // Timeouts start at offense 3 (1st timeout = 1 hour)
+      // Only remove timeout if the new count is below 3
+      const member = interaction.guild?.members.cache.get(user.id);
+      let timeoutRemoved = false;
+      if (member && member.communicationDisabledUntil && afterCount < 3) {
+        try {
+          await member.timeout(null, 'Offense cleared - below timeout threshold');
+          timeoutRemoved = true;
+          logger.info('Timeout removed after clearing offense (below threshold)', {
+            userId: user.id,
+            username: user.username,
+            moderator: interaction.user.username,
+            newOffenseCount: afterCount,
+          });
+        } catch (timeoutError) {
+          logger.warn('Failed to remove timeout after clearing offense', {
+            userId: user.id,
+            error: timeoutError,
+          });
+        }
+      }
+
+      // Send DM notification to user
+      try {
+        let dmMessage = `<@${user.id}> ✅ **Offense Cleared**\n\n`;
+        dmMessage += `One of your offenses has been removed by a moderator.\n\n`;
+        dmMessage += `**Previous offense count:** ${beforeCount}\n`;
+        dmMessage += `**New offense count:** ${afterCount}`;
+        
+        if (timeoutRemoved) {
+          dmMessage += `\n\n**Timeout removed:** Your timeout has been lifted.`;
+        }
+        
+        await user.send(dmMessage);
+        logger.debug('Clearwarn DM sent', {
+          userId: user.id,
+          username: user.username,
+        });
+      } catch (dmError) {
+        logger.warn('Failed to send clearwarn DM to user', {
+          userId: user.id,
+          error: (dmError as Error).message,
+        });
+      }
+
       logger.info('Last offense cleared via command', {
         userId: user.id,
         username: user.username,
@@ -790,10 +868,12 @@ function createClearWarnCommand(
         moderatorId: interaction.user.id,
         beforeCount,
         afterCount,
+        timeoutRemoved,
       });
 
+      const timeoutMessage = timeoutRemoved ? '\n**Timeout removed:** Yes' : '';
       await interaction.editReply({
-        content: `✅ Cleared last offense for ${user.username}.\n**Previous offense count:** ${beforeCount}\n**New offense count:** ${afterCount}`,
+        content: `✅ Cleared last offense for ${user.username}.\n**Previous offense count:** ${beforeCount}\n**New offense count:** ${afterCount}${timeoutMessage}`,
       });
     } catch (error) {
       logError('Failed to execute clearwarn command', error as Error, {
@@ -1042,3 +1122,217 @@ function createModLogCommand(
   };
 }
 
+
+/**
+ * /ratelimit-add command - Add a channel to rate limiting
+ */
+function createRateLimitAddCommand(
+  _client: IDiscordClient,
+  _database: Database
+): CommandDefinition {
+  const builder = new SlashCommandBuilder()
+    .setName('ratelimit-add')
+    .setDescription('Add a channel to text rate limiting')
+    .addChannelOption((option) =>
+      option
+        .setName('restricted')
+        .setDescription('The channel to restrict')
+        .setRequired(true)
+    )
+    .addChannelOption((option) =>
+      option
+        .setName('redirect')
+        .setDescription('The channel to redirect users to')
+        .setRequired(true)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels);
+
+  const handler = async (interaction: ChatInputCommandInteraction) => {
+    const restrictedChannel = interaction.options.getChannel('restricted', true);
+    const redirectChannel = interaction.options.getChannel('redirect', true);
+
+    try {
+      await interaction.deferReply({ ephemeral: true });
+
+      // Save to database config
+      const currentConfig = await _database.getConfig('rateLimiterRestrictedChannels');
+      const channelMap = typeof currentConfig === 'object' && currentConfig !== null
+        ? currentConfig as Record<string, string>
+        : {};
+
+      channelMap[restrictedChannel.id] = redirectChannel.id;
+
+      await _database.setConfig('rateLimiterRestrictedChannels', channelMap);
+
+      logger.info('Rate limiter channel added', {
+        restrictedChannelId: restrictedChannel.id,
+        redirectChannelId: redirectChannel.id,
+        moderator: interaction.user.username,
+        moderatorId: interaction.user.id,
+      });
+
+      await interaction.editReply({
+        content: `✅ Rate limiting enabled for <#${restrictedChannel.id}>.\nUsers will be redirected to <#${redirectChannel.id}> for chatting.\n\n⚠️ **Note:** Restart the bot for changes to take effect.`,
+      });
+    } catch (error) {
+      logError('Failed to execute ratelimit-add command', error as Error, {
+        restrictedChannelId: restrictedChannel.id,
+        redirectChannelId: redirectChannel.id,
+      });
+
+      await interaction.editReply({
+        content: `❌ Failed to add rate limit. Error: ${(error as Error).message}`,
+      });
+    }
+  };
+
+  return {
+    name: 'ratelimit-add',
+    description: 'Add a channel to text rate limiting',
+    builder: builder as SlashCommandBuilder,
+    handler,
+    permissions: [PermissionFlagsBits.ManageChannels],
+    moderatorOnly: true,
+  };
+}
+
+/**
+ * /ratelimit-remove command - Remove a channel from rate limiting
+ */
+function createRateLimitRemoveCommand(
+  _client: IDiscordClient,
+  _database: Database
+): CommandDefinition {
+  const builder = new SlashCommandBuilder()
+    .setName('ratelimit-remove')
+    .setDescription('Remove a channel from text rate limiting')
+    .addChannelOption((option) =>
+      option
+        .setName('channel')
+        .setDescription('The channel to remove from rate limiting')
+        .setRequired(true)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels);
+
+  const handler = async (interaction: ChatInputCommandInteraction) => {
+    const channel = interaction.options.getChannel('channel', true);
+
+    try {
+      await interaction.deferReply({ ephemeral: true });
+
+      // Get current config
+      const currentConfig = await _database.getConfig('rateLimiterRestrictedChannels');
+      const channelMap = typeof currentConfig === 'object' && currentConfig !== null
+        ? currentConfig as Record<string, string>
+        : {};
+
+      if (!channelMap[channel.id]) {
+        await interaction.editReply({
+          content: `<#${channel.id}> is not currently rate limited.`,
+        });
+        return;
+      }
+
+      // Remove channel
+      delete channelMap[channel.id];
+
+      await _database.setConfig('rateLimiterRestrictedChannels', channelMap);
+
+      logger.info('Rate limiter channel removed', {
+        channelId: channel.id,
+        moderator: interaction.user.username,
+        moderatorId: interaction.user.id,
+      });
+
+      await interaction.editReply({
+        content: `✅ Rate limiting removed for <#${channel.id}>.\n\n⚠️ **Note:** Restart the bot for changes to take effect.`,
+      });
+    } catch (error) {
+      logError('Failed to execute ratelimit-remove command', error as Error, {
+        channelId: channel.id,
+      });
+
+      await interaction.editReply({
+        content: `❌ Failed to remove rate limit. Error: ${(error as Error).message}`,
+      });
+    }
+  };
+
+  return {
+    name: 'ratelimit-remove',
+    description: 'Remove a channel from text rate limiting',
+    builder: builder as SlashCommandBuilder,
+    handler,
+    permissions: [PermissionFlagsBits.ManageChannels],
+    moderatorOnly: true,
+  };
+}
+
+/**
+ * /ratelimit-list command - List all rate limited channels
+ */
+function createRateLimitListCommand(
+  _client: IDiscordClient,
+  _database: Database
+): CommandDefinition {
+  const builder = new SlashCommandBuilder()
+    .setName('ratelimit-list')
+    .setDescription('List all rate limited channels')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels);
+
+  const handler = async (interaction: ChatInputCommandInteraction) => {
+    try {
+      await interaction.deferReply({ ephemeral: true });
+
+      // Get current config
+      const currentConfig = await _database.getConfig('rateLimiterRestrictedChannels');
+      const channelMap = typeof currentConfig === 'object' && currentConfig !== null
+        ? currentConfig as Record<string, string>
+        : {};
+
+      const entries = Object.entries(channelMap);
+
+      if (entries.length === 0) {
+        await interaction.editReply({
+          content: 'No channels are currently rate limited.',
+        });
+        return;
+      }
+
+      // Build embed
+      const embed = new EmbedBuilder()
+        .setTitle('⏱️ Rate Limited Channels')
+        .setColor(0x5865f2)
+        .setDescription(`Total: ${entries.length} channel${entries.length > 1 ? 's' : ''}`);
+
+      for (const [restrictedId, redirectId] of entries) {
+        embed.addFields({
+          name: `<#${restrictedId}>`,
+          value: `Redirects to: <#${redirectId}>`,
+          inline: false,
+        });
+      }
+
+      embed.setFooter({
+        text: 'Text messages limited to 1 per minute • Media unlimited',
+      });
+
+      await interaction.editReply({ embeds: [embed] });
+    } catch (error) {
+      logError('Failed to execute ratelimit-list command', error as Error);
+
+      await interaction.editReply({
+        content: `❌ Failed to list rate limits. Error: ${(error as Error).message}`,
+      });
+    }
+  };
+
+  return {
+    name: 'ratelimit-list',
+    description: 'List all rate limited channels',
+    builder: builder as SlashCommandBuilder,
+    handler,
+    permissions: [PermissionFlagsBits.ManageChannels],
+    moderatorOnly: true,
+  };
+}
