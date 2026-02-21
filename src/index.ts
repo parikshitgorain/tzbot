@@ -686,7 +686,7 @@ class TZBotApplication {
               // Send DM reminder
               try {
                 await message.author.send(
-                  '⚠️ **Please don\'t spam!** You are in a 1-minute cooldown. Your messages will be automatically deleted until the cooldown expires.'
+                  `<@${message.author.id}> ⚠️ **Please don't spam!** You are in a 1-minute cooldown. Your messages will be automatically deleted until the cooldown expires.`
                 );
                 
                 logger.debug('Cooldown reminder DM sent', {
@@ -851,7 +851,7 @@ class TZBotApplication {
             // Send warning message to user via DM
             try {
               await message.author.send(
-                `⚠️ **Warning: Spam Detected**\n\n` +
+                `<@${message.author.id}> ⚠️ **Warning: Spam Detected**\n\n` +
                 `You have been warned for: ${spamResult.reason || 'Spam detected'}\n\n` +
                 `**Offense Count:** ${offenseCount}\n` +
                 `**Cooldown:** 1 minute - Your messages will be auto-deleted during this time.\n` +
@@ -1092,7 +1092,7 @@ class TZBotApplication {
           if (!accessResult.isAuthorized) {
             await message.delete();
             await message.author.send(
-              `Your message in <#${message.channel.id}> was deleted because you don't have permission to post in that channel.`
+              `<@${message.author.id}> Your message in <#${message.channel.id}> was deleted because you don't have permission to post in that channel.`
             ).catch(() => {
               // Ignore DM failures
             });
