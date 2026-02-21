@@ -4,19 +4,37 @@
  */
 
 import { REST, Routes } from 'discord.js';
-import { config } from '../src/config/index.js';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 async function clearCommands() {
   console.log('🗑️  Clearing all Discord slash commands...\n');
 
-  const rest = new REST({ version: '10' }).setToken(config.discordToken);
+  // Get config from environment variables directly
+  const discordToken = process.env.DISCORD_TOKEN;
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  const guildId = process.env.DISCORD_GUILD_ID;
+
+  if (!discordToken) {
+    console.error('❌ DISCORD_TOKEN not found in .env file');
+    process.exit(1);
+  }
+
+  if (!clientId) {
+    console.error('❌ DISCORD_CLIENT_ID not found in .env file');
+    process.exit(1);
+  }
+
+  const rest = new REST({ version: '10' }).setToken(discordToken);
 
   try {
     // Clear guild commands
-    if (config.guildId) {
-      console.log(`Clearing guild commands for guild: ${config.guildId}`);
+    if (guildId) {
+      console.log(`Clearing guild commands for guild: ${guildId}`);
       await rest.put(
-        Routes.applicationGuildCommands(config.clientId, config.guildId),
+        Routes.applicationGuildCommands(clientId, guildId),
         { body: [] }
       );
       console.log('✅ Guild commands cleared\n');
@@ -24,7 +42,7 @@ async function clearCommands() {
 
     // Clear global commands
     console.log('Clearing global commands...');
-    await rest.put(Routes.applicationCommands(config.clientId), {
+    await rest.put(Routes.applicationCommands(clientId), {
       body: [],
     });
     console.log('✅ Global commands cleared\n');
