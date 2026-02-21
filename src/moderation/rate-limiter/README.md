@@ -120,7 +120,7 @@ Alternatively, use Discord commands to manage channels (stored in database):
 /ratelimit-remove channel:#announcements
 ```
 
-**Note:** Bot restart required after using commands for changes to take effect.
+**Hot-Reload:** Changes take effect immediately without bot restart! ✨
 
 ## Architecture
 
@@ -226,7 +226,7 @@ The rate limiter logs the following events:
 
 ## Future Enhancements
 
-- Hot-reload configuration without restart
+- ~~Hot-reload configuration without restart~~ ✅ **Implemented!**
 - Per-channel rate limit customization
 - Whitelist roles (bypass rate limiting)
 - Analytics dashboard

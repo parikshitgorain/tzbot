@@ -128,6 +128,29 @@ export class ChannelTextRateLimiter {
   }
 
   /**
+   * Reload configuration without restarting the bot
+   * Updates the restricted channels map dynamically
+   */
+  async reloadConfig(newRestrictedChannels: Map<string, string>): Promise<void> {
+    if (!this.initialized) {
+      throw new Error('ChannelTextRateLimiter not initialized');
+    }
+
+    // Update the restricted channels configuration
+    this.config.restrictedChannels = newRestrictedChannels;
+
+    // Note: We don't need to reinitialize other components as they reference this.config
+    // The classifier will use the updated config on the next message check
+  }
+
+  /**
+   * Get current configuration
+   */
+  getConfig(): RateLimiterConfig {
+    return this.config;
+  }
+
+  /**
    * Shutdown and cleanup resources
    */
   async shutdown(): Promise<void> {

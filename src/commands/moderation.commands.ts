@@ -49,7 +49,8 @@ function initializeOffenseManager(
  */
 export function createModerationCommands(
   _client: IDiscordClient,
-  database: Database
+  database: Database,
+  rateLimiter?: import('@/moderation/rate-limiter/channel-text-rate-limiter.js').ChannelTextRateLimiter
 ): CommandDefinition[] {
   return [
     createBanCommand(_client, database),
@@ -61,8 +62,8 @@ export function createModerationCommands(
     createClearWarnCommand(_client, database),
     createResetOffensesCommand(_client, database),
     createModLogCommand(_client, database),
-    createRateLimitAddCommand(_client, database),
-    createRateLimitRemoveCommand(_client, database),
+    createRateLimitAddCommand(_client, database, rateLimiter),
+    createRateLimitRemoveCommand(_client, database, rateLimiter),
     createRateLimitListCommand(_client, database),
   ];
 }
@@ -1128,7 +1129,8 @@ function createModLogCommand(
  */
 function createRateLimitAddCommand(
   _client: IDiscordClient,
-  _database: Database
+  _database: Database,
+  rateLimiter?: import('@/moderation/rate-limiter/channel-text-rate-limiter.js').ChannelTextRateLimiter
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('ratelimit-add')
@@ -1164,16 +1166,33 @@ function createRateLimitAddCommand(
 
       await _database.setConfig('rateLimiterRestrictedChannels', channelMap);
 
-      logger.info('Rate limiter channel added', {
-        restrictedChannelId: restrictedChannel.id,
-        redirectChannelId: redirectChannel.id,
-        moderator: interaction.user.username,
-        moderatorId: interaction.user.id,
-      });
+      // Hot-reload configuration if rate limiter is available
+      if (rateLimiter) {
+        const restrictedChannelsMap = new Map(Object.entries(channelMap));
+        await rateLimiter.reloadConfig(restrictedChannelsMap);
+        
+        logger.info('Rate limiter configuration reloaded', {
+          restrictedChannelId: restrictedChannel.id,
+          redirectChannelId: redirectChannel.id,
+          moderator: interaction.user.username,
+          moderatorId: interaction.user.id,
+        });
 
-      await interaction.editReply({
-        content: `✅ Rate limiting enabled for <#${restrictedChannel.id}>.\nUsers will be redirected to <#${redirectChannel.id}> for chatting.\n\n⚠️ **Note:** Restart the bot for changes to take effect.`,
-      });
+        await interaction.editReply({
+          content: `✅ Rate limiting enabled for <#${restrictedChannel.id}>.\nUsers will be redirected to <#${redirectChannel.id}> for chatting.\n\n✨ **Changes applied immediately** - no restart required!`,
+        });
+      } else {
+        logger.info('Rate limiter channel added (restart required)', {
+          restrictedChannelId: restrictedChannel.id,
+          redirectChannelId: redirectChannel.id,
+          moderator: interaction.user.username,
+          moderatorId: interaction.user.id,
+        });
+
+        await interaction.editReply({
+          content: `✅ Rate limiting enabled for <#${restrictedChannel.id}>.\nUsers will be redirected to <#${redirectChannel.id}> for chatting.\n\n⚠️ **Note:** Restart the bot for changes to take effect.`,
+        });
+      }
     } catch (error) {
       logError('Failed to execute ratelimit-add command', error as Error, {
         restrictedChannelId: restrictedChannel.id,
@@ -1201,7 +1220,8 @@ function createRateLimitAddCommand(
  */
 function createRateLimitRemoveCommand(
   _client: IDiscordClient,
-  _database: Database
+  _database: Database,
+  rateLimiter?: import('@/moderation/rate-limiter/channel-text-rate-limiter.js').ChannelTextRateLimiter
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('ratelimit-remove')
@@ -1238,15 +1258,31 @@ function createRateLimitRemoveCommand(
 
       await _database.setConfig('rateLimiterRestrictedChannels', channelMap);
 
-      logger.info('Rate limiter channel removed', {
-        channelId: channel.id,
-        moderator: interaction.user.username,
-        moderatorId: interaction.user.id,
-      });
+      // Hot-reload configuration if rate limiter is available
+      if (rateLimiter) {
+        const restrictedChannelsMap = new Map(Object.entries(channelMap));
+        await rateLimiter.reloadConfig(restrictedChannelsMap);
+        
+        logger.info('Rate limiter configuration reloaded (channel removed)', {
+          channelId: channel.id,
+          moderator: interaction.user.username,
+          moderatorId: interaction.user.id,
+        });
 
-      await interaction.editReply({
-        content: `✅ Rate limiting removed for <#${channel.id}>.\n\n⚠️ **Note:** Restart the bot for changes to take effect.`,
-      });
+        await interaction.editReply({
+          content: `✅ Rate limiting removed for <#${channel.id}>.\n\n✨ **Changes applied immediately** - no restart required!`,
+        });
+      } else {
+        logger.info('Rate limiter channel removed (restart required)', {
+          channelId: channel.id,
+          moderator: interaction.user.username,
+          moderatorId: interaction.user.id,
+        });
+
+        await interaction.editReply({
+          content: `✅ Rate limiting removed for <#${channel.id}>.\n\n⚠️ **Note:** Restart the bot for changes to take effect.`,
+        });
+      }
     } catch (error) {
       logError('Failed to execute ratelimit-remove command', error as Error, {
         channelId: channel.id,

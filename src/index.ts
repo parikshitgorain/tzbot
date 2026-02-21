@@ -1527,8 +1527,12 @@ class TZBotApplication {
   private async registerCommands(): Promise<void> {
     logger.info('Registering slash commands...');
 
-    // Register moderation commands
-    const modCommands = createModerationCommands(this.discordClient, this.database);
+    // Register moderation commands (pass rate limiter for hot-reload support)
+    const modCommands = createModerationCommands(
+      this.discordClient, 
+      this.database,
+      this.rateLimiter // Pass rate limiter instance for hot-reload
+    );
     this.commandManager.registerCommands(modCommands);
 
     // Register utility commands
