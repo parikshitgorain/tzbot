@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @file retention.example.ts
  * @description Example usage of the Data Retention Service

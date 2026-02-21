@@ -27,6 +27,7 @@ export class Database implements IDatabase {
   /**
    * Connect to the database and initialize repositories
    * Runs migrations automatically on startup
+   * Includes retry logic for Neon database cold starts
    */
   async connect(config?: DatabaseConfig): Promise<void> {
     if (this.pool) {
@@ -38,6 +39,30 @@ export class Database implements IDatabase {
       this.pool = createPool(config);
     } else {
       this.pool = getPool();
+    }
+
+    // Test connection with retry logic (for Neon cold starts)
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const client = await this.pool.connect();
+        await client.query('SELECT 1');
+        client.release();
+        break; // Connection successful
+      } catch (error) {
+        lastError = error as Error;
+        if (attempt < maxRetries) {
+          const delay = attempt * 2000; // 2s, 4s
+          console.log(`Database connection attempt ${attempt} failed, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    if (lastError) {
+      throw new Error(`Failed to connect to database after ${maxRetries} attempts: ${lastError.message}`);
     }
 
     // Run migrations automatically

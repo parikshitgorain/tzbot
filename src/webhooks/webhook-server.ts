@@ -161,10 +161,11 @@ export class WebhookServer {
             });
 
             this.errorCount++;
-            return res.status(401).json({
+            res.status(401).json({
               error: 'Invalid signature',
               message: verification.error,
             });
+            return;
           }
 
           // Validate payload structure
@@ -175,10 +176,11 @@ export class WebhookServer {
             });
 
             this.errorCount++;
-            return res.status(400).json({
+            res.status(400).json({
               error: 'Invalid payload',
               message: 'Payload structure validation failed',
             });
+            return;
           }
 
           // Handle webhook event

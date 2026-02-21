@@ -331,6 +331,130 @@ Spam Threshold: 5 identical messages in 10s
 
 ---
 
+### `/setup` (NEW!)
+
+Configure bot settings directly through Discord without editing configuration files.
+
+**Syntax:**
+```
+/setup channel notification <channel>
+/setup channel fallback <channel>
+/setup role subscriber <role>
+/setup role vip <role>
+/setup role moderator <role>
+```
+
+**Parameters:**
+
+#### Channel Subcommands
+
+**`/setup channel notification`**
+Set the notification channel where the bot sends important messages.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| channel | Channel | Yes | The channel for notifications |
+
+**Example:**
+```
+/setup channel notification channel:#notifications
+```
+
+**Response:**
+```
+✅ Notification channel set to #notifications
+```
+
+---
+
+**`/setup channel fallback`**
+Set the fallback notification channel used when the primary channel is unavailable.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| channel | Channel | Yes | The fallback channel |
+
+**Example:**
+```
+/setup channel fallback channel:#general
+```
+
+**Response:**
+```
+✅ Fallback channel set to #general
+```
+
+---
+
+#### Role Subcommands
+
+**`/setup role subscriber`**
+Set the role assigned to Kick subscribers.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| role | Role | Yes | The subscriber role |
+
+**Example:**
+```
+/setup role subscriber role:@Subscriber
+```
+
+**Response:**
+```
+✅ Subscriber role set to @Subscriber
+```
+
+---
+
+**`/setup role vip`**
+Set the role assigned to Kick VIPs.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| role | Role | Yes | The VIP role |
+
+**Example:**
+```
+/setup role vip role:@VIP
+```
+
+**Response:**
+```
+✅ VIP role set to @VIP
+```
+
+---
+
+**`/setup role moderator`**
+Set the role that grants moderator permissions for bot commands.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| role | Role | Yes | The moderator role |
+
+**Example:**
+```
+/setup role moderator role:@Moderator
+```
+
+**Response:**
+```
+✅ Moderator role set to @Moderator
+```
+
+---
+
+**Notes:**
+- All settings are saved to the database and persist across bot restarts
+- Changes take effect immediately
+- You can verify changes using `/config`
+- Only users with Administrator permission can use this command
+
+**Required Permission:** ADMINISTRATOR
+
+---
+
 ## Command Examples
 
 ### Account Linking Workflow
@@ -411,6 +535,7 @@ Bot: 🎉 Giveaway Ended!
 | Command | Required Permission | Discord Permission |
 |---------|-------------------|-------------------|
 | /config | Moderator Role | ADMINISTRATOR |
+| /setup | Moderator Role | ADMINISTRATOR |
 
 ---
 
@@ -597,6 +722,20 @@ Reasons can be any text up to 512 characters. Be clear and specific.
 
 ## Command Changelog
 
+### Version 1.0.1 (2026-02-21)
+
+**Added:**
+- `/setup` - Configure bot settings through Discord (channels and roles)
+  - `/setup channel notification` - Set notification channel
+  - `/setup channel fallback` - Set fallback channel
+  - `/setup role subscriber` - Set subscriber role
+  - `/setup role vip` - Set VIP role
+  - `/setup role moderator` - Set moderator role
+
+**Notes:**
+- Configuration changes are now saved to database and persist across restarts
+- No more manual `.env` file editing required for basic configuration
+
 ### Version 1.0.0 (2025-02-21)
 
 **Added:**
@@ -617,6 +756,6 @@ Reasons can be any text up to 512 characters. Be clear and specific.
 
 ---
 
-**Last Updated:** 2025-02-21
-**Version:** 1.0.0
+**Last Updated:** 2026-02-21
+**Version:** 1.0.1
 

@@ -10,12 +10,12 @@ import {
   ButtonStyle,
   EmbedBuilder,
   ButtonInteraction,
-  Message,
 } from 'discord.js';
 import { randomBytes } from 'crypto';
 import type { IDiscordClient } from '@/core/discord/client.js';
 import type { GiveawayRepository } from '@/core/database/repositories/GiveawayRepository.js';
-import type { Giveaway, GiveawayStatus } from '@/types/models.js';
+import type { Giveaway } from '@/types/models.js';
+import { GiveawayStatus } from '@/types/models.js';
 import { logger, logError } from '@/core/logger/logger.js';
 
 /**
@@ -99,7 +99,7 @@ export class GiveawayManager {
         requiredRoles: options.requiredRoles,
         winnerCount: options.winnerCount,
         entries: [],
-        status: 'active',
+        status: GiveawayStatus.ACTIVE,
         endsAt,
         createdAt: now,
       };
@@ -331,7 +331,7 @@ export class GiveawayManager {
       }
 
       // Update status to ended
-      await this.giveawayRepository.updateStatus(giveawayId, 'ended');
+      await this.giveawayRepository.updateStatus(giveawayId, GiveawayStatus.ENDED);
 
       // Get all entries
       const entries = await this.giveawayRepository.getEntries(giveawayId);
@@ -654,7 +654,7 @@ export class GiveawayManager {
   async cancelGiveaway(giveawayId: string): Promise<void> {
     try {
       // Update status
-      await this.giveawayRepository.updateStatus(giveawayId, 'cancelled');
+      await this.giveawayRepository.updateStatus(giveawayId, GiveawayStatus.CANCELLED);
 
       // Remove scheduled timeout
       const timeout = this.activeGiveaways.get(giveawayId);

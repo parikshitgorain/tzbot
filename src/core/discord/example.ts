@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @file example.ts
  * @description Example usage of the Discord client wrapper

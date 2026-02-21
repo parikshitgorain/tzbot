@@ -49,7 +49,7 @@ export class PusherClient {
       // Initialize Pusher client
       this.pusher = new Pusher('eb1d5f283081a78b932c', {
         cluster: this.config.cluster,
-        encrypted: this.config.encrypted,
+        forceTLS: this.config.encrypted,
       });
 
       // Set up connection state handlers

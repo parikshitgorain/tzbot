@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @file giveaway.example.ts
  * @description Example usage of the GiveawayManager

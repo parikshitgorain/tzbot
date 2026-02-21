@@ -133,7 +133,7 @@ After deep review, the following critical tasks need to be added:
     - Implement ConfigRepository (get, set)
     - _Requirements: 2.5, 4.1-4.6, 9.5, 11.1_
   
-  - [~]* 2.3 Write property tests for database operations
+  - [ ]* 2.3 Write property tests for database operations
     - **Property 7: User Mapping Persistence**
     - **Property 60: Data Minimization**
     - **Validates: Requirements 2.5, 15.3**
@@ -154,7 +154,7 @@ After deep review, the following critical tasks need to be added:
     - Implement rate limiting on event processing
     - _Requirements: 1.1, 3.1, 4.5, 7.1_
   
-  - [~]* 3.3 Write property tests for Discord operations
+  - [ ]* 3.3 Write property tests for Discord operations
     - **Property 9: Unauthorized Message Deletion**
     - **Property 11: Moderator Exemption**
     - **Validates: Requirements 3.1, 3.3**
@@ -169,7 +169,7 @@ After deep review, the following critical tasks need to be added:
     - Create SpamResult type with detection details
     - _Requirements: 4.5_
   
-  - [~]* 5.2 Write property test for spam detection
+  - [ ]* 5.2 Write property test for spam detection
     - **Property 14: Spam Detection Criteria**
     - **Validates: Requirements 4.5**
   
@@ -180,7 +180,7 @@ After deep review, the following critical tasks need to be added:
     - Implement violation expiry (7 days)
     - _Requirements: 4.1-4.4, 4.6_
   
-  - [~]* 5.4 Write property test for escalation matrix
+  - [ ]* 5.4 Write property test for escalation matrix
     - **Property 13: Spam Escalation Matrix**
     - **Property 15: Violation Expiry**
     - **Validates: Requirements 4.1-4.4, 4.6**
@@ -193,7 +193,7 @@ After deep review, the following critical tasks need to be added:
     - Implement moderator exemption logic
     - _Requirements: 7.1-7.4, 7.7, 7.8_
   
-  - [~]* 5.6 Write property test for URL normalization
+  - [ ]* 5.6 Write property test for URL normalization
     - **Property 27: URL Normalization**
     - **Validates: Requirements 7.4**
   
@@ -204,7 +204,7 @@ After deep review, the following critical tasks need to be added:
     - Send DM notifications to users
     - _Requirements: 3.1-3.4_
   
-  - [~]* 5.8 Write property test for channel access
+  - [ ]* 5.8 Write property test for channel access
     - **Property 12: Whitelist Role Access**
     - **Validates: Requirements 3.4**
 
@@ -225,7 +225,7 @@ After deep review, the following critical tasks need to be added:
     - Send confirmation messages
     - _Requirements: 5.1-5.7_
   
-  - [~]* 6.3 Write property test for moderation commands
+  - [ ]* 6.3 Write property test for moderation commands
     - **Property 17: Moderation Command Execution**
     - **Property 18: Moderation Command Confirmation**
     - **Validates: Requirements 5.1-5.7**
@@ -251,7 +251,7 @@ After deep review, the following critical tasks need to be added:
     - Handle token expiration and refresh
     - _Requirements: 2.1-2.4, 8.1-8.7, 14.6_
   
-  - [~]* 8.2 Write property test for exponential backoff
+  - [ ]* 8.2 Write property test for exponential backoff
     - **Property 58: Exponential Backoff**
     - **Validates: Requirements 14.6**
   
@@ -278,7 +278,7 @@ After deep review, the following critical tasks need to be added:
     - Log all role sync operations
     - _Requirements: 2.1-2.4_
   
-  - [~]* 8.6 Write property test for role synchronization
+  - [ ]* 8.6 Write property test for role synchronization
     - **Property 6: Role Synchronization Timing**
     - **Validates: Requirements 2.1-2.4**
 
@@ -291,7 +291,7 @@ After deep review, the following critical tasks need to be added:
     - Create notification queue for retries
     - _Requirements: 1.1-1.5_
   
-  - [~]* 9.2 Write property tests for notifications
+  - [ ]* 9.2 Write property tests for notifications
     - **Property 2: Embed Structure Completeness**
     - **Property 4: Channel Targeting Accuracy**
     - **Property 5: Fallback Channel Delivery**
@@ -315,7 +315,7 @@ After deep review, the following critical tasks need to be added:
     - Log all system transitions
     - _Requirements: 8.3-8.6_
   
-  - [~]* 9.5 Write property test for failover logic
+  - [ ]* 9.5 Write property test for failover logic
     - **Property 30: Webhook-to-Polling Failover**
     - **Property 32: Polling-to-Webhook Recovery**
     - **Validates: Requirements 8.3, 8.5**
@@ -332,7 +332,7 @@ After deep review, the following critical tasks need to be added:
     - Handle relay failures with notifications
     - _Requirements: 6.1-6.5_
   
-  - [~]* 11.2 Write property tests for relay system
+  - [ ]* 11.2 Write property tests for relay system
     - **Property 20: Message Content Preservation**
     - **Property 22: Multi-Channel Relay**
     - **Validates: Requirements 6.2, 6.4**
@@ -346,7 +346,7 @@ After deep review, the following critical tasks need to be added:
     - Prevent duplicate entries
     - _Requirements: 9.1, 9.2, 9.4, 9.5, 9.6_
   
-  - [~] 12.2 Write property test for entry validation
+  - [ ] 12.2 Write property test for entry validation
 
     - **Property 33: Giveaway Role Restriction**
     - **Property 36: Duplicate Entry Prevention**
@@ -359,7 +359,7 @@ After deep review, the following critical tasks need to be added:
     - Use CSPRNG for all giveaway winner selection
     - _Requirements: 9.3_
   
-  - [~]* 12.4 Write property test for CSPRNG usage
+  - [ ]* 12.4 Write property test for CSPRNG usage
     - **Property 50: CSPRNG Usage**
     - **Validates: Requirements 9.3, 11.3**
   
@@ -384,7 +384,7 @@ After deep review, the following critical tasks need to be added:
     - Clean up old activity records
     - _Requirements: 11.1_
   
-  - [~]* 13.2 Write property test for active chatter tracking
+  - [ ]* 13.2 Write property test for active chatter tracking
     - **Property 43: Active Chatter Tracking**
     - **Validates: Requirements 11.1**
   
@@ -396,7 +396,7 @@ After deep review, the following critical tasks need to be added:
     - Select 3-10 random recipients using CSPRNG
     - _Requirements: 11.2-11.5, 11.8_
   
-  - [~] 13.4 Write property tests for chat rain
+  - [ ] 13.4 Write property tests for chat rain
     - **Property 44: Chat Rain Recipient Count**
     - **Property 45: Spam Filter Exclusion**
     - **Property 46: Chat Rain Minimum Delay**
@@ -415,7 +415,7 @@ After deep review, the following critical tasks need to be added:
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 15. AI Auto-Responder (Optional Feature)
-  - [~] 15.1 Implement knowledge base system
+  - [ ] 15.1 Implement knowledge base system
     - Create KnowledgeBase interface
     - Implement FAQ entry storage and retrieval
     - Implement search functionality
@@ -423,7 +423,7 @@ After deep review, the following critical tasks need to be added:
     - Support JSON import for bulk FAQ loading
     - _Requirements: 10.6_
   
-  - [~] 15.2 Implement AI responder
+  - [ ] 15.2 Implement AI responder
     - Create AIResponder interface
     - Support both local LLM (Ollama) and cloud APIs (OpenAI)
     - Implement question detection (question mark, keywords)
@@ -432,7 +432,7 @@ After deep review, the following critical tasks need to be added:
     - Allow moderator deletion via ❌ reaction
     - _Requirements: 10.1-10.5, 10.7, 10.8_
   
-  - [~]* 15.3 Write property tests for AI responder
+  - [ ]* 15.3 Write property tests for AI responder
     - **Property 39: Question Detection**
     - **Property 40: Confidence Thresholding**
     - **Property 42: AI Rate Limiting**
@@ -445,7 +445,7 @@ After deep review, the following critical tasks need to be added:
     - Implement bcrypt password hashing (cost factor 12+)
     - _Requirements: 12.6, 15.1, 15.5_
   
-  - [~]* 16.2 Write property test for encryption
+  - [ ]* 16.2 Write property test for encryption
     - **Property 54: Sensitive Data Encryption**
     - **Property 62: Password Hashing**
     - **Validates: Requirements 12.6, 15.1, 15.5**
@@ -456,7 +456,7 @@ After deep review, the following critical tasks need to be added:
     - Remove all user data on request
     - _Requirements: 15.2, 15.4_
   
-  - [~]* 16.4 Write property test for data retention
+  - [ ]* 16.4 Write property test for data retention
     - **Property 59: Message Retention Limit**
     - **Property 61: User Data Deletion**
     - **Validates: Requirements 15.2, 15.4**
@@ -468,7 +468,7 @@ After deep review, the following critical tasks need to be added:
     - Log rate limit violations
     - _Requirements: 15.6_
   
-  - [~]* 16.6 Write property test for rate limiting
+  - [ ]* 16.6 Write property test for rate limiting
     - **Property 63: API Rate Limiting**
     - **Validates: Requirements 15.6**
 
@@ -481,7 +481,7 @@ After deep review, the following critical tasks need to be added:
     - Implement log rotation
     - _Requirements: 3.5, 5.6, 7.6, 8.6, 14.5_
   
-  - [~]* 17.2 Write property test for logging completeness
+  - [ ]* 17.2 Write property test for logging completeness
     - **Property 65: Comprehensive Logging**
     - **Validates: Requirements 3.5, 5.6, 7.6, 8.6, 14.5**
   
@@ -502,7 +502,7 @@ After deep review, the following critical tasks need to be added:
     - Handle corrupted state gracefully
     - _Requirements: 14.3, 14.4_
   
-  - [~]* 17.5 Write property test for state persistence
+  - [ ]* 17.5 Write property test for state persistence
     - **Property 56: State Persistence Frequency**
     - **Property 57: State Recovery**
     - **Validates: Requirements 14.3, 14.4**
@@ -523,7 +523,7 @@ After deep review, the following critical tasks need to be added:
     - Notify administrators of config changes
     - _Requirements: 12.4_
   
-  - [~]* 18.2 Write property test for hot-reload
+  - [ ]* 18.2 Write property test for hot-reload
     - **Property 52: Configuration Hot-Reload**
     - **Validates: Requirements 12.4**
 
@@ -538,14 +538,14 @@ After deep review, the following critical tasks need to be added:
     - Start health check system
     - _Requirements: All_
   
-  - [~]* 19.2 Write integration tests
+  - [ ]* 19.2 Write integration tests
     - Test end-to-end notification flow
     - Test end-to-end moderation flow
     - Test end-to-end giveaway flow
     - Test failover scenarios
     - Test crash recovery
   
-  - [~]* 19.3 Test crash recovery and restart
+  - [ ]* 19.3 Test crash recovery and restart
     - Simulate bot crash during active giveaway
     - Verify giveaway state is recovered
     - Verify giveaway ends correctly after restart

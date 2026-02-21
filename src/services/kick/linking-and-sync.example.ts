@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @file linking-and-sync.example.ts
  * @description Example usage of user linking and role synchronization systems

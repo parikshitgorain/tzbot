@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @file chat-rain.example.ts
  * @description Example usage of ChatRainManager

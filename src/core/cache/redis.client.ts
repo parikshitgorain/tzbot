@@ -87,17 +87,31 @@ export class RedisClient {
 
     this.client.on('ready', () => {
       logger.info('Redis client ready');
-      logSystemTransition('disconnected', 'connected', 'Redis connection ready');
+      logSystemTransition({
+        from: 'disconnected',
+        to: 'connected',
+        reason: 'Redis connection ready',
+        component: 'redis',
+        automatic: true,
+      });
     });
 
     this.client.on('error', (error: Error) => {
-      logError('Redis client error', error, { isConnected: this.isConnected });
+      logError('Redis client error', error, {
+        additionalContext: { isConnected: this.isConnected },
+      });
     });
 
     this.client.on('close', () => {
       logger.warn('Redis connection closed');
       this.isConnected = false;
-      logSystemTransition('connected', 'disconnected', 'Redis connection closed');
+      logSystemTransition({
+        from: 'connected',
+        to: 'disconnected',
+        reason: 'Redis connection closed',
+        component: 'redis',
+        automatic: true,
+      });
     });
 
     this.client.on('reconnecting', (delay: number) => {
@@ -175,7 +189,9 @@ export class RedisClient {
 
       return await this.client.get(key);
     } catch (error) {
-      logError('Redis GET operation failed', error as Error, { key });
+      logError('Redis GET operation failed', error as Error, {
+        additionalContext: { key },
+      });
       throw error;
     }
   }
@@ -195,7 +211,9 @@ export class RedisClient {
         await this.client.set(key, value);
       }
     } catch (error) {
-      logError('Redis SET operation failed', error as Error, { key, ttlSeconds });
+      logError('Redis SET operation failed', error as Error, {
+        additionalContext: { key, ttlSeconds },
+      });
       throw error;
     }
   }
@@ -211,7 +229,9 @@ export class RedisClient {
 
       return await this.client.del(key);
     } catch (error) {
-      logError('Redis DEL operation failed', error as Error, { key });
+      logError('Redis DEL operation failed', error as Error, {
+        additionalContext: { key },
+      });
       throw error;
     }
   }
@@ -228,7 +248,9 @@ export class RedisClient {
       const result = await this.client.expire(key, seconds);
       return result === 1;
     } catch (error) {
-      logError('Redis EXPIRE operation failed', error as Error, { key, seconds });
+      logError('Redis EXPIRE operation failed', error as Error, {
+        additionalContext: { key, seconds },
+      });
       throw error;
     }
   }
@@ -245,7 +267,9 @@ export class RedisClient {
       const result = await this.client.exists(key);
       return result === 1;
     } catch (error) {
-      logError('Redis EXISTS operation failed', error as Error, { key });
+      logError('Redis EXISTS operation failed', error as Error, {
+        additionalContext: { key },
+      });
       throw error;
     }
   }
@@ -261,7 +285,9 @@ export class RedisClient {
 
       return await this.client.incr(key);
     } catch (error) {
-      logError('Redis INCR operation failed', error as Error, { key });
+      logError('Redis INCR operation failed', error as Error, {
+        additionalContext: { key },
+      });
       throw error;
     }
   }
@@ -277,7 +303,9 @@ export class RedisClient {
 
       return await this.client.decr(key);
     } catch (error) {
-      logError('Redis DECR operation failed', error as Error, { key });
+      logError('Redis DECR operation failed', error as Error, {
+        additionalContext: { key },
+      });
       throw error;
     }
   }
@@ -293,7 +321,9 @@ export class RedisClient {
 
       return await this.client.mget(...keys);
     } catch (error) {
-      logError('Redis MGET operation failed', error as Error, { keys });
+      logError('Redis MGET operation failed', error as Error, {
+        additionalContext: { keys },
+      });
       throw error;
     }
   }

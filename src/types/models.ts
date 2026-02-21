@@ -61,6 +61,7 @@ export enum ViolationType {
 
 export enum PunishmentLevel {
   WARNING = 'warning',
+  TIMEOUT_5M = 'timeout_5m',
   TIMEOUT_1H = 'timeout_1h',
   TIMEOUT_24H = 'timeout_24h',
   BAN = 'ban',

@@ -174,7 +174,9 @@ export class CommandManager implements ICommandManager {
       }
     } catch (error) {
       logError('Failed to deploy commands', error as Error, {
-        commandCount: this.commands.size,
+        additionalContext: {
+          commandCount: this.commands.size,
+        },
       });
       throw error;
     }
@@ -283,8 +285,10 @@ export class CommandManager implements ICommandManager {
       });
     } catch (error) {
       logError('Error executing command', error as Error, {
-        commandName,
-        userId: interaction.user.id,
+        additionalContext: {
+          commandName,
+          userId: interaction.user.id,
+        },
       });
 
       // Send error message to user

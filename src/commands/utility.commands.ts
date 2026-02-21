@@ -20,17 +20,191 @@ import { logger, logError } from '@/core/logger/logger.js';
  * Create utility commands
  */
 export function createUtilityCommands(
-  client: IDiscordClient,
+  _client: IDiscordClient,
   database: Database,
   config: BotConfig
 ): CommandDefinition[] {
   return [
     createConfigCommand(config),
+    createSetupCommand(database, config),
+    createUserInfoCommand(database),
     createLinkCommand(database),
     createUnlinkCommand(database),
     createCheckLinkCommand(database),
     createDeleteMyDataCommand(database),
   ];
+}
+
+/**
+ * /setup command - Configure bot settings through Discord
+ */
+function createSetupCommand(database: Database, config: BotConfig): CommandDefinition {
+  const builder = new SlashCommandBuilder()
+    .setName('setup')
+    .setDescription('Configure bot settings')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addSubcommandGroup((group) =>
+      group
+        .setName('channel')
+        .setDescription('Configure channel settings')
+        .addSubcommand((subcommand) =>
+          subcommand
+            .setName('notification')
+            .setDescription('Set the notification channel')
+            .addChannelOption((option) =>
+              option
+                .setName('channel')
+                .setDescription('The channel for notifications')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand((subcommand) =>
+          subcommand
+            .setName('fallback')
+            .setDescription('Set the fallback notification channel')
+            .addChannelOption((option) =>
+              option
+                .setName('channel')
+                .setDescription('The fallback channel for notifications')
+                .setRequired(true)
+            )
+        )
+    )
+    .addSubcommandGroup((group) =>
+      group
+        .setName('role')
+        .setDescription('Configure role settings')
+        .addSubcommand((subcommand) =>
+          subcommand
+            .setName('subscriber')
+            .setDescription('Set the subscriber role')
+            .addRoleOption((option) =>
+              option
+                .setName('role')
+                .setDescription('The role for subscribers')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand((subcommand) =>
+          subcommand
+            .setName('vip')
+            .setDescription('Set the VIP role')
+            .addRoleOption((option) =>
+              option
+                .setName('role')
+                .setDescription('The role for VIPs')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand((subcommand) =>
+          subcommand
+            .setName('moderator')
+            .setDescription('Set the moderator role')
+            .addRoleOption((option) =>
+              option
+                .setName('role')
+                .setDescription('The role for moderators')
+                .setRequired(true)
+            )
+        )
+    );
+
+  const handler = async (interaction: ChatInputCommandInteraction) => {
+    try {
+      await interaction.deferReply({ ephemeral: true });
+
+      const subcommandGroup = interaction.options.getSubcommandGroup();
+      const subcommand = interaction.options.getSubcommand();
+
+      if (subcommandGroup === 'channel') {
+        const channel = interaction.options.getChannel('channel', true);
+
+        if (subcommand === 'notification') {
+          await database.setConfig('notificationChannelId', channel.id);
+          config.notificationChannelId = channel.id;
+
+          await interaction.editReply({
+            content: `✅ Notification channel set to <#${channel.id}>`,
+          });
+
+          logger.info('Notification channel configured', {
+            channelId: channel.id,
+            userId: interaction.user.id,
+          });
+        } else if (subcommand === 'fallback') {
+          await database.setConfig('fallbackChannelId', channel.id);
+          config.fallbackChannelId = channel.id;
+
+          await interaction.editReply({
+            content: `✅ Fallback channel set to <#${channel.id}>`,
+          });
+
+          logger.info('Fallback channel configured', {
+            channelId: channel.id,
+            userId: interaction.user.id,
+          });
+        }
+      } else if (subcommandGroup === 'role') {
+        const role = interaction.options.getRole('role', true);
+
+        if (subcommand === 'subscriber') {
+          await database.setConfig('subscriberRoleId', role.id);
+          config.subscriberRoleId = role.id;
+
+          await interaction.editReply({
+            content: `✅ Subscriber role set to <@&${role.id}>`,
+          });
+
+          logger.info('Subscriber role configured', {
+            roleId: role.id,
+            userId: interaction.user.id,
+          });
+        } else if (subcommand === 'vip') {
+          await database.setConfig('vipRoleId', role.id);
+          config.vipRoleId = role.id;
+
+          await interaction.editReply({
+            content: `✅ VIP role set to <@&${role.id}>`,
+          });
+
+          logger.info('VIP role configured', {
+            roleId: role.id,
+            userId: interaction.user.id,
+          });
+        } else if (subcommand === 'moderator') {
+          await database.setConfig('moderatorRoleId', role.id);
+          config.moderatorRoleId = role.id;
+
+          await interaction.editReply({
+            content: `✅ Moderator role set to <@&${role.id}>`,
+          });
+
+          logger.info('Moderator role configured', {
+            roleId: role.id,
+            userId: interaction.user.id,
+          });
+        }
+      }
+    } catch (error) {
+      logError('Failed to execute setup command', error as Error);
+
+      const errorMessage = '❌ Failed to update configuration. Please try again.';
+      if (interaction.deferred) {
+        await interaction.editReply({ content: errorMessage });
+      } else {
+        await interaction.reply({ content: errorMessage, ephemeral: true });
+      }
+    }
+  };
+
+  return {
+    name: 'setup',
+    description: 'Configure bot settings',
+    builder: builder as SlashCommandBuilder,
+    handler,
+    permissions: [PermissionFlagsBits.Administrator],
+    moderatorOnly: true,
+  };
 }
 
 /**
@@ -147,6 +321,141 @@ function createConfigCommand(config: BotConfig): CommandDefinition {
 }
 
 /**
+ * /userinfo command - Display information about a user
+ */
+function createUserInfoCommand(database: Database): CommandDefinition {
+  const builder = new SlashCommandBuilder()
+    .setName('userinfo')
+    .setDescription('Display information about a user')
+    .addUserOption((option) =>
+      option
+        .setName('user')
+        .setDescription('The user to get information about (leave empty for yourself)')
+        .setRequired(false)
+    );
+
+  const handler = async (interaction: ChatInputCommandInteraction) => {
+    try {
+      await interaction.deferReply({ ephemeral: true });
+
+      // Get the target user (or the command user if not specified)
+      const targetUser = interaction.options.getUser('user') || interaction.user;
+      const member = interaction.guild?.members.cache.get(targetUser.id);
+
+      // Get user data from database
+      const userData = await database.getUser(targetUser.id);
+
+      // Create user info embed
+      const embed = new EmbedBuilder()
+        .setTitle(`👤 User Information`)
+        .setColor(0x5865f2)
+        .setThumbnail(targetUser.displayAvatarURL())
+        .setTimestamp()
+        .addFields(
+          {
+            name: 'Discord User',
+            value: `${targetUser.tag} (${targetUser.id})`,
+            inline: false,
+          },
+          {
+            name: 'Account Created',
+            value: `<t:${Math.floor(targetUser.createdTimestamp / 1000)}:R>`,
+            inline: true,
+          },
+          {
+            name: 'Joined Server',
+            value: member?.joinedAt
+              ? `<t:${Math.floor(member.joinedTimestamp! / 1000)}:R>`
+              : 'Unknown',
+            inline: true,
+          }
+        );
+
+      // Add Kick account info if linked
+      if (userData?.kickUsername) {
+        embed.addFields({
+          name: 'Kick Account',
+          value: `✅ Linked to: **${userData.kickUsername}**`,
+          inline: false,
+        });
+      } else {
+        embed.addFields({
+          name: 'Kick Account',
+          value: '❌ Not linked',
+          inline: false,
+        });
+      }
+
+      // Add roles
+      if (member) {
+        const roles = member.roles.cache
+          .filter((role) => role.id !== interaction.guildId)
+          .sort((a, b) => b.position - a.position)
+          .map((role) => role.toString())
+          .slice(0, 10);
+
+        embed.addFields({
+          name: `Roles (${member.roles.cache.size - 1})`,
+          value: roles.length > 0 ? roles.join(', ') : 'No roles',
+          inline: false,
+        });
+      }
+
+      // Add violation count if any
+      if (userData?.violations && userData.violations.length > 0) {
+        embed.addFields({
+          name: 'Violations',
+          value: `⚠️ ${userData.violations.length} violation(s) on record`,
+          inline: true,
+        });
+      } else {
+        embed.addFields({
+          name: 'Violations',
+          value: '✅ No violations',
+          inline: true,
+        });
+      }
+
+      // Add account age in database
+      if (userData?.createdAt) {
+        embed.addFields({
+          name: 'First Seen',
+          value: `<t:${Math.floor(new Date(userData.createdAt).getTime() / 1000)}:R>`,
+          inline: true,
+        });
+      }
+
+      await interaction.editReply({
+        embeds: [embed],
+      });
+
+      logger.info('Userinfo command executed', {
+        userId: interaction.user.id,
+        targetUserId: targetUser.id,
+      });
+    } catch (error) {
+      logError('Failed to execute userinfo command', error as Error, {
+        userId: interaction.user.id,
+      });
+
+      const errorMessage = '❌ Failed to retrieve user information.';
+      if (interaction.deferred) {
+        await interaction.editReply({ content: errorMessage });
+      } else {
+        await interaction.reply({ content: errorMessage, ephemeral: true });
+      }
+    }
+  };
+
+  return {
+    name: 'userinfo',
+    description: 'Display information about a user',
+    builder: builder as SlashCommandBuilder,
+    handler,
+  };
+}
+
+/**
  * /link command - Start account linking process
  */
 function createLinkCommand(database: Database): CommandDefinition {
@@ -205,8 +514,10 @@ function createLinkCommand(database: Database): CommandDefinition {
       });
     } catch (error) {
       logError('Failed to execute link command', error as Error, {
-        userId: interaction.user.id,
-        kickUsername,
+        additionalContext: {
+          userId: interaction.user.id,
+          kickUsername,
+        },
       });
 
       await interaction.editReply({
@@ -218,7 +529,7 @@ function createLinkCommand(database: Database): CommandDefinition {
   return {
     name: 'link',
     description: 'Link your Discord account with your Kick account',
-    builder,
+    builder: builder as SlashCommandBuilder,
     handler,
   };
 }
@@ -276,7 +587,7 @@ function createUnlinkCommand(database: Database): CommandDefinition {
   return {
     name: 'unlink',
     description: 'Unlink your Discord account from your Kick account',
-    builder,
+    builder: builder as SlashCommandBuilder,
     handler,
   };
 }
@@ -320,7 +631,7 @@ function createCheckLinkCommand(database: Database): CommandDefinition {
   return {
     name: 'checklink',
     description: 'Check if your Discord account is linked to a Kick account',
-    builder,
+    builder: builder as SlashCommandBuilder,
     handler,
   };
 }
@@ -372,7 +683,7 @@ function createDeleteMyDataCommand(database: Database): CommandDefinition {
   return {
     name: 'deletemydata',
     description: 'Delete all your data from the bot (GDPR compliance)',
-    builder,
+    builder: builder as SlashCommandBuilder,
     handler,
   };
 }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @file state-persistence.example.ts
  * @description Example usage of the state persistence service

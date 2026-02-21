@@ -22,11 +22,11 @@ import { redisClient } from '@/core/cache/redis.client.js';
 import { DiscordClient } from '@/core/discord/client.js';
 import { EventManager } from '@/managers/event.manager.js';
 import { CommandManager } from '@/managers/command.manager.js';
-import { NotificationManager } from '@/managers/notification.manager.js';
+import { NotificationManager, type PremiumEmbedData } from '@/managers/notification.manager.js';
 import { GiveawayManager } from '@/managers/giveaway.manager.js';
-import { ChatRainManager } from '@/managers/chat-rain.manager.js';
-import { AnnouncementRelayManager } from '@/managers/announcement-relay.manager.js';
-import { RewardSystem } from '@/managers/reward-system.js';
+// import { ChatRainManager } from '@/managers/chat-rain.manager.js';
+// import { AnnouncementRelayManager } from '@/managers/announcement-relay.manager.js';
+// import { RewardSystem } from '@/managers/reward-system.js';
 import { kickChatClient } from '@/services/kick/chat-client.js';
 import { KickWebhookHandler } from '@/webhooks/kick-webhook.js';
 import { WebhookServer } from '@/webhooks/webhook-server.js';
@@ -41,6 +41,7 @@ import { ChannelAccessEnforcer } from '@/moderation/channel-access.js';
 import { createModerationCommands } from '@/commands/moderation.commands.js';
 import { createUtilityCommands } from '@/commands/utility.commands.js';
 import type { Message } from 'discord.js';
+import type { NotificationEvent } from '@/types/models.js';
 
 /**
  * Main application class
@@ -59,9 +60,9 @@ class TZBotApplication {
   private commandManager!: CommandManager;
   private notificationManager!: NotificationManager;
   private giveawayManager!: GiveawayManager;
-  private chatRainManager!: ChatRainManager; // Initialized but not actively used in event routing yet
-  private announcementRelay!: AnnouncementRelayManager; // Optional - only if configured
-  private rewardSystem!: RewardSystem;
+  // private chatRainManager!: ChatRainManager; // Initialized but not actively used in event routing yet
+  // private announcementRelay!: AnnouncementRelayManager; // Optional - only if configured
+  // private rewardSystem!: RewardSystem;
 
   // Moderation
   private spamDetector!: SpamDetector;
@@ -177,8 +178,43 @@ class TZBotApplication {
   private async initializeDatabase(): Promise<void> {
     logger.info('Initializing database...');
 
+    // Parse DATABASE_URL from environment
+    const databaseUrl = config.databaseUrl;
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL not configured');
+    }
+
+    // Parse PostgreSQL connection string
+    const url = new URL(databaseUrl);
+    const dbConfig = {
+      host: url.hostname,
+      port: parseInt(url.port) || 5432,
+      database: url.pathname.slice(1), // Remove leading slash
+      user: url.username,
+      password: url.password,
+      max: 20,
+      ssl: { rejectUnauthorized: false }, // Required for Neon
+    };
+
     this.database = new Database();
-    await this.database.connect();
+    await this.database.connect(dbConfig);
+
+    // Load configuration from database (overrides .env values)
+    try {
+      const dbNotificationChannelId = await this.database.getConfig('notificationChannelId');
+      if (dbNotificationChannelId && typeof dbNotificationChannelId === 'string') {
+        config.notificationChannelId = dbNotificationChannelId;
+        logger.info('Loaded notification channel from database', { channelId: dbNotificationChannelId });
+      }
+
+      const dbFallbackChannelId = await this.database.getConfig('fallbackChannelId');
+      if (dbFallbackChannelId && typeof dbFallbackChannelId === 'string') {
+        config.fallbackChannelId = dbFallbackChannelId;
+        logger.info('Loaded fallback channel from database', { channelId: dbFallbackChannelId });
+      }
+    } catch (error) {
+      logger.warn('Failed to load config from database, using .env values', { error });
+    }
 
     // Register cleanup
     this.shutdownManager.registerCleanup('database', async () => {
@@ -194,20 +230,28 @@ class TZBotApplication {
   private async initializeRedis(): Promise<void> {
     logger.info('Initializing Redis cache...');
 
-    await redisClient.connect();
+    try {
+      await redisClient.connect();
 
-    // Test connectivity
-    const isConnected = await redisClient.testConnection();
-    if (!isConnected) {
-      throw new Error('Redis connection test failed');
+      // Test connectivity
+      const isConnected = await redisClient.testConnection();
+      if (!isConnected) {
+        logger.warn('Redis connection test failed - bot will run without caching');
+        return;
+      }
+
+      // Register cleanup
+      this.shutdownManager.registerCleanup('redis', async () => {
+        await redisClient.disconnect();
+      });
+
+      logger.info('Redis cache initialized');
+    } catch (error) {
+      logger.warn('Redis initialization failed - bot will run without caching', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Don't throw - Redis is optional
     }
-
-    // Register cleanup
-    this.shutdownManager.registerCleanup('redis', async () => {
-      await redisClient.disconnect();
-    });
-
-    logger.info('Redis cache initialized');
   }
 
   /**
@@ -267,29 +311,31 @@ class TZBotApplication {
       fallbackChannelId: config.fallbackChannelId,
       maxRetries: 3,
       retryDelayMs: 5000,
+      getChannelId: () => config.notificationChannelId, // Dynamic channel ID getter
+      getFallbackChannelId: () => config.fallbackChannelId, // Dynamic fallback channel ID getter
     });
 
     // Reward system
-    this.rewardSystem = new RewardSystem(
-      this.discordClient as any, // Type mismatch - our wrapper vs Discord.js Client
-      this.database.repositories.chatActivity,
-      config.guildId
-    );
+    // this.rewardSystem = new RewardSystem(
+    //   this.discordClient as any, // Type mismatch - our wrapper vs Discord.js Client
+    //   this.database.repositories.chatActivity,
+    //   config.guildId
+    // );
 
     // Chat rain manager
-    this.chatRainManager = new ChatRainManager(
-      this.database.repositories.chatActivity,
-      this.database.repositories.violations,
-      this.rewardSystem,
-      {
-        minDelayMinutes: 5,
-        activeWindowMinutes: 10,
-        minMessages: 3,
-        cooldownMinutes: 60,
-        rewardType: 'announcement', // Default reward type
-        rewardValue: undefined,
-      }
-    );
+    // this.chatRainManager = new ChatRainManager(
+    //   this.database.repositories.chatActivity,
+    //   this.database.repositories.violations,
+    //   this.rewardSystem,
+    //   {
+    //     minDelayMinutes: 5,
+    //     activeWindowMinutes: 10,
+    //     minMessages: 3,
+    //     cooldownMinutes: 60,
+    //     rewardType: 'announcement', // Default reward type
+    //     rewardValue: undefined,
+    //   }
+    // );
 
     // Giveaway manager
     this.giveawayManager = new GiveawayManager(
@@ -314,8 +360,8 @@ class TZBotApplication {
     this.spamDetector = new SpamDetector({
       identicalMessages: 5,
       identicalWindow: 10, // seconds
-      rapidMessages: 10,
-      rapidWindow: 5, // seconds
+      rapidMessages: 5,
+      rapidWindow: 10, // seconds
     });
 
     // Violation tracker
@@ -436,16 +482,154 @@ class TZBotApplication {
         // Check spam
         const spamResult = this.spamDetector.checkSpam(
           message.author.id,
+          message.id,
           message.content
         );
 
         if (spamResult.isSpam) {
-          await this.violationTracker.recordViolation(
+          // Record violation and get escalation result
+          const escalation = await this.violationTracker.recordViolation(
             message.author.id,
-            'spam' as any, // Type will be fixed in violation tracker
+            'spam' as any,
             spamResult.reason || 'Spam detected'
           );
-          await message.delete();
+          
+          // Delete spam messages
+          let deletedCount = 0;
+          try {
+            const recentMessages = await message.channel.messages.fetch({ limit: 100 });
+            const spamWindowMs = 12 * 1000;
+            const windowStart = new Date(message.createdTimestamp - spamWindowMs);
+            const windowEnd = new Date(message.createdTimestamp + 2000);
+            
+            const userMessagesInWindow = recentMessages.filter(msg => 
+              msg.author.id === message.author.id &&
+              msg.createdTimestamp >= windowStart.getTime() &&
+              msg.createdTimestamp <= windowEnd.getTime()
+            );
+            
+            if (message.channel.type === 0 && 'bulkDelete' in message.channel.messages) {
+              const deleted = await (message.channel.messages as any).bulkDelete(userMessagesInWindow, true);
+              deletedCount = deleted.size;
+            }
+          } catch (error) {
+            logger.error('Failed to delete spam messages', { error });
+          }
+          
+          // Apply punishment based on escalation level
+          const { PunishmentLevel } = await import('@/types/models.js');
+          
+          if (escalation.punishmentLevel === PunishmentLevel.WARNING) {
+            // 1st offense: Ephemeral warning message + DM
+            try {
+              // Send ephemeral warning (only user can see)
+              if (message.channel.type === 0) { // Guild text channel
+                await (message.channel as any).send({
+                  content: `<@${message.author.id}> ⚠️ **Warning #1** - Spam detected. This warning expires in 30 days. Further spam will result in timeout or ban.`,
+                }).then((msg: any) => {
+                  // Delete after 10 seconds so only user sees it briefly
+                  setTimeout(() => msg.delete().catch(() => {}), 10000);
+                });
+              }
+            } catch (error) {
+              logger.debug('Failed to send ephemeral warning', { error });
+            }
+            
+            // Send DM
+            try {
+              await message.author.send(
+                `⚠️ **Spam Warning #1**\n\nYour messages in ${message.guild?.name} were detected as spam and removed.\n\n**Reason:** ${spamResult.reason}\n**Messages deleted:** ${deletedCount}\n**Warning expires:** 30 days from now\n\n**Progressive Punishment System:**\n- 2nd spam within 5 minutes: 5-minute timeout\n- 3 warnings within 30 days: Timeout\n- 3 timeouts within 30 days: Ban from server\n\nPlease avoid spamming to prevent further action.`
+              );
+            } catch (error) {
+              logger.debug('Could not DM user about warning', { userId: message.author.id });
+            }
+            
+            logger.info('Spam warning issued', {
+              userId: message.author.id,
+              username: message.author.username,
+              deletedCount,
+              escalation: escalation.reason
+            });
+            
+          } else if (escalation.punishmentLevel === PunishmentLevel.TIMEOUT_5M) {
+            // 2nd offense or 3 warnings: 5-minute timeout
+            try {
+              if (message.member) {
+                await message.member.timeout(5 * 60 * 1000, escalation.reason);
+                
+                // Send ephemeral message
+                if (message.channel.type === 0) {
+                  await (message.channel as any).send({
+                    content: `<@${message.author.id}> 🔇 **Timed out for 5 minutes** - ${escalation.reason}`,
+                  }).then((msg: any) => {
+                    setTimeout(() => msg.delete().catch(() => {}), 10000);
+                  });
+                }
+                
+                // Send DM
+                await message.author.send(
+                  `🔇 **5-Minute Timeout**\n\nYou have been timed out in ${message.guild?.name}.\n\n**Reason:** ${escalation.reason}\n**Duration:** 5 minutes\n**Messages deleted:** ${deletedCount}\n\n**Warning:** 3 timeouts within 30 days will result in a ban from the server.`
+                ).catch(() => {});
+                
+                logger.info('User timed out for 5 minutes', {
+                  userId: message.author.id,
+                  reason: escalation.reason
+                });
+              }
+            } catch (error) {
+              logger.error('Failed to timeout user', { error });
+            }
+            
+          } else if (escalation.punishmentLevel === PunishmentLevel.BAN) {
+            // 3rd timeout or 3 warnings + timeout: Ban
+            try {
+              // Send DM before ban
+              await message.author.send(
+                `🚫 **Banned from ${message.guild?.name}**\n\n**Reason:** ${escalation.reason}\n\nYou have been permanently banned from the server due to repeated spam violations.\n\n**Violation History:**\n- Multiple spam warnings\n- Multiple timeouts\n- Failed to comply with server rules\n\nIf you believe this was a mistake, please contact the server administrators.`
+              ).catch(() => {});
+              
+              // Ban user
+              if (message.member) {
+                await message.member.ban({
+                  reason: escalation.reason,
+                  deleteMessageSeconds: 60 * 60 * 24 // Delete last 24 hours of messages
+                });
+                
+                logger.info('User banned for repeated spam', {
+                  userId: message.author.id,
+                  reason: escalation.reason
+                });
+              }
+            } catch (error) {
+              logger.error('Failed to ban user', { error });
+            }
+          }
+          
+          // Notify moderators
+          const notificationEvent: NotificationEvent = {
+            id: `spam-${message.author.id}-${Date.now()}`,
+            type: 'SPAM_DETECTED' as any,
+            channelId: message.channel.id,
+            data: { userId: message.author.id, reason: spamResult.reason },
+            timestamp: new Date(),
+            delivered: false,
+          };
+          
+          const embedData: PremiumEmbedData = {
+            title: '🚨 Spam Detected',
+            description: `User <@${message.author.id}> was detected spamming in <#${message.channel.id}>`,
+            fields: [
+              { name: 'User', value: `${message.author.tag} (${message.author.id})`, inline: true },
+              { name: 'Punishment', value: escalation.punishmentLevel, inline: true },
+              { name: 'Reason', value: escalation.reason, inline: true },
+              { name: 'Messages Deleted', value: `${deletedCount}`, inline: true },
+              { name: 'Violation Count', value: `${escalation.violationCount}`, inline: true },
+            ],
+            color: escalation.punishmentLevel === PunishmentLevel.BAN ? 0x000000 : 0xff0000,
+          };
+          
+          await this.notificationManager.sendNotification(notificationEvent, embedData);
+          
           return;
         }
 
@@ -458,12 +642,55 @@ class TZBotApplication {
         );
 
         if (linkScanResult.isMalicious) {
+          // Record violation
           await this.violationTracker.recordViolation(
             message.author.id,
             'malicious_link' as any, // Type will be fixed in violation tracker
             'Malicious link detected'
           );
-          await message.delete();
+          
+          // Delete the message
+          await message.delete().catch(() => {
+            logger.warn('Failed to delete malicious link message', { messageId: message.id });
+          });
+          
+          // Warn the user
+          try {
+            await message.author.send(
+              `⚠️ **Malicious Link Detected**\n\nYour message in ${message.guild?.name} contained a malicious or suspicious link and was removed.\n\nPlease do not post suspicious links. Continued violations may result in a timeout or ban.`
+            );
+          } catch (error) {
+            logger.debug('Could not DM user about malicious link', { userId: message.author.id });
+          }
+          
+          // Notify moderators
+          const notificationEvent: NotificationEvent = {
+            id: `malicious-link-${message.author.id}-${Date.now()}`,
+            type: 'MALICIOUS_LINK_DETECTED' as any,
+            channelId: message.channel.id,
+            data: { userId: message.author.id },
+            timestamp: new Date(),
+            delivered: false,
+          };
+          
+          const embedData: PremiumEmbedData = {
+            title: '🔗 Malicious Link Detected',
+            description: `User <@${message.author.id}> posted a malicious link in <#${message.channel.id}>`,
+            fields: [
+              { name: 'User', value: `${message.author.tag} (${message.author.id})`, inline: true },
+              { name: 'Channel', value: `<#${message.channel.id}>`, inline: true },
+            ],
+            color: 0xff6600,
+          };
+          
+          await this.notificationManager.sendNotification(notificationEvent, embedData);
+          
+          logger.info('Malicious link detected and handled', {
+            userId: message.author.id,
+            username: message.author.username,
+            channelId: message.channel.id,
+          });
+          
           return;
         }
 
@@ -592,6 +819,11 @@ class TZBotApplication {
       });
       // Notification manager will handle retry automatically
     }
+
+    // Validate and clean notification queue (remove stale/invalid notifications)
+    logger.info('Validating and cleaning notification queue');
+    this.notificationManager.validateAndCleanQueue();
+    logger.info('Notification queue validation complete');
 
     // Recover active giveaways
     if (state.data.activeGiveaways && config.guildId) {

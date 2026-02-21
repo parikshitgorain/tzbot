@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @file channel-access.example.ts
  * @description Example usage of the channel access enforcement system

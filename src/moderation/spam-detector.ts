@@ -7,12 +7,15 @@
 import type { SpamResult, ViolationType } from '../types/index.js';
 
 interface MessageRecord {
+  messageId: string;
   content: string;
   timestamp: Date;
 }
 
 interface UserMessageHistory {
   messages: MessageRecord[];
+  spamCooldownUntil?: Date; // Track when the spam cooldown expires
+  totalSpamMessages?: number; // Count total spam messages during cooldown
 }
 
 /**
@@ -58,12 +61,14 @@ export class SpamDetector {
   /**
    * Check if a message is spam
    * @param userId - Discord user ID
+   * @param messageId - Discord message ID
    * @param messageContent - Message content to check
    * @param timestamp - Message timestamp (defaults to now)
    * @returns SpamResult with detection details
    */
   checkSpam(
     userId: string,
+    messageId: string,
     messageContent: string,
     timestamp: Date = new Date()
   ): SpamResult {
@@ -76,6 +81,7 @@ export class SpamDetector {
 
     // Add current message to history
     history.messages.push({
+      messageId,
       content: messageContent,
       timestamp,
     });
@@ -119,19 +125,20 @@ export class SpamDetector {
       timestamp.getTime() - this.thresholds.identicalWindow * 1000
     );
 
-    // Count identical messages within the window
-    const identicalCount = history.messages.filter(
+    // Get all identical messages within the window
+    const identicalMessages = history.messages.filter(
       (msg) =>
         msg.content === messageContent &&
         msg.timestamp >= windowStart &&
         msg.timestamp <= timestamp
-    ).length;
+    );
 
-    if (identicalCount >= this.thresholds.identicalMessages) {
+    if (identicalMessages.length >= this.thresholds.identicalMessages) {
       return {
         isSpam: true,
-        reason: `${identicalCount} identical messages within ${this.thresholds.identicalWindow} seconds`,
+        reason: `${identicalMessages.length} identical messages within ${this.thresholds.identicalWindow} seconds`,
         violationType: 'spam' as ViolationType,
+        messageIds: identicalMessages.map(msg => msg.messageId),
       };
     }
 
@@ -150,16 +157,17 @@ export class SpamDetector {
       timestamp.getTime() - this.thresholds.rapidWindow * 1000
     );
 
-    // Count all messages within the window
-    const messageCount = history.messages.filter(
+    // Get all messages within the window
+    const rapidMessages = history.messages.filter(
       (msg) => msg.timestamp >= windowStart && msg.timestamp <= timestamp
-    ).length;
+    );
 
-    if (messageCount >= this.thresholds.rapidMessages) {
+    if (rapidMessages.length >= this.thresholds.rapidMessages) {
       return {
         isSpam: true,
-        reason: `${messageCount} messages within ${this.thresholds.rapidWindow} seconds`,
+        reason: `${rapidMessages.length} messages within ${this.thresholds.rapidWindow} seconds`,
         violationType: 'spam' as ViolationType,
+        messageIds: rapidMessages.map(msg => msg.messageId),
       };
     }
 
@@ -186,6 +194,62 @@ export class SpamDetector {
    */
   clearUserHistory(userId: string): void {
     this.userHistory.delete(userId);
+  }
+
+  /**
+   * Set spam cooldown for a user (1 minute)
+   * During cooldown, ALL messages from this user should be deleted
+   */
+  setSpamCooldown(userId: string): void {
+    let history = this.userHistory.get(userId);
+    if (!history) {
+      history = { messages: [] };
+      this.userHistory.set(userId, history);
+    }
+    
+    // Set cooldown for 1 minute from now
+    history.spamCooldownUntil = new Date(Date.now() + 60000); // 60 seconds
+    history.totalSpamMessages = 0;
+  }
+
+  /**
+   * Check if a user is in spam cooldown
+   * Returns true if the user should have ALL their messages deleted
+   */
+  isInSpamCooldown(userId: string): boolean {
+    const history = this.userHistory.get(userId);
+    if (!history || !history.spamCooldownUntil) {
+      return false;
+    }
+    
+    // Check if cooldown has expired
+    if (new Date() > history.spamCooldownUntil) {
+      // Cooldown expired, clear it
+      history.spamCooldownUntil = undefined;
+      return false;
+    }
+    
+    return true;
+  }
+
+  /**
+   * Increment spam message count during cooldown
+   */
+  incrementSpamCount(userId: string): number {
+    const history = this.userHistory.get(userId);
+    if (history) {
+      history.totalSpamMessages = (history.totalSpamMessages || 0) + 1;
+      return history.totalSpamMessages;
+    }
+    return 0;
+  }
+
+  /**
+   * Get total spam messages during cooldown
+   */
+  getSpamCount(userId: string): number {
+    const history = this.userHistory.get(userId);
+    return history?.totalSpamMessages || 0;
   }
 
   /**

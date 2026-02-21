@@ -157,4 +157,31 @@ export class ViolationRepository {
       throw new Error(`Failed to get latest violation: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Get violation count by punishment level within a time window
+   * Used for progressive punishment system
+   */
+  async getCountByPunishment(
+    userId: string,
+    since: Date,
+    punishmentLevel: PunishmentLevel | PunishmentLevel[]
+  ): Promise<number> {
+    const punishmentLevels = Array.isArray(punishmentLevel) ? punishmentLevel : [punishmentLevel];
+    
+    const query = `
+      SELECT COUNT(*) as count
+      FROM violations
+      WHERE user_id = $1 
+        AND timestamp >= $2
+        AND punishment_applied = ANY($3)
+    `;
+
+    try {
+      const result = await this.pool.query(query, [userId, since, punishmentLevels]);
+      return parseInt(result.rows[0].count, 10);
+    } catch (error) {
+      throw new Error(`Failed to get violation count by punishment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }

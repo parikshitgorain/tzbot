@@ -20,14 +20,14 @@ import { randomUUID } from 'crypto';
  * Create moderation commands
  */
 export function createModerationCommands(
-  client: IDiscordClient,
+  _client: IDiscordClient,
   database: Database
 ): CommandDefinition[] {
   return [
-    createBanCommand(client, database),
-    createTimeoutCommand(client, database),
-    createWarnCommand(client, database),
-    createKickCommand(client, database),
+    createBanCommand(_client, database),
+    createTimeoutCommand(_client, database),
+    createWarnCommand(_client, database),
+    createKickCommand(_client, database),
   ];
 }
 
@@ -35,7 +35,7 @@ export function createModerationCommands(
  * /ban command - Ban a user from the server
  */
 function createBanCommand(
-  client: IDiscordClient,
+  _client: IDiscordClient,
   database: Database
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
@@ -73,7 +73,7 @@ function createBanCommand(
       await interaction.deferReply({ ephemeral: true });
 
       // Ban the user
-      await client.banUser(guildId, user.id, reason);
+      await _client.banUser(guildId, user.id, reason);
 
       // Record violation in database
       await database.saveViolation({
@@ -128,7 +128,7 @@ function createBanCommand(
   return {
     name: 'ban',
     description: 'Ban a user from the server',
-    builder,
+    builder: builder as SlashCommandBuilder,
     handler,
     permissions: [PermissionFlagsBits.BanMembers],
     moderatorOnly: true,
@@ -139,7 +139,7 @@ function createBanCommand(
  * /timeout command - Timeout a user for a specified duration
  */
 function createTimeoutCommand(
-  client: IDiscordClient,
+  _client: IDiscordClient,
   database: Database
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
@@ -189,7 +189,7 @@ function createTimeoutCommand(
       const durationMs = durationMinutes * 60 * 1000;
 
       // Timeout the user
-      await client.timeoutUser(guildId, user.id, durationMs, reason);
+      await _client.timeoutUser(guildId, user.id, durationMs, reason);
 
       // Determine punishment level based on duration
       let punishmentLevel: PunishmentLevel;
@@ -254,7 +254,7 @@ function createTimeoutCommand(
   return {
     name: 'timeout',
     description: 'Timeout a user for a specified duration',
-    builder,
+    builder: builder as SlashCommandBuilder,
     handler,
     permissions: [PermissionFlagsBits.ModerateMembers],
     moderatorOnly: true,
@@ -265,7 +265,7 @@ function createTimeoutCommand(
  * /warn command - Issue a warning to a user
  */
 function createWarnCommand(
-  client: IDiscordClient,
+  _client: IDiscordClient,
   database: Database
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
@@ -355,7 +355,7 @@ function createWarnCommand(
   return {
     name: 'warn',
     description: 'Issue a warning to a user',
-    builder,
+    builder: builder as SlashCommandBuilder,
     handler,
     permissions: [PermissionFlagsBits.ModerateMembers],
     moderatorOnly: true,
@@ -366,7 +366,7 @@ function createWarnCommand(
  * /kick command - Kick a user from the server
  */
 function createKickCommand(
-  client: IDiscordClient,
+  _client: IDiscordClient,
   database: Database
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
@@ -404,7 +404,7 @@ function createKickCommand(
       await interaction.deferReply({ ephemeral: true });
 
       // Kick the user
-      await client.kickUser(guildId, user.id, reason);
+      await _client.kickUser(guildId, user.id, reason);
 
       // Record violation in database
       await database.saveViolation({
@@ -459,7 +459,7 @@ function createKickCommand(
   return {
     name: 'kick',
     description: 'Kick a user from the server',
-    builder,
+    builder: builder as SlashCommandBuilder,
     handler,
     permissions: [PermissionFlagsBits.KickMembers],
     moderatorOnly: true,

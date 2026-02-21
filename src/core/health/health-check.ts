@@ -16,7 +16,7 @@ import { Client as DiscordClient } from 'discord.js';
 import { Database } from '../database/Database';
 import { RedisClient } from '../cache/redis.client';
 import { KickAPIClient } from '../../services/kick/client';
-import { Logger } from '../logger/logger';
+import type { logger as LoggerType } from '../logger/logger';
 
 /**
  * Health status for a single component
@@ -70,7 +70,7 @@ export interface HealthCheckConfig {
  * Health check system implementation
  */
 export class HealthCheckSystem implements IHealthCheckSystem {
-  private logger: Logger;
+  private logger: typeof LoggerType;
   private discordClient: DiscordClient | null = null;
   private kickClient: KickAPIClient | null = null;
   private database: Database | null = null;
@@ -80,7 +80,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
   private consecutiveFailures: Map<string, number> = new Map();
   private startTime: number = Date.now();
 
-  constructor(config: HealthCheckConfig, logger: Logger) {
+  constructor(config: HealthCheckConfig, logger: typeof LoggerType) {
     this.config = config;
     this.logger = logger;
   }

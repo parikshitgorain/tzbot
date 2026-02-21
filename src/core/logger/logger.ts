@@ -15,11 +15,6 @@ import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import { config } from '@/config/index.js';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 /**
  * Log event types for structured logging
@@ -113,6 +108,7 @@ export interface ErrorLogContext {
   operation?: string;
   userId?: string;
   additionalContext?: Record<string, unknown>;
+  [key: string]: unknown; // Allow any additional properties
 }
 
 // Define log format with enhanced structure

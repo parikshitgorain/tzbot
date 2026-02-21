@@ -6,7 +6,7 @@
 
 import { EmbedBuilder } from 'discord.js';
 import type { IDiscordClient } from '@/core/discord/client.js';
-import type { NotificationEvent, EventType } from '@/types/models.js';
+import type { NotificationEvent } from '@/types/models.js';
 import { logger, logError } from '@/core/logger/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -41,6 +41,8 @@ export interface NotificationManagerConfig {
   fallbackChannelId?: string;
   maxRetries?: number;
   retryDelayMs?: number;
+  getChannelId?: () => string; // Dynamic channel ID getter
+  getFallbackChannelId?: () => string | undefined; // Dynamic fallback channel ID getter
 }
 
 /**
@@ -80,6 +82,20 @@ export class NotificationManager {
   }
 
   /**
+   * Get the current primary channel ID (supports dynamic updates)
+   */
+  private getPrimaryChannelId(): string {
+    return this.config.getChannelId?.() || this.config.primaryChannelId;
+  }
+
+  /**
+   * Get the current fallback channel ID (supports dynamic updates)
+   */
+  private getFallbackChannelId(): string | undefined {
+    return this.config.getFallbackChannelId?.() || this.config.fallbackChannelId;
+  }
+
+  /**
    * Send a notification event as a Premium_Embed
    * Requirement 1.1: Deliver within 1 second
    * Requirement 1.4: Only send to designated channel
@@ -94,8 +110,11 @@ export class NotificationManager {
       // Format Premium_Embed (Requirement 1.2)
       const embed = this.formatPremiumEmbed(embedData, event.timestamp);
 
+      // Get current primary channel ID (supports dynamic updates)
+      const primaryChannelId = this.getPrimaryChannelId();
+
       // Send to primary channel (Requirement 1.4)
-      await this.discordClient.sendMessage(this.config.primaryChannelId, {
+      await this.discordClient.sendMessage(primaryChannelId, {
         embeds: [embed],
       });
 
@@ -103,7 +122,7 @@ export class NotificationManager {
       logger.info('Notification delivered', {
         eventId: event.id,
         eventType: event.type,
-        channelId: this.config.primaryChannelId,
+        channelId: primaryChannelId,
         deliveryTimeMs: deliveryTime,
       });
 
@@ -119,7 +138,7 @@ export class NotificationManager {
       logError('Failed to deliver notification to primary channel', error as Error, {
         eventId: event.id,
         eventType: event.type,
-        primaryChannelId: this.config.primaryChannelId,
+        primaryChannelId: this.getPrimaryChannelId(),
       });
 
       await this.handleDeliveryFailure(event, embedData);
@@ -160,17 +179,18 @@ export class NotificationManager {
     embedData: PremiumEmbedData
   ): Promise<void> {
     // Try fallback channel if configured
-    if (this.config.fallbackChannelId) {
+    const fallbackChannelId = this.getFallbackChannelId();
+    if (fallbackChannelId) {
       try {
         const embed = this.formatPremiumEmbed(embedData, event.timestamp);
-        await this.discordClient.sendMessage(this.config.fallbackChannelId, {
+        await this.discordClient.sendMessage(fallbackChannelId, {
           embeds: [embed],
         });
 
         logger.info('Notification delivered to fallback channel', {
           eventId: event.id,
           eventType: event.type,
-          fallbackChannelId: this.config.fallbackChannelId,
+          fallbackChannelId,
         });
         return;
       } catch (fallbackError) {
@@ -180,7 +200,7 @@ export class NotificationManager {
           {
             eventId: event.id,
             eventType: event.type,
-            fallbackChannelId: this.config.fallbackChannelId,
+            fallbackChannelId,
           }
         );
       }
@@ -197,6 +217,22 @@ export class NotificationManager {
     event: NotificationEvent,
     embedData: PremiumEmbedData
   ): void {
+    // Validate channel IDs before queueing
+    const primaryChannelId = this.getPrimaryChannelId();
+    const fallbackChannelId = this.getFallbackChannelId();
+    const invalidIds = ['123456789012345678']; // Known placeholder IDs
+    
+    // Don't queue if channel IDs are still placeholders
+    if (invalidIds.includes(primaryChannelId) || 
+        (fallbackChannelId && invalidIds.includes(fallbackChannelId))) {
+      logger.warn('Skipping notification queue - channel IDs are placeholders', {
+        eventId: event.id,
+        primaryChannelId,
+        fallbackChannelId
+      });
+      return;
+    }
+
     const queuedNotification: QueuedNotification = {
       id: uuidv4(),
       event,
@@ -270,8 +306,11 @@ export class NotificationManager {
           notification.event.timestamp
         );
 
+        // Get current primary channel ID (supports dynamic updates)
+        const primaryChannelId = this.getPrimaryChannelId();
+
         // Try primary channel first
-        await this.discordClient.sendMessage(this.config.primaryChannelId, {
+        await this.discordClient.sendMessage(primaryChannelId, {
           embeds: [embed],
         });
 
@@ -290,13 +329,14 @@ export class NotificationManager {
         });
 
         // Try fallback channel
-        if (this.config.fallbackChannelId) {
+        const fallbackChannelId = this.getFallbackChannelId();
+        if (fallbackChannelId) {
           try {
             const embed = this.formatPremiumEmbed(
               notification.embedData,
               notification.event.timestamp
             );
-            await this.discordClient.sendMessage(this.config.fallbackChannelId, {
+            await this.discordClient.sendMessage(fallbackChannelId, {
               embeds: [embed],
             });
 
@@ -372,5 +412,60 @@ export class NotificationManager {
     const queueSize = this.notificationQueue.size;
     this.notificationQueue.clear();
     logger.info('Notification queue cleared', { clearedCount: queueSize });
+  }
+
+  /**
+   * Validate and clean queue on startup
+   * Removes notifications with invalid channel IDs (placeholder values)
+   */
+  validateAndCleanQueue(): void {
+    logger.info('Starting queue validation', {
+      currentQueueSize: this.notificationQueue.size,
+      primaryChannelId: this.getPrimaryChannelId(),
+      fallbackChannelId: this.getFallbackChannelId()
+    });
+
+    const invalidIds = ['123456789012345678']; // Known placeholder IDs
+    const primaryChannelId = this.getPrimaryChannelId();
+    const fallbackChannelId = this.getFallbackChannelId();
+    
+    // If current channel IDs are still placeholders, clear entire queue
+    if (invalidIds.includes(primaryChannelId) || 
+        (fallbackChannelId && invalidIds.includes(fallbackChannelId))) {
+      logger.warn('Current channel IDs are placeholders, clearing notification queue', {
+        primaryChannelId,
+        fallbackChannelId,
+        queueSize: this.notificationQueue.size
+      });
+      this.clearQueue();
+      return;
+    }
+
+    // Remove any queued notifications that were created with invalid channel IDs
+    let removedCount = 0;
+    for (const [id, notification] of this.notificationQueue.entries()) {
+      // Check if notification is too old (more than 1 hour)
+      const age = Date.now() - notification.createdAt.getTime();
+      if (age > 3600000) { // 1 hour in milliseconds
+        this.notificationQueue.delete(id);
+        removedCount++;
+        logger.debug('Removed stale notification from queue', {
+          queueId: id,
+          eventId: notification.event.id,
+          ageMs: age
+        });
+      }
+    }
+
+    if (removedCount > 0) {
+      logger.info('Cleaned notification queue on startup', {
+        removedCount,
+        remainingCount: this.notificationQueue.size
+      });
+    } else {
+      logger.info('No stale notifications found in queue', {
+        queueSize: this.notificationQueue.size
+      });
+    }
   }
 }

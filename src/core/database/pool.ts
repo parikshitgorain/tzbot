@@ -37,6 +37,7 @@ export interface DatabaseConfig {
   max?: number;
   idleTimeoutMillis?: number;
   connectionTimeoutMillis?: number;
+  ssl?: { rejectUnauthorized: boolean } | boolean;
 }
 
 let pool: pg.Pool | null = null;
@@ -59,7 +60,8 @@ export function createPool(config: DatabaseConfig): pg.Pool {
     password: config.password,
     max: config.max || 20, // Maximum 20 connections per requirements
     idleTimeoutMillis: config.idleTimeoutMillis || 30000,
-    connectionTimeoutMillis: config.connectionTimeoutMillis || 5000,
+    connectionTimeoutMillis: config.connectionTimeoutMillis || 20000, // Increased to 20s for Neon cold starts
+    ssl: config.ssl,
   });
 
   // Handle pool errors

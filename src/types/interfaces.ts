@@ -48,6 +48,7 @@ export interface SpamResult {
   isSpam: boolean;
   reason?: string;
   violationType?: ViolationType;
+  messageIds?: string[];
 }
 
 export interface LinkScanResult {

@@ -180,7 +180,10 @@ export class ChatRainManager {
 
   /**
    * Record chat rain winners in the database
+   * @internal Reserved for future use
    */
+  // @ts-expect-error - Reserved for future use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async recordWinners(winners: string[], timestamp: Date): Promise<void> {
     for (const userId of winners) {
       await this.chatActivityRepo.recordWinner(
