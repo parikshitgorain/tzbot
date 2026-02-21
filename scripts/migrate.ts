@@ -24,7 +24,8 @@ async function runMigrations() {
     // Run migrations in order
     const migrations = [
       '001_initial_schema.sql',
-      '002_offense_tracking.sql'
+      '002_offense_tracking.sql',
+      '003_giveaway_enhancements.sql'
     ];
 
     for (const migrationFile of migrations) {
