@@ -771,6 +771,15 @@ Bot: 🎉 Giveaway Ended!
 | /config | Moderator Role | ADMINISTRATOR |
 | /setup | Moderator Role | ADMINISTRATOR |
 
+### Giveaway Commands
+
+| Command | Required Permission | Discord Permission |
+|---------|-------------------|-------------------|
+| /giveaway create | Moderator Role | MANAGE_EVENTS |
+| /giveaway cancel | Moderator Role | MANAGE_EVENTS |
+| /giveaway list | Moderator Role | MANAGE_EVENTS |
+| Giveaway Entry (Button) | None | None |
+
 ---
 
 ## Command Response Times
@@ -984,12 +993,192 @@ Reasons can be any text up to 512 characters. Be clear and specific.
 - `/config` - View configuration
 
 **Future Commands (Planned):**
-- `/giveaway` - Create giveaways
 - `/ai-toggle` - Toggle AI responder
 - `/kb` - Knowledge base management
 
 ---
 
+## Giveaway Commands
+
+### `/giveaway create`
+
+Create a new giveaway with interactive button entry.
+
+**Syntax:**
+```
+/giveaway create title:<title> description:<description> duration:<minutes> winners:<count> [channel:<channel>] [role1:<role>] [role2:<role>] [role3:<role>]
+```
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| title | String | Yes | Title of the giveaway (max 256 chars) |
+| description | String | Yes | Description of the giveaway (max 1024 chars) |
+| duration | Integer | Yes | Duration in minutes (1-10080 = 7 days max) |
+| winners | Integer | Yes | Number of winners (1-10) |
+| channel | Channel | No | Channel to post giveaway (defaults to current) |
+| role1 | Role | No | Required role 1 (optional) |
+| role2 | Role | No | Required role 2 (optional) |
+| role3 | Role | No | Required role 3 (optional) |
+
+**Example (Open to Everyone):**
+```
+/giveaway create title:Free Game Key description:Win a Steam game key! duration:1440 winners:3
+```
+
+**Example (Role-Gated):**
+```
+/giveaway create title:Subscriber Giveaway description:Exclusive for subscribers! duration:2880 winners:5 role1:@Subscriber
+```
+
+**Response:**
+```
+✅ Giveaway created successfully!
+
+ID: abc123def456
+Title: Free Game Key
+Channel: #giveaways
+Duration: 1440 minutes (1 day)
+Winners: 3
+Required Roles: None (open to everyone)
+
+The giveaway has been posted in #giveaways. Users can enter by clicking the button!
+```
+
+**What happens:**
+- Giveaway message is posted with interactive button
+- Users click "🎉 Enter Giveaway" button to enter
+- Entry validation checks required roles (if any)
+- Winners are selected using CSPRNG when giveaway ends
+- Winners are announced and receive DMs
+
+**Duration Limits:**
+- Minimum: 1 minute
+- Maximum: 10,080 minutes (7 days)
+
+**Winner Limits:**
+- Minimum: 1 winner
+- Maximum: 10 winners
+
+**Required Permission:** MANAGE_EVENTS
+
+---
+
+### `/giveaway cancel`
+
+Cancel an active giveaway before it ends.
+
+**Syntax:**
+```
+/giveaway cancel giveaway_id:<id>
+```
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| giveaway_id | String | Yes | ID of the giveaway to cancel |
+
+**Example:**
+```
+/giveaway cancel giveaway_id:abc123def456
+```
+
+**Response:**
+```
+✅ Giveaway abc123def456 has been cancelled.
+```
+
+**What happens:**
+- Giveaway status is set to "cancelled"
+- Giveaway message is updated to show cancellation
+- Entry button is disabled
+- No winners are selected
+- Action is logged
+
+**Use Cases:**
+- Correcting mistakes
+- Changing giveaway terms
+- Responding to issues
+
+**Required Permission:** MANAGE_EVENTS
+
+---
+
+### `/giveaway list`
+
+List all active giveaways in the server.
+
+**Syntax:**
+```
+/giveaway list
+```
+
+**Parameters:** None
+
+**Example:**
+```
+/giveaway list
+```
+
+**Response:**
+```
+🎉 Active Giveaways
+
+Total active giveaways: 2
+
+Free Game Key
+Channel: #giveaways
+Entries: 45
+Winners: 3
+Ends: in 12 hours
+ID: abc123def456
+
+Subscriber Giveaway
+Channel: #giveaways
+Entries: 23
+Winners: 5
+Ends: in 2 days
+ID: def456ghi789
+```
+
+**Required Permission:** MANAGE_EVENTS
+
+---
+
+### Giveaway Entry (Button Interaction)
+
+Users enter giveaways by clicking the "🎉 Enter Giveaway" button on the giveaway message.
+
+**Entry Validation:**
+- User must have at least one required role (if roles are specified)
+- User can only enter once per giveaway
+- Duplicate entries are automatically prevented
+
+**Success Response:**
+```
+✅ You've successfully entered the giveaway!
+```
+
+**Already Entered Response:**
+```
+❌ You've already entered this giveaway.
+```
+
+**Missing Role Response:**
+```
+❌ You don't have the required roles to enter this giveaway.
+
+Required roles: @Subscriber, @VIP
+```
+
+**Winner Selection:**
+- Uses cryptographically secure random number generator (CSPRNG)
+- Ensures fair and unpredictable selection
+- Winners are announced in the giveaway channel
+- Each winner receives a DM notification
+
+---
+
 **Last Updated:** 2026-02-21
-**Version:** 1.0.1
+**Version:** 1.0.2
 

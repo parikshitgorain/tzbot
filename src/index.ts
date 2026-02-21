@@ -15,7 +15,7 @@
  * Requirements: All
  */
 
-import { logger } from '@/core/logger/logger.js';
+import { logger, logError } from '@/core/logger/logger.js';
 import { config } from '@/config/index.js';
 import { Database } from '@/core/database/Database.js';
 import { redisClient } from '@/core/cache/redis.client.js';
@@ -39,7 +39,8 @@ import { LinkScanner } from '@/moderation/link-scanner.js';
 import { ChannelAccessEnforcer } from '@/moderation/channel-access.js';
 import { createModerationCommands } from '@/commands/moderation.commands.js';
 import { createUtilityCommands } from '@/commands/utility.commands.js';
-import type { Message } from 'discord.js';
+import { createGiveawayCommands } from '@/commands/giveaway.commands.js';
+import type { Message, ButtonInteraction } from 'discord.js';
 import type { NotificationEvent } from '@/types/models.js';
 
 /**
@@ -757,6 +758,46 @@ class TZBotApplication {
     this.healthCheck.setCache(redisClient);
 
     logger.info('Health check system initialized');
+  }
+
+  /**
+   * Handle button interactions (giveaway entries)
+   */
+  private async handleButtonInteraction(interaction: ButtonInteraction): Promise<void> {
+    try {
+      // Check if this is a giveaway entry button
+      if (interaction.customId.startsWith('giveaway_enter_')) {
+        await this.giveawayManager.handleEntry(interaction);
+        
+        logger.debug('Giveaway entry button handled', {
+          userId: interaction.user.id,
+          username: interaction.user.username,
+          customId: interaction.customId,
+        });
+      }
+    } catch (error) {
+      logError('Failed to handle button interaction', error as Error, {
+        userId: interaction.user.id,
+        customId: interaction.customId,
+      });
+
+      // Send error message to user
+      try {
+        if (interaction.deferred || interaction.replied) {
+          await interaction.followUp({
+            content: '❌ An error occurred while processing your entry. Please try again.',
+            ephemeral: true,
+          });
+        } else {
+          await interaction.reply({
+            content: '❌ An error occurred while processing your entry. Please try again.',
+            ephemeral: true,
+          });
+        }
+      } catch (replyError) {
+        logger.error('Failed to send error message to user', { replyError });
+      }
+    }
   }
 
   /**
@@ -1497,14 +1538,20 @@ class TZBotApplication {
       }
     }, 50); // Priority 50
 
-    // Interaction events for commands
+    // Interaction events for commands and buttons
     this.eventManager.registerHandler('interactionCreate', async (interaction) => {
-      if (!interaction.isCommand()) return;
-
       const completeOp = this.shutdownManager.trackOperation();
 
       try {
-        await this.commandManager.handleInteraction(interaction);
+        // Handle slash commands
+        if (interaction.isCommand()) {
+          await this.commandManager.handleInteraction(interaction);
+        }
+        
+        // Handle button interactions (giveaway entries)
+        if (interaction.isButton()) {
+          await this.handleButtonInteraction(interaction as ButtonInteraction);
+        }
       } catch (error) {
         logger.error('Error handling interaction', { error });
       } finally {
@@ -1541,6 +1588,10 @@ class TZBotApplication {
     // Register utility commands
     const utilCommands = createUtilityCommands(this.discordClient, this.database, config);
     this.commandManager.registerCommands(utilCommands);
+
+    // Register giveaway commands
+    const giveawayCommands = createGiveawayCommands(this.discordClient, this.giveawayManager);
+    this.commandManager.registerCommands(giveawayCommands);
 
     logger.info('Slash commands registered');
   }
