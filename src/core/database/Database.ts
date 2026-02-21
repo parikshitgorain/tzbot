@@ -1,0 +1,224 @@
+import type { Pool } from 'pg';
+import type { Database as IDatabase } from '../../types/interfaces.js';
+import type { User, Violation, Giveaway } from '../../types/models.js';
+import { getPool, createPool, closePool, type DatabaseConfig } from './pool.js';
+import { runMigrations } from './migrator.js';
+import {
+  UserRepository,
+  ViolationRepository,
+  GiveawayRepository,
+  ChatActivityRepository,
+  ConfigRepository,
+} from './repositories/index.js';
+
+/**
+ * Database class implements the Database interface
+ * Provides a unified interface to all repository operations
+ * Follows the repository pattern for clean data access
+ */
+export class Database implements IDatabase {
+  private pool: Pool | null = null;
+  private userRepo: UserRepository | null = null;
+  private violationRepo: ViolationRepository | null = null;
+  private giveawayRepo: GiveawayRepository | null = null;
+  private chatActivityRepo: ChatActivityRepository | null = null;
+  private configRepo: ConfigRepository | null = null;
+
+  /**
+   * Connect to the database and initialize repositories
+   * Runs migrations automatically on startup
+   */
+  async connect(config?: DatabaseConfig): Promise<void> {
+    if (this.pool) {
+      throw new Error('Database already connected');
+    }
+
+    // Create pool with provided config or use existing pool
+    if (config) {
+      this.pool = createPool(config);
+    } else {
+      this.pool = getPool();
+    }
+
+    // Run migrations automatically
+    await runMigrations();
+
+    // Initialize repositories
+    this.userRepo = new UserRepository(this.pool);
+    this.violationRepo = new ViolationRepository(this.pool);
+    this.giveawayRepo = new GiveawayRepository(this.pool);
+    this.chatActivityRepo = new ChatActivityRepository(this.pool);
+    this.configRepo = new ConfigRepository(this.pool);
+  }
+
+  /**
+   * Disconnect from the database
+   * Should be called during graceful shutdown
+   */
+  async disconnect(): Promise<void> {
+    await closePool();
+    this.pool = null;
+    this.userRepo = null;
+    this.violationRepo = null;
+    this.giveawayRepo = null;
+    this.chatActivityRepo = null;
+    this.configRepo = null;
+  }
+
+  // User operations
+  async saveUser(user: User): Promise<void> {
+    this.ensureConnected();
+    await this.userRepo!.save(user);
+  }
+
+  async getUser(userId: string): Promise<User | null> {
+    this.ensureConnected();
+    return await this.userRepo!.get(userId);
+  }
+
+  async getUserByKickUsername(kickUsername: string): Promise<User | null> {
+    this.ensureConnected();
+    return await this.userRepo!.getByKickUsername(kickUsername);
+  }
+
+  // Violation operations
+  async saveViolation(violation: Violation): Promise<void> {
+    this.ensureConnected();
+    await this.violationRepo!.save(violation);
+  }
+
+  async getViolations(userId: string, since: Date): Promise<Violation[]> {
+    this.ensureConnected();
+    return await this.violationRepo!.get(userId, since);
+  }
+
+  async clearViolations(userId: string): Promise<void> {
+    this.ensureConnected();
+    await this.violationRepo!.clear(userId);
+  }
+
+  // Giveaway operations
+  async saveGiveaway(giveaway: Giveaway): Promise<void> {
+    this.ensureConnected();
+    await this.giveawayRepo!.save(giveaway);
+  }
+
+  async getGiveaway(giveawayId: string): Promise<Giveaway | null> {
+    this.ensureConnected();
+    return await this.giveawayRepo!.get(giveawayId);
+  }
+
+  async addGiveawayEntry(giveawayId: string, userId: string): Promise<void> {
+    this.ensureConnected();
+    await this.giveawayRepo!.addEntry(giveawayId, userId);
+  }
+
+  // Chat activity operations
+  async recordChatActivity(userId: string, timestamp: Date): Promise<void> {
+    this.ensureConnected();
+    await this.chatActivityRepo!.record(userId, timestamp);
+  }
+
+  async getActiveChatters(since: Date): Promise<string[]> {
+    this.ensureConnected();
+    return await this.chatActivityRepo!.getActiveChatters(since);
+  }
+
+  async recordChatRainWinner(userId: string, timestamp: Date): Promise<void> {
+    this.ensureConnected();
+    await this.chatActivityRepo!.recordWinner(userId, timestamp, 'default');
+  }
+
+  // Configuration operations
+  async getConfig(key: string): Promise<unknown> {
+    this.ensureConnected();
+    return await this.configRepo!.get(key);
+  }
+
+  async setConfig(key: string, value: unknown): Promise<void> {
+    this.ensureConnected();
+    await this.configRepo!.set(key, value);
+  }
+
+  // Data retention operations
+  async deleteAllUserData(userId: string): Promise<void> {
+    this.ensureConnected();
+    
+    const client = await this.pool!.connect();
+    
+    try {
+      await client.query('BEGIN');
+
+      // Delete message content
+      await client.query('DELETE FROM message_content WHERE user_id = $1', [userId]);
+
+      // Delete chat activity
+      await client.query('DELETE FROM chat_activity WHERE user_id = $1', [userId]);
+
+      // Delete chat rain winners
+      await client.query('DELETE FROM chat_rain_winners WHERE user_id = $1', [userId]);
+
+      // Delete giveaway entries
+      await client.query('DELETE FROM giveaway_entries WHERE user_id = $1', [userId]);
+
+      // Delete violations (will cascade from user deletion, but explicit for clarity)
+      await client.query('DELETE FROM violations WHERE user_id = $1', [userId]);
+
+      // Delete moderation logs where user is the target
+      await client.query('DELETE FROM moderation_logs WHERE target_user_id = $1', [userId]);
+
+      // Delete user record (this will cascade to violations due to foreign key)
+      await client.query('DELETE FROM users WHERE discord_id = $1', [userId]);
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw new Error(
+        `Failed to delete user data: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Health check - executes a simple query to verify database connectivity
+   * Used by the health check system to monitor database health
+   */
+  async healthCheck(): Promise<void> {
+    this.ensureConnected();
+    await this.pool!.query('SELECT 1');
+  }
+
+  /**
+   * Get direct access to repositories for advanced operations
+   * Use with caution - prefer using the Database interface methods
+   */
+  get repositories() {
+    this.ensureConnected();
+    return {
+      users: this.userRepo!,
+      violations: this.violationRepo!,
+      giveaways: this.giveawayRepo!,
+      chatActivity: this.chatActivityRepo!,
+      config: this.configRepo!,
+    };
+  }
+
+  /**
+   * Ensure database is connected before operations
+   */
+  private ensureConnected(): void {
+    if (!this.pool || !this.userRepo) {
+      throw new Error('Database not connected. Call connect() first.');
+    }
+  }
+}
+
+/**
+ * Create a new Database instance
+ * Convenience function for creating database instances
+ */
+export function createDatabase(): Database {
+  return new Database();
+}
