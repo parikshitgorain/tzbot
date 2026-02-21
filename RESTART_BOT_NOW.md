@@ -1,4 +1,10 @@
-# ⚠️ BOT RESTART REQUIRED - CRITICAL FIX APPLIED
+# ⚠️ BOT RESTART REQUIRED - CODE COMPILED AFTER BOT STARTED
+
+## What Happened
+
+The code was fixed and compiled at **19:32:54**, but the bot was already running (started at **19:32:42**).
+
+This means the bot is running the OLD compiled code from BEFORE the fix.
 
 ## What Was Fixed
 
@@ -13,7 +19,7 @@
 
 ## Current Situation
 
-The bot is running the OLD code that has the bug. You need to restart ONCE to load the fixed code.
+The bot needs to be restarted ONE MORE TIME to load the newly compiled code (from 19:32:54).
 
 ## How to Fix (RESTART THE BOT)
 
@@ -55,8 +61,18 @@ sudo systemctl restart tzbot
 After restarting:
 1. Check logs - you should see: "Channel text rate limiter initialized (no channels configured yet - use /ratelimit-add to add channels)"
 2. Use `/ratelimit-add restricted:#channel redirect:#general`
-3. Try sending multiple text messages in the restricted channel
-4. Bot should delete them and show warning
+3. **Check the response** - it should say "✨ Changes applied immediately - no restart required!"
+4. Try sending multiple text messages in the restricted channel
+5. Bot should delete them and show warning
+
+## Timeline of Events
+
+- **19:32:42** - Bot started with OLD code
+- **19:32:54** - New code compiled (bot already running)
+- **19:33:51** - User ran `/ratelimit-add` (bot still using OLD code)
+- **19:33:52** - Command showed "restart required" message (because bot has OLD code)
+
+The bot needs ONE MORE RESTART to load the code compiled at 19:32:54.
 
 ---
 
