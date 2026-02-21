@@ -741,11 +741,22 @@ class TZBotApplication {
               // Also send reminder in channel (auto-delete after 3 seconds with retry)
               if (message.channel.isTextBased() && 'send' in message.channel) {
                 try {
-                  const deleteTime = Math.floor(Date.now() / 1000) + 3; // Unix timestamp 3 seconds from now
                   const cooldownReminder = await message.channel.send(
-                    `<@${message.author.id}> ⚠️ **Cooldown Active** - Please don't spam! Your messages will be deleted for 1 minute.\n` +
-                    `*This message will be deleted <t:${deleteTime}:R>*`
+                    `<@${message.author.id}> ⚠️ **Cooldown Active** - Please don't spam! Your messages will be deleted for 1 minute.`
                   );
+                  
+                  // Calculate delete time AFTER message is sent
+                  const deleteTime = Math.floor(Date.now() / 1000) + 3;
+                  
+                  // Edit message to add countdown
+                  try {
+                    await cooldownReminder.edit(
+                      `<@${message.author.id}> ⚠️ **Cooldown Active** - Please don't spam! Your messages will be deleted for 1 minute.\n` +
+                      `*This message will be deleted <t:${deleteTime}:R>*`
+                    );
+                  } catch (editError) {
+                    logger.debug('Failed to edit cooldown reminder with countdown', { error: editError });
+                  }
                   
                   // Delete after 3 seconds with retry
                   setTimeout(async () => {
@@ -907,13 +918,26 @@ class TZBotApplication {
             // Also send warning in channel (auto-delete after 5 seconds with retry)
             if (message.channel.isTextBased() && 'send' in message.channel) {
               try {
-                const deleteTime = Math.floor(Date.now() / 1000) + 5; // Unix timestamp 5 seconds from now
                 const channelWarning = await message.channel.send(
                   `<@${message.author.id}> ⚠️ **Warning: Spam Detected**\n` +
                   `You have been warned for spam. Check your DMs for details.\n` +
-                  `**Cooldown:** 1 minute - Your messages will be auto-deleted.\n` +
-                  `*This message will be deleted <t:${deleteTime}:R>*`
+                  `**Cooldown:** 1 minute - Your messages will be auto-deleted.`
                 );
+                
+                // Calculate delete time AFTER message is sent to ensure accuracy
+                const deleteTime = Math.floor(Date.now() / 1000) + 5;
+                
+                // Edit message to add countdown
+                try {
+                  await channelWarning.edit(
+                    `<@${message.author.id}> ⚠️ **Warning: Spam Detected**\n` +
+                    `You have been warned for spam. Check your DMs for details.\n` +
+                    `**Cooldown:** 1 minute - Your messages will be auto-deleted.\n` +
+                    `*This message will be deleted <t:${deleteTime}:R>*`
+                  );
+                } catch (editError) {
+                  logger.debug('Failed to edit warning message with countdown', { error: editError });
+                }
                 
                 // Delete the warning message after 5 seconds with retry
                 setTimeout(async () => {
