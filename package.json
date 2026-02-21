@@ -8,6 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "migrate": "tsx scripts/migrate.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "commands:clear": "tsx scripts/clear-commands.ts",
     "test": "vitest",
