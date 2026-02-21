@@ -35,13 +35,28 @@ import { HealthCheckSystem } from '@/core/health/health-check.js';
 import { GracefulShutdownManager } from '@/core/shutdown/shutdown-manager.js';
 import { StatePersistenceService } from '@/core/state/state-persistence.js';
 import { SpamDetector } from '@/moderation/spam-detector.js';
-import { ViolationTracker } from '@/moderation/violation-tracker.js';
 import { LinkScanner } from '@/moderation/link-scanner.js';
 import { ChannelAccessEnforcer } from '@/moderation/channel-access.js';
 import { createModerationCommands } from '@/commands/moderation.commands.js';
 import { createUtilityCommands } from '@/commands/utility.commands.js';
 import type { Message } from 'discord.js';
 import type { NotificationEvent } from '@/types/models.js';
+
+/**
+ * Batched spam notification data
+ */
+interface BatchedSpamNotification {
+  userId: string;
+  username: string;
+  userTag: string;
+  channelId: string;
+  punishmentType: string;
+  duration?: number;
+  reason: string;
+  deletedCount: number;
+  offenseCount: number;
+  timestamp: Date;
+}
 
 /**
  * Main application class
@@ -66,7 +81,6 @@ class TZBotApplication {
 
   // Moderation
   private spamDetector!: SpamDetector;
-  private violationTracker!: ViolationTracker;
   private linkScanner!: LinkScanner;
   private channelAccess!: ChannelAccessEnforcer;
 
@@ -74,6 +88,18 @@ class TZBotApplication {
   private webhookHandler!: KickWebhookHandler;
   private webhookServer!: WebhookServer;
   // private pollingFallback!: PollingFallbackSystem; // Commented out - needs Kick API client
+
+  // Spam notification batching
+  private spamNotificationBatch: Map<string, BatchedSpamNotification> = new Map();
+  private spamBatchTimer: NodeJS.Timeout | null = null;
+  private readonly SPAM_BATCH_WINDOW_MS = 30000; // 30 seconds
+
+  // Warning cooldown tracking
+  private warningCooldowns: Map<string, { expiresAt: Date; warningIssued: boolean }> = new Map();
+  private readonly WARNING_COOLDOWN_MS = 60000; // 1 minute
+
+  // Processing lock to prevent race conditions
+  private processingOffenses: Set<string> = new Set();
 
   /**
    * Initialize all bot components in the correct order
@@ -114,6 +140,145 @@ class TZBotApplication {
     await this.recoverState();
 
     logger.info('All components initialized successfully');
+  }
+
+  /**
+   * Add spam notification to batch
+   * Notifications are collected for 30 seconds, then sent together
+   */
+  private addSpamNotificationToBatch(notification: BatchedSpamNotification): void {
+    // Add or update notification for this user
+    this.spamNotificationBatch.set(notification.userId, notification);
+
+    // Start batch timer if not already running
+    if (!this.spamBatchTimer) {
+      this.spamBatchTimer = setTimeout(() => {
+        this.flushSpamNotificationBatch();
+      }, this.SPAM_BATCH_WINDOW_MS);
+
+      logger.debug('Started spam notification batch timer', {
+        windowMs: this.SPAM_BATCH_WINDOW_MS,
+      });
+    }
+  }
+
+  /**
+   * Check if user is in warning cooldown period
+   */
+  private isInWarningCooldown(userId: string): boolean {
+    const cooldown = this.warningCooldowns.get(userId);
+    if (!cooldown) return false;
+
+    const now = new Date();
+    if (now >= cooldown.expiresAt) {
+      // Cooldown expired, remove it
+      this.warningCooldowns.delete(userId);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Start warning cooldown for user
+   */
+  private startWarningCooldown(userId: string): void {
+    const expiresAt = new Date(Date.now() + this.WARNING_COOLDOWN_MS);
+    this.warningCooldowns.set(userId, {
+      expiresAt,
+      warningIssued: false,
+    });
+
+    logger.debug('Started warning cooldown', {
+      userId,
+      expiresAt,
+      durationMs: this.WARNING_COOLDOWN_MS,
+    });
+  }
+
+  /**
+   * Check if warning has been issued during current cooldown
+   */
+  private hasWarningBeenIssued(userId: string): boolean {
+    const cooldown = this.warningCooldowns.get(userId);
+    return cooldown?.warningIssued || false;
+  }
+
+  /**
+   * Mark warning as issued for current cooldown
+   */
+  private markWarningIssued(userId: string): void {
+    const cooldown = this.warningCooldowns.get(userId);
+    if (cooldown) {
+      cooldown.warningIssued = true;
+    }
+  }
+
+  /**
+   * Flush batched spam notifications
+   * Sends one notification per user to mod-log channel
+   */
+  private async flushSpamNotificationBatch(): Promise<void> {
+    // Clear timer
+    this.spamBatchTimer = null;
+
+    // Get all batched notifications
+    const notifications = Array.from(this.spamNotificationBatch.values());
+    
+    if (notifications.length === 0) {
+      return;
+    }
+
+    logger.info('Flushing spam notification batch', {
+      userCount: notifications.length,
+    });
+
+    // Send each user's notification separately
+    for (const notification of notifications) {
+      try {
+        const notificationEvent: NotificationEvent = {
+          id: `spam-${notification.userId}-${notification.timestamp.getTime()}`,
+          type: 'SPAM_DETECTED' as any,
+          channelId: notification.channelId,
+          data: { userId: notification.userId, reason: notification.reason },
+          timestamp: notification.timestamp,
+          delivered: false,
+        };
+
+        const embedData: PremiumEmbedData = {
+          title: '🚨 Spam Detected',
+          description: `User <@${notification.userId}> was detected spamming in <#${notification.channelId}>`,
+          fields: [
+            { name: 'User', value: `${notification.userTag} (${notification.userId})`, inline: true },
+            { name: 'Punishment', value: notification.punishmentType, inline: true },
+            { name: 'Duration', value: notification.duration ? `${notification.duration}h` : 'N/A', inline: true },
+            { name: 'Reason', value: notification.reason, inline: true },
+            { name: 'Messages Deleted', value: `${notification.deletedCount}`, inline: true },
+            { name: 'Offense Count', value: `${notification.offenseCount}`, inline: true },
+          ],
+          color: notification.punishmentType === 'PERMANENT_BAN' ? 0x000000 : 0xff0000,
+        };
+
+        await this.notificationManager.sendNotification(notificationEvent, embedData);
+        
+        logger.debug('Sent batched spam notification', {
+          userId: notification.userId,
+          username: notification.username,
+        });
+      } catch (error) {
+        logger.error('Failed to send batched spam notification', {
+          error,
+          userId: notification.userId,
+        });
+      }
+    }
+
+    // Clear the batch
+    this.spamNotificationBatch.clear();
+    
+    logger.info('Spam notification batch flushed', {
+      sentCount: notifications.length,
+    });
   }
 
   /**
@@ -168,6 +333,24 @@ class TZBotApplication {
 
     this.shutdownManager = new GracefulShutdownManager(logger, 30000);
     this.shutdownManager.setupSignalHandlers();
+
+    // Register cleanup for spam notification batch
+    this.shutdownManager.registerCleanup('spam-notification-batch', async () => {
+      if (this.spamBatchTimer) {
+        clearTimeout(this.spamBatchTimer);
+        this.spamBatchTimer = null;
+      }
+      // Flush any pending notifications
+      await this.flushSpamNotificationBatch();
+    });
+
+    // Register cleanup for warning cooldowns
+    this.shutdownManager.registerCleanup('warning-cooldowns', async () => {
+      this.warningCooldowns.clear();
+      logger.info('Cleared warning cooldowns', {
+        count: this.warningCooldowns.size,
+      });
+    });
 
     logger.info('Shutdown manager initialized');
   }
@@ -364,11 +547,6 @@ class TZBotApplication {
       rapidWindow: 10, // seconds
     });
 
-    // Violation tracker
-    this.violationTracker = new ViolationTracker(
-      this.database.repositories.violations
-    );
-
     // Link scanner
     this.linkScanner = new LinkScanner(
       undefined, // Use default blocklist
@@ -487,18 +665,131 @@ class TZBotApplication {
         );
 
         if (spamResult.isSpam) {
-          // Record violation and get escalation result
-          const escalation = await this.violationTracker.recordViolation(
+          // Check if user is in warning cooldown FIRST (before processing offense)
+          const inCooldown = this.isInWarningCooldown(message.author.id);
+          
+          if (inCooldown) {
+            // User is in cooldown - delete message instantly WITHOUT recording offense
+            // User is in cooldown - delete message instantly WITHOUT recording offense
+            try {
+              await message.delete();
+              logger.debug('Deleted message from user in warning cooldown', {
+                userId: message.author.id,
+                username: message.author.username,
+              });
+            } catch (error) {
+              logger.error('Failed to delete message during cooldown', { error });
+            }
+
+            // Send warning message only if not already issued in this cooldown period
+            if (!this.hasWarningBeenIssued(message.author.id)) {
+              // Send DM reminder
+              try {
+                await message.author.send(
+                  '⚠️ **Please don\'t spam!** You are in a 1-minute cooldown. Your messages will be automatically deleted until the cooldown expires.'
+                );
+                
+                logger.debug('Cooldown reminder DM sent', {
+                  userId: message.author.id,
+                  username: message.author.username,
+                });
+              } catch (error) {
+                logger.warn('Failed to send cooldown reminder DM', {
+                  userId: message.author.id,
+                  error,
+                });
+              }
+
+              // Also send reminder in channel (auto-delete after 3 seconds)
+              if (message.channel.isTextBased() && 'send' in message.channel) {
+                try {
+                  const deleteTime = Math.floor(Date.now() / 1000) + 3; // Unix timestamp 3 seconds from now
+                  const cooldownReminder = await message.channel.send(
+                    `<@${message.author.id}> ⚠️ **Cooldown Active** - Please don't spam! Your messages will be deleted for 1 minute.\n` +
+                    `*This message will be deleted <t:${deleteTime}:R>*`
+                  );
+                  
+                  // Delete after 3 seconds
+                  setTimeout(async () => {
+                    try {
+                      await cooldownReminder.delete();
+                    } catch (deleteError) {
+                      logger.debug('Failed to delete cooldown reminder', { error: deleteError });
+                    }
+                  }, 3000);
+                  
+                  logger.debug('Cooldown reminder sent in channel', {
+                    userId: message.author.id,
+                    username: message.author.username,
+                  });
+                } catch (error) {
+                  logger.warn('Failed to send channel cooldown reminder', {
+                    userId: message.author.id,
+                    error,
+                  });
+                }
+              }
+              
+              this.markWarningIssued(message.author.id);
+              
+              logger.info('Cooldown reminder sent', {
+                userId: message.author.id,
+                username: message.author.username,
+              });
+            }
+            
+            return; // Don't process offense - just delete and warn
+          }
+
+          // Not in cooldown - process offense normally
+          // Check if we're already processing an offense for this user (prevent race conditions)
+          if (this.processingOffenses.has(message.author.id)) {
+            logger.debug('Already processing offense for user, skipping duplicate', {
+              userId: message.author.id,
+              username: message.author.username,
+            });
+            // Still delete the message
+            try {
+              await message.delete();
+            } catch (error) {
+              logger.error('Failed to delete message during duplicate processing', { error });
+            }
+            return;
+          }
+
+          // Mark as processing
+          this.processingOffenses.add(message.author.id);
+
+          try {
+            // Initialize offense management system
+            const { getPool } = await import('@/core/database/pool.js');
+            const { OffenseRepository } = await import('@/core/database/repositories/OffenseRepository.js');
+            const { OffenseManager } = await import('@/moderation/offense-manager.js');
+            const { PunishmentCalculator, PunishmentType } = await import('@/moderation/punishment-calculator.js');
+          
+          const pool = getPool();
+          const offenseRepo = new OffenseRepository(pool);
+          const punishmentCalc = new PunishmentCalculator();
+          const offenseManager = new OffenseManager(
+            pool,
+            offenseRepo,
+            punishmentCalc,
+            this.notificationManager
+          );
+
+          // Process offense and get punishment
+          const punishment = await offenseManager.processOffense(
             message.author.id,
-            'spam' as any,
-            spamResult.reason || 'Spam detected'
+            spamResult.reason || 'Spam detected',
+            'system', // System-detected spam
+            message.channel.id
           );
           
           // Delete spam messages
           let deletedCount = 0;
           try {
             const recentMessages = await message.channel.messages.fetch({ limit: 100 });
-            const spamWindowMs = 12 * 1000;
+            const spamWindowMs = 10 * 1000;
             const windowStart = new Date(message.createdTimestamp - spamWindowMs);
             const windowEnd = new Date(message.createdTimestamp + 2000);
             
@@ -508,127 +799,179 @@ class TZBotApplication {
               msg.createdTimestamp <= windowEnd.getTime()
             );
             
-            if (message.channel.type === 0 && 'bulkDelete' in message.channel.messages) {
-              const deleted = await (message.channel.messages as any).bulkDelete(userMessagesInWindow, true);
-              deletedCount = deleted.size;
+            logger.debug('Messages to delete', {
+              userId: message.author.id,
+              totalMessages: userMessagesInWindow.size,
+              windowStart: windowStart.toISOString(),
+              windowEnd: windowEnd.toISOString(),
+            });
+            
+            // Try bulk delete first (only works for messages < 14 days old)
+            if (userMessagesInWindow.size > 0 && message.channel.type === 0) {
+              try {
+                const deleted = await message.channel.bulkDelete(userMessagesInWindow, true);
+                deletedCount = deleted.size;
+                logger.info('Bulk deleted spam messages', {
+                  userId: message.author.id,
+                  deletedCount,
+                });
+              } catch (bulkError) {
+                logger.warn('Bulk delete failed, falling back to individual deletes', {
+                  error: bulkError,
+                  messageCount: userMessagesInWindow.size,
+                });
+                
+                // Fallback: delete messages individually
+                for (const msg of userMessagesInWindow.values()) {
+                  try {
+                    await msg.delete();
+                    deletedCount++;
+                  } catch (deleteError) {
+                    logger.debug('Failed to delete individual message', {
+                      messageId: msg.id,
+                      error: deleteError,
+                    });
+                  }
+                }
+              }
             }
           } catch (error) {
             logger.error('Failed to delete spam messages', { error });
           }
           
-          // Apply punishment based on escalation level
-          const { PunishmentLevel } = await import('@/types/models.js');
+          // Get offense count for notification
+          const offenseRecord = await offenseManager.getOffenseHistory(message.author.id);
+          const offenseCount = offenseRecord?.total_offenses || 0;
           
-          if (escalation.punishmentLevel === PunishmentLevel.WARNING) {
-            // 1st offense: Ephemeral warning message + DM
-            try {
-              // Send ephemeral warning (only user can see)
-              if (message.channel.type === 0) { // Guild text channel
-                await (message.channel as any).send({
-                  content: `<@${message.author.id}> ⚠️ **Warning #1** - Spam detected. This warning expires in 30 days. Further spam will result in timeout or ban.`,
-                }).then((msg: any) => {
-                  // Delete after 10 seconds so only user sees it briefly
-                  setTimeout(() => msg.delete().catch(() => {}), 10000);
-                });
-              }
-            } catch (error) {
-              logger.debug('Failed to send ephemeral warning', { error });
-            }
+          // Apply punishment based on type
+          if (punishment.type === PunishmentType.WARNING) {
+            // Start warning cooldown period
+            this.startWarningCooldown(message.author.id);
             
-            // Send DM
+            // Send warning message to user via DM
             try {
               await message.author.send(
-                `⚠️ **Spam Warning #1**\n\nYour messages in ${message.guild?.name} were detected as spam and removed.\n\n**Reason:** ${spamResult.reason}\n**Messages deleted:** ${deletedCount}\n**Warning expires:** 30 days from now\n\n**Progressive Punishment System:**\n- 2nd spam within 5 minutes: 5-minute timeout\n- 3 warnings within 30 days: Timeout\n- 3 timeouts within 30 days: Ban from server\n\nPlease avoid spamming to prevent further action.`
+                `⚠️ **Warning: Spam Detected**\n\n` +
+                `You have been warned for: ${spamResult.reason || 'Spam detected'}\n\n` +
+                `**Offense Count:** ${offenseCount}\n` +
+                `**Cooldown:** 1 minute - Your messages will be auto-deleted during this time.\n` +
+                `**Next Offense:** ${punishment.nextPunishment}`
               );
+              
+              logger.debug('Warning DM sent', {
+                userId: message.author.id,
+                username: message.author.username,
+              });
             } catch (error) {
-              logger.debug('Could not DM user about warning', { userId: message.author.id });
+              logger.warn('Failed to send warning DM', {
+                userId: message.author.id,
+                error,
+              });
+            }
+
+            // Also send warning in channel (auto-delete after 5 seconds)
+            if (message.channel.isTextBased() && 'send' in message.channel) {
+              try {
+                const deleteTime = Math.floor(Date.now() / 1000) + 5; // Unix timestamp 5 seconds from now
+                const channelWarning = await message.channel.send(
+                  `<@${message.author.id}> ⚠️ **Warning: Spam Detected**\n` +
+                  `You have been warned for spam. Check your DMs for details.\n` +
+                  `**Cooldown:** 1 minute - Your messages will be auto-deleted.\n` +
+                  `*This message will be deleted <t:${deleteTime}:R>*`
+                );
+                
+                // Delete the warning message after 5 seconds
+                setTimeout(async () => {
+                  try {
+                    await channelWarning.delete();
+                  } catch (deleteError) {
+                    logger.debug('Failed to delete channel warning', { error: deleteError });
+                  }
+                }, 5000);
+                
+                logger.debug('Warning sent in channel', {
+                  userId: message.author.id,
+                  username: message.author.username,
+                });
+              } catch (error) {
+                logger.warn('Failed to send channel warning', {
+                  userId: message.author.id,
+                  error,
+                });
+              }
             }
             
-            logger.info('Spam warning issued', {
+            this.markWarningIssued(message.author.id);
+            
+            logger.info('Warning issued with cooldown', {
               userId: message.author.id,
               username: message.author.username,
               deletedCount,
-              escalation: escalation.reason
+              offenseCount,
+              reason: spamResult.reason
             });
             
-          } else if (escalation.punishmentLevel === PunishmentLevel.TIMEOUT_5M) {
-            // 2nd offense or 3 warnings: 5-minute timeout
+          } else if (punishment.type === PunishmentType.TIMEOUT && punishment.duration && message.member) {
+            // Apply timeout
+            const durationMs = punishment.duration * 60 * 60 * 1000; // Convert hours to ms
             try {
-              if (message.member) {
-                await message.member.timeout(5 * 60 * 1000, escalation.reason);
-                
-                // Send ephemeral message
-                if (message.channel.type === 0) {
-                  await (message.channel as any).send({
-                    content: `<@${message.author.id}> 🔇 **Timed out for 5 minutes** - ${escalation.reason}`,
-                  }).then((msg: any) => {
-                    setTimeout(() => msg.delete().catch(() => {}), 10000);
-                  });
-                }
-                
-                // Send DM
-                await message.author.send(
-                  `🔇 **5-Minute Timeout**\n\nYou have been timed out in ${message.guild?.name}.\n\n**Reason:** ${escalation.reason}\n**Duration:** 5 minutes\n**Messages deleted:** ${deletedCount}\n\n**Warning:** 3 timeouts within 30 days will result in a ban from the server.`
-                ).catch(() => {});
-                
-                logger.info('User timed out for 5 minutes', {
-                  userId: message.author.id,
-                  reason: escalation.reason
-                });
-              }
+              await message.member.timeout(durationMs, spamResult.reason || 'Spam detected');
+              
+              logger.info('User timed out for spam', {
+                userId: message.author.id,
+                username: message.author.username,
+                duration: punishment.duration,
+                offenseCount,
+                reason: spamResult.reason
+              });
             } catch (error) {
               logger.error('Failed to timeout user', { error });
             }
             
-          } else if (escalation.punishmentLevel === PunishmentLevel.BAN) {
-            // 3rd timeout or 3 warnings + timeout: Ban
+          } else if (punishment.type === PunishmentType.PERMANENT_BAN && message.member) {
+            // Apply ban
             try {
-              // Send DM before ban
-              await message.author.send(
-                `🚫 **Banned from ${message.guild?.name}**\n\n**Reason:** ${escalation.reason}\n\nYou have been permanently banned from the server due to repeated spam violations.\n\n**Violation History:**\n- Multiple spam warnings\n- Multiple timeouts\n- Failed to comply with server rules\n\nIf you believe this was a mistake, please contact the server administrators.`
-              ).catch(() => {});
+              await message.member.ban({
+                reason: spamResult.reason || 'Spam detected - repeated offenses',
+                deleteMessageSeconds: 60 * 60 * 24 // Delete last 24 hours of messages
+              });
               
-              // Ban user
-              if (message.member) {
-                await message.member.ban({
-                  reason: escalation.reason,
-                  deleteMessageSeconds: 60 * 60 * 24 // Delete last 24 hours of messages
-                });
-                
-                logger.info('User banned for repeated spam', {
-                  userId: message.author.id,
-                  reason: escalation.reason
-                });
-              }
+              logger.info('User banned for repeated spam', {
+                userId: message.author.id,
+                username: message.author.username,
+                offenseCount,
+                reason: spamResult.reason
+              });
             } catch (error) {
               logger.error('Failed to ban user', { error });
             }
           }
           
-          // Notify moderators
-          const notificationEvent: NotificationEvent = {
-            id: `spam-${message.author.id}-${Date.now()}`,
-            type: 'SPAM_DETECTED' as any,
-            channelId: message.channel.id,
-            data: { userId: message.author.id, reason: spamResult.reason },
-            timestamp: new Date(),
-            delivered: false,
-          };
-          
-          const embedData: PremiumEmbedData = {
-            title: '🚨 Spam Detected',
-            description: `User <@${message.author.id}> was detected spamming in <#${message.channel.id}>`,
-            fields: [
-              { name: 'User', value: `${message.author.tag} (${message.author.id})`, inline: true },
-              { name: 'Punishment', value: escalation.punishmentLevel, inline: true },
-              { name: 'Reason', value: escalation.reason, inline: true },
-              { name: 'Messages Deleted', value: `${deletedCount}`, inline: true },
-              { name: 'Violation Count', value: `${escalation.violationCount}`, inline: true },
-            ],
-            color: escalation.punishmentLevel === PunishmentLevel.BAN ? 0x000000 : 0xff0000,
-          };
-          
-          await this.notificationManager.sendNotification(notificationEvent, embedData);
+          // Add to batch instead of sending immediately (only for timeout/ban, not warnings)
+          if (punishment.type !== PunishmentType.WARNING) {
+            this.addSpamNotificationToBatch({
+              userId: message.author.id,
+              username: message.author.username,
+              userTag: message.author.tag,
+              channelId: message.channel.id,
+              punishmentType: punishment.type,
+              duration: punishment.duration,
+              reason: spamResult.reason || 'Spam detected',
+              deletedCount,
+              offenseCount,
+              timestamp: new Date(),
+            });
+            
+            logger.debug('Added spam notification to batch', {
+              userId: message.author.id,
+              username: message.author.username,
+              batchSize: this.spamNotificationBatch.size,
+            });
+          }
+          } finally {
+            // Remove processing lock
+            this.processingOffenses.delete(message.author.id);
+          }
           
           return;
         }
@@ -642,11 +985,28 @@ class TZBotApplication {
         );
 
         if (linkScanResult.isMalicious) {
-          // Record violation
-          await this.violationTracker.recordViolation(
+          // Initialize offense management system
+          const { getPool } = await import('@/core/database/pool.js');
+          const { OffenseRepository } = await import('@/core/database/repositories/OffenseRepository.js');
+          const { OffenseManager } = await import('@/moderation/offense-manager.js');
+          const { PunishmentCalculator, PunishmentType } = await import('@/moderation/punishment-calculator.js');
+          
+          const pool = getPool();
+          const offenseRepo = new OffenseRepository(pool);
+          const punishmentCalc = new PunishmentCalculator();
+          const offenseManager = new OffenseManager(
+            pool,
+            offenseRepo,
+            punishmentCalc,
+            this.notificationManager
+          );
+
+          // Process offense and get punishment
+          const punishment = await offenseManager.processOffense(
             message.author.id,
-            'malicious_link' as any, // Type will be fixed in violation tracker
-            'Malicious link detected'
+            'Malicious link detected',
+            'system', // System-detected malicious link
+            message.channel.id
           );
           
           // Delete the message
@@ -654,14 +1014,42 @@ class TZBotApplication {
             logger.warn('Failed to delete malicious link message', { messageId: message.id });
           });
           
-          // Warn the user
-          try {
-            await message.author.send(
-              `⚠️ **Malicious Link Detected**\n\nYour message in ${message.guild?.name} contained a malicious or suspicious link and was removed.\n\nPlease do not post suspicious links. Continued violations may result in a timeout or ban.`
-            );
-          } catch (error) {
-            logger.debug('Could not DM user about malicious link', { userId: message.author.id });
+          // Apply punishment based on type
+          if (punishment.type === PunishmentType.TIMEOUT && punishment.duration && message.member) {
+            // Apply timeout
+            const durationMs = punishment.duration * 60 * 60 * 1000; // Convert hours to ms
+            try {
+              await message.member.timeout(durationMs, 'Malicious link detected');
+              
+              logger.info('User timed out for malicious link', {
+                userId: message.author.id,
+                username: message.author.username,
+                duration: punishment.duration
+              });
+            } catch (error) {
+              logger.error('Failed to timeout user', { error });
+            }
+            
+          } else if (punishment.type === PunishmentType.PERMANENT_BAN && message.member) {
+            // Apply ban
+            try {
+              await message.member.ban({
+                reason: 'Malicious link detected - repeated offenses',
+                deleteMessageSeconds: 60 * 60 * 24 // Delete last 24 hours of messages
+              });
+              
+              logger.info('User banned for repeated malicious links', {
+                userId: message.author.id,
+                username: message.author.username
+              });
+            } catch (error) {
+              logger.error('Failed to ban user', { error });
+            }
           }
+          
+          // Get offense count for notification
+          const offenseRecord = await offenseManager.getOffenseHistory(message.author.id);
+          const offenseCount = offenseRecord?.total_offenses || 0;
           
           // Notify moderators
           const notificationEvent: NotificationEvent = {
@@ -679,6 +1067,9 @@ class TZBotApplication {
             fields: [
               { name: 'User', value: `${message.author.tag} (${message.author.id})`, inline: true },
               { name: 'Channel', value: `<#${message.channel.id}>`, inline: true },
+              { name: 'Punishment', value: punishment.type, inline: true },
+              { name: 'Duration', value: punishment.duration ? `${punishment.duration}h` : 'N/A', inline: true },
+              { name: 'Offense Count', value: `${offenseCount}`, inline: true },
             ],
             color: 0xff6600,
           };
