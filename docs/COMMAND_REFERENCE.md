@@ -778,6 +778,7 @@ Bot: 🎉 Giveaway Ended!
 | /giveaway create | Moderator Role | MANAGE_EVENTS |
 | /giveaway cancel | Moderator Role | MANAGE_EVENTS |
 | /giveaway list | Moderator Role | MANAGE_EVENTS |
+| /giveaway reroll | Moderator Role | MANAGE_EVENTS |
 | Giveaway Entry (Button) | None | None |
 
 ---
@@ -1006,7 +1007,7 @@ Create a new giveaway with interactive button entry.
 
 **Syntax:**
 ```
-/giveaway create title:<title> description:<description> duration:<minutes> winners:<count> [channel:<channel>] [role1:<role>] [role2:<role>] [role3:<role>]
+/giveaway create title:<title> description:<description> duration:<minutes> winners:<count> [channel:<channel>] [condition:<text>] [role1:<role>] [role2:<role>] [role3:<role>]
 ```
 
 **Parameters:**
@@ -1017,6 +1018,7 @@ Create a new giveaway with interactive button entry.
 | duration | Integer | Yes | Duration in minutes (1-10080 = 7 days max) |
 | winners | Integer | Yes | Number of winners (1-10) |
 | channel | Channel | No | Channel to post giveaway (defaults to current) |
+| condition | String | No | Optional requirement/instructions for winners (max 512 chars) |
 | role1 | Role | No | Required role 1 (optional) |
 | role2 | Role | No | Required role 2 (optional) |
 | role3 | Role | No | Required role 3 (optional) |
@@ -1029,6 +1031,11 @@ Create a new giveaway with interactive button entry.
 **Example (Role-Gated):**
 ```
 /giveaway create title:Subscriber Giveaway description:Exclusive for subscribers! duration:2880 winners:5 role1:@Subscriber
+```
+
+**Example (With Condition):**
+```
+/giveaway create title:Custom Prize description:Win a custom prize! duration:1440 winners:1 condition:DM me your email address to claim your prize
 ```
 
 **Response:**
@@ -1050,7 +1057,8 @@ The giveaway has been posted in #giveaways. Users can enter by clicking the butt
 - Users click "🎉 Enter Giveaway" button to enter
 - Entry validation checks required roles (if any)
 - Winners are selected using CSPRNG when giveaway ends
-- Winners are announced and receive DMs
+- Winners receive DM with @mention and condition (if provided)
+- Winners are announced with reroll command for moderators
 
 **Duration Limits:**
 - Minimum: 1 minute
@@ -1140,6 +1148,49 @@ Winners: 5
 Ends: in 2 days
 ID: def456ghi789
 ```
+
+**Required Permission:** MANAGE_EVENTS
+
+---
+
+### `/giveaway reroll`
+
+Reroll a specific winner from an ended giveaway.
+
+**Syntax:**
+```
+/giveaway reroll giveaway_id:<id> winner:@user
+```
+
+**Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| giveaway_id | String | Yes | ID of the giveaway |
+| winner | User | Yes | The winner to reroll/replace |
+
+**Example:**
+```
+/giveaway reroll giveaway_id:abc123def456 winner:@OldWinner
+```
+
+**Response:**
+```
+✅ Winner rerolled successfully! Check the giveaway channel for the announcement.
+```
+
+**What happens:**
+- Validates giveaway exists and is ended
+- Validates user is a winner of the giveaway
+- Selects new winner from remaining entries (excluding current winners)
+- Updates winners array in database
+- Sends DM to new winner with @mention and condition (if provided)
+- Announces reroll in channel with old and new winner
+- Updates original giveaway message
+
+**Use Cases:**
+- Winner doesn't respond or claim prize
+- Winner is disqualified
+- Winner declines the prize
 
 **Required Permission:** MANAGE_EVENTS
 

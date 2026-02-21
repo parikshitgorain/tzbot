@@ -78,6 +78,13 @@ function createGiveawayCommand(
             .setDescription('Channel to post the giveaway (defaults to current channel)')
             .setRequired(false)
         )
+        .addStringOption((option) =>
+          option
+            .setName('condition')
+            .setDescription('Optional condition/requirement for winners (e.g., "DM me your email")')
+            .setRequired(false)
+            .setMaxLength(512)
+        )
         .addRoleOption((option) =>
           option
             .setName('role1')
@@ -112,6 +119,23 @@ function createGiveawayCommand(
       subcommand
         .setName('list')
         .setDescription('List all active giveaways')
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName('reroll')
+        .setDescription('Reroll a specific winner from a giveaway')
+        .addStringOption((option) =>
+          option
+            .setName('giveaway_id')
+            .setDescription('ID of the giveaway')
+            .setRequired(true)
+        )
+        .addUserOption((option) =>
+          option
+            .setName('winner')
+            .setDescription('The winner to reroll/replace')
+            .setRequired(true)
+        )
     );
 
   const handler = async (interaction: ChatInputCommandInteraction) => {
@@ -123,6 +147,8 @@ function createGiveawayCommand(
       await handleCancelGiveaway(interaction, giveawayManager);
     } else if (subcommand === 'list') {
       await handleListGiveaways(interaction, giveawayManager);
+    } else if (subcommand === 'reroll') {
+      await handleRerollWinner(interaction, giveawayManager);
     }
   };
 
@@ -148,6 +174,7 @@ async function handleCreateGiveaway(
   const durationMinutes = interaction.options.getInteger('duration', true);
   const winnerCount = interaction.options.getInteger('winners', true);
   const channel = interaction.options.getChannel('channel') || interaction.channel;
+  const condition = interaction.options.getString('condition');
   const role1 = interaction.options.getRole('role1');
   const role2 = interaction.options.getRole('role2');
   const role3 = interaction.options.getRole('role3');
@@ -189,6 +216,7 @@ async function handleCreateGiveaway(
       requiredRoles,
       winnerCount,
       durationMs,
+      condition: condition || undefined,
     });
 
     logger.info('Giveaway created via command', {
@@ -333,6 +361,56 @@ async function handleListGiveaways(
     });
 
     const errorMessage = '❌ Failed to retrieve giveaway list. Please try again.';
+    if (interaction.deferred) {
+      await interaction.editReply({ content: errorMessage });
+    } else {
+      await interaction.reply({ content: errorMessage, ephemeral: true });
+    }
+  }
+}
+
+/**
+ * Handle /giveaway reroll subcommand
+ */
+async function handleRerollWinner(
+  interaction: ChatInputCommandInteraction,
+  giveawayManager: GiveawayManager
+): Promise<void> {
+  const giveawayId = interaction.options.getString('giveaway_id', true);
+  const winner = interaction.options.getUser('winner', true);
+
+  if (!interaction.guildId) {
+    await interaction.reply({
+      content: '❌ This command can only be used in a server.',
+      ephemeral: true,
+    });
+    return;
+  }
+
+  try {
+    await interaction.deferReply({ ephemeral: true });
+
+    // Reroll the winner
+    await giveawayManager.rerollWinner(giveawayId, winner.id, interaction.guildId);
+
+    logger.info('Giveaway winner rerolled via command', {
+      giveawayId,
+      oldWinnerId: winner.id,
+      moderator: interaction.user.username,
+      moderatorId: interaction.user.id,
+    });
+
+    await interaction.editReply({
+      content: `✅ Winner rerolled successfully! Check the giveaway channel for the announcement.`,
+    });
+  } catch (error) {
+    logError('Failed to reroll winner', error as Error, {
+      giveawayId,
+      winnerId: winner.id,
+      moderator: interaction.user.username,
+    });
+
+    const errorMessage = `❌ Failed to reroll winner. ${(error as Error).message}`;
     if (interaction.deferred) {
       await interaction.editReply({ content: errorMessage });
     } else {

@@ -16,15 +16,18 @@ export class GiveawayRepository {
     const query = `
       INSERT INTO giveaways (
         id, title, description, channel_id, message_id, 
-        required_roles, winner_count, status, ends_at, created_at
+        required_roles, winner_count, status, ends_at, created_at,
+        condition, winners
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       ON CONFLICT (id) 
       DO UPDATE SET 
         title = EXCLUDED.title,
         description = EXCLUDED.description,
         status = EXCLUDED.status,
-        ends_at = EXCLUDED.ends_at
+        ends_at = EXCLUDED.ends_at,
+        condition = EXCLUDED.condition,
+        winners = EXCLUDED.winners
     `;
 
     try {
@@ -39,6 +42,8 @@ export class GiveawayRepository {
         giveaway.status,
         giveaway.endsAt,
         giveaway.createdAt,
+        giveaway.condition || null,
+        JSON.stringify(giveaway.winners || []),
       ]);
     } catch (error) {
       throw new Error(`Failed to save giveaway: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -53,7 +58,8 @@ export class GiveawayRepository {
     const query = `
       SELECT 
         g.id, g.title, g.description, g.channel_id, g.message_id,
-        g.required_roles, g.winner_count, g.status, g.ends_at, g.created_at
+        g.required_roles, g.winner_count, g.status, g.ends_at, g.created_at,
+        g.condition, g.winners
       FROM giveaways g
       WHERE g.id = $1
     `;
@@ -82,6 +88,8 @@ export class GiveawayRepository {
         endsAt: row.ends_at,
         createdAt: row.created_at,
         entries,
+        condition: row.condition || undefined,
+        winners: row.winners || [],
       };
     } catch (error) {
       throw new Error(`Failed to get giveaway: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -96,7 +104,8 @@ export class GiveawayRepository {
     const query = `
       SELECT 
         id, title, description, channel_id, message_id,
-        required_roles, winner_count, status, ends_at, created_at
+        required_roles, winner_count, status, ends_at, created_at,
+        condition, winners
       FROM giveaways
       WHERE status = 'active'
       ORDER BY ends_at ASC
@@ -121,6 +130,8 @@ export class GiveawayRepository {
           endsAt: row.ends_at,
           createdAt: row.created_at,
           entries,
+          condition: row.condition || undefined,
+          winners: row.winners || [],
         });
       }
 
@@ -217,7 +228,8 @@ export class GiveawayRepository {
     let query = `
       SELECT 
         id, title, description, channel_id, message_id,
-        required_roles, winner_count, status, ends_at, created_at
+        required_roles, winner_count, status, ends_at, created_at,
+        condition, winners
       FROM giveaways
       WHERE channel_id = $1
     `;
@@ -250,12 +262,32 @@ export class GiveawayRepository {
           endsAt: row.ends_at,
           createdAt: row.created_at,
           entries,
+          condition: row.condition || undefined,
+          winners: row.winners || [],
         });
       }
 
       return giveaways;
     } catch (error) {
       throw new Error(`Failed to get giveaways by channel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Update winners array for a giveaway
+   * Used when announcing winners or rerolling
+   */
+  async updateWinners(giveawayId: string, winners: string[]): Promise<void> {
+    const query = `
+      UPDATE giveaways
+      SET winners = $1
+      WHERE id = $2
+    `;
+
+    try {
+      await this.pool.query(query, [JSON.stringify(winners), giveawayId]);
+    } catch (error) {
+      throw new Error(`Failed to update giveaway winners: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

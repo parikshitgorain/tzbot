@@ -59,6 +59,8 @@ export interface Giveaway {
   status: GiveawayStatus;
   endsAt: Date;
   createdAt: Date;
+  condition?: string; // Optional condition/requirement for winners
+  winners?: string[]; // Store winner IDs for reroll functionality
 }
 
 export interface GiveawayEntry {

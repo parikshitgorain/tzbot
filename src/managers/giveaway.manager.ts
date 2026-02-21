@@ -29,6 +29,7 @@ export interface CreateGiveawayOptions {
   requiredRoles: string[];
   winnerCount: number;
   durationMs: number;
+  condition?: string;
 }
 
 /**
@@ -102,6 +103,8 @@ export class GiveawayManager {
         status: GiveawayStatus.ACTIVE,
         endsAt,
         createdAt: now,
+        condition: options.condition,
+        winners: [],
       };
 
       // Save to database
@@ -429,11 +432,16 @@ export class GiveawayManager {
     try {
       const winnerMentions = winners.map((id) => `<@${id}>`).join(', ');
 
+      // Build announcement description with reroll command
+      let description = `Congratulations to the winners!\n\n**Winners:** ${winnerMentions}`;
+      
+      if (winners.length > 0) {
+        description += `\n\n**Moderators:** To reroll a winner, use:\n\`\`\`\n/giveaway reroll giveaway_id:${giveaway.id} winner:@user\n\`\`\``;
+      }
+
       const embed = new EmbedBuilder()
         .setTitle(`🎉 ${giveaway.title} - Winners!`)
-        .setDescription(
-          `Congratulations to the winners!\n\n**Winners:** ${winnerMentions}`
-        )
+        .setDescription(description)
         .setColor(0x00ff00)
         .setTimestamp();
 
@@ -442,23 +450,23 @@ export class GiveawayManager {
         embeds: [embed],
       });
 
-      // Send DM to each winner
+      // Store winners in database
+      await this.giveawayRepository.updateWinners(giveaway.id, winners);
+
+      // Send DM to each winner with @mention and condition
       for (const winnerId of winners) {
         try {
           const member = await this.discordClient.getMember(guildId, winnerId);
           if (member) {
-            await member.send({
-              embeds: [
-                new EmbedBuilder()
-                  .setTitle('🎉 You Won a Giveaway!')
-                  .setDescription(
-                    `Congratulations! You won the giveaway: **${giveaway.title}**\n\n` +
-                      `Check the giveaway channel for more details!`
-                  )
-                  .setColor(0x00ff00)
-                  .setTimestamp(),
-              ],
-            });
+            let dmMessage = `<@${winnerId}> 🎉 You Won!\n\nCongratulations! You won the giveaway: **${giveaway.title}**`;
+            
+            if (giveaway.condition) {
+              dmMessage += `\n\n**Next Steps:**\n${giveaway.condition}`;
+            } else {
+              dmMessage += `\n\nCheck the giveaway channel for more details!`;
+            }
+
+            await member.send(dmMessage);
           }
         } catch (error) {
           logger.debug('Failed to send DM to winner', {
@@ -673,6 +681,116 @@ export class GiveawayManager {
       logger.info('Giveaway cancelled', { giveawayId });
     } catch (error) {
       logError('Failed to cancel giveaway', error as Error, { giveawayId });
+      throw error;
+    }
+  }
+
+  /**
+   * Get all active giveaways for a guild
+   */
+  async getActiveGiveaways(guildId: string): Promise<Giveaway[]> {
+    try {
+      const allActive = await this.giveawayRepository.getActive();
+      // Filter by guild (giveaways don't store guildId, so we need to check via Discord)
+      // For now, return all active giveaways
+      return allActive;
+    } catch (error) {
+      logError('Failed to get active giveaways', error as Error, { guildId });
+      throw error;
+    }
+  }
+
+  /**
+   * Reroll a specific winner from a giveaway
+   */
+  async rerollWinner(giveawayId: string, oldWinnerId: string, guildId: string): Promise<void> {
+    try {
+      // Get giveaway from database
+      const giveaway = await this.giveawayRepository.get(giveawayId);
+
+      if (!giveaway) {
+        throw new Error('Giveaway not found');
+      }
+
+      if (giveaway.status !== GiveawayStatus.ENDED) {
+        throw new Error('Can only reroll winners from ended giveaways');
+      }
+
+      if (!giveaway.winners || !giveaway.winners.includes(oldWinnerId)) {
+        throw new Error('User is not a winner of this giveaway');
+      }
+
+      // Get all entries excluding current winners
+      const allEntries = await this.giveawayRepository.getEntries(giveawayId);
+      const availableEntries = allEntries
+        .map(e => e.userId)
+        .filter(userId => !giveaway.winners?.includes(userId));
+
+      if (availableEntries.length === 0) {
+        throw new Error('No remaining entries available for reroll');
+      }
+
+      // Select new winner using CSPRNG
+      const newWinners = this.selectWinners(availableEntries, 1);
+      const newWinnerId = newWinners[0];
+
+      // Update winners array (replace old with new)
+      const updatedWinners = giveaway.winners.map(id => 
+        id === oldWinnerId ? newWinnerId : id
+      );
+      await this.giveawayRepository.updateWinners(giveawayId, updatedWinners);
+
+      // Send DM to new winner with condition
+      try {
+        const member = await this.discordClient.getMember(guildId, newWinnerId);
+        if (member) {
+          let dmMessage = `<@${newWinnerId}> 🎉 You Won!\n\nCongratulations! You won the giveaway: **${giveaway.title}**`;
+          
+          if (giveaway.condition) {
+            dmMessage += `\n\n**Next Steps:**\n${giveaway.condition}`;
+          } else {
+            dmMessage += `\n\nCheck the giveaway channel for more details!`;
+          }
+
+          await member.send(dmMessage);
+        }
+      } catch (error) {
+        logger.debug('Failed to send DM to new winner', {
+          winnerId: newWinnerId,
+          error: (error as Error).message,
+        });
+      }
+
+      // Announce reroll in channel
+      const embed = new EmbedBuilder()
+        .setTitle(`🔄 ${giveaway.title} - Winner Rerolled`)
+        .setDescription(
+          `A winner has been rerolled!\n\n` +
+          `**Previous Winner:** <@${oldWinnerId}>\n` +
+          `**New Winner:** <@${newWinnerId}>\n\n` +
+          `Congratulations to the new winner!`
+        )
+        .setColor(0xffa500)
+        .setTimestamp();
+
+      await this.discordClient.sendMessage(giveaway.channelId, {
+        content: `<@${newWinnerId}>`,
+        embeds: [embed],
+      });
+
+      // Update giveaway message
+      await this.updateGiveawayMessageEnded(giveaway, updatedWinners);
+
+      logger.info('Giveaway winner rerolled', {
+        giveawayId,
+        oldWinnerId,
+        newWinnerId,
+      });
+    } catch (error) {
+      logError('Failed to reroll winner', error as Error, {
+        giveawayId,
+        oldWinnerId,
+      });
       throw error;
     }
   }
