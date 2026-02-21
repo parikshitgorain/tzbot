@@ -1,23 +1,19 @@
-# ⚠️ BOT RESTART REQUIRED
+# ⚠️ BOT RESTART REQUIRED - CRITICAL FIX APPLIED
+
+## What Was Fixed
+
+**CRITICAL BUG:** The rate limiter wasn't being initialized at startup if no channels were configured. This meant:
+- Rate limiting didn't work at all ❌
+- Hot-reload couldn't work because the rate limiter didn't exist ❌
+
+**NOW FIXED:** The rate limiter always initializes (even with empty channels), so:
+- You can add channels via `/ratelimit-add` and they work immediately ✅
+- Hot-reload works perfectly ✅
+- No restart needed after adding/removing channels ✅
 
 ## Current Situation
 
-The hot-reload feature is **FULLY IMPLEMENTED** in the code, but your bot is still running the old version.
-
-## What You're Seeing
-
-The bot shows: "⚠️ Note: Restart the bot for changes to take effect."
-
-## What It Should Show (After Restart)
-
-The bot will show: "✨ **Changes applied immediately** - no restart required!"
-
-## Why This Happens
-
-- The code has been updated ✅
-- The code has been compiled ✅  
-- The code has been committed ✅
-- **BUT** your bot is still running the OLD code in memory
+The bot is running the OLD code that has the bug. You need to restart ONCE to load the fixed code.
 
 ## How to Fix (RESTART THE BOT)
 
@@ -48,16 +44,21 @@ sudo systemctl restart tzbot
 
 ## After Restart
 
-1. Bot will load the NEW code
-2. Commands will be re-registered with Discord
-3. `/ratelimit-add` will show: "✨ Changes applied immediately"
-4. `/ratelimit-remove` will show: "✨ Changes applied immediately"
-5. Future config changes will work WITHOUT restart
+1. Bot will initialize the rate limiter (even with no channels)
+2. Use `/ratelimit-add` to add a channel
+3. Rate limiting will work immediately
+4. You'll see: "✨ Changes applied immediately - no restart required!"
+5. Future changes work without restart
 
 ## Verification
 
-After restarting, use `/ratelimit-add` again and you should see the new message!
+After restarting:
+1. Check logs - you should see: "Channel text rate limiter initialized (no channels configured yet - use /ratelimit-add to add channels)"
+2. Use `/ratelimit-add restricted:#channel redirect:#general`
+3. Try sending multiple text messages in the restricted channel
+4. Bot should delete them and show warning
 
 ---
 
-**The code is ready. You just need to restart the bot ONCE to activate it.**
+**The bug is fixed. Restart the bot once to activate the fix.**
+
