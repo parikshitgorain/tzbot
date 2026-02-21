@@ -102,6 +102,45 @@ class TZBotApplication {
   private processingOffenses: Set<string> = new Set();
 
   /**
+   * Retry message deletion with exponential backoff
+   * Keeps trying every second until message is deleted or max retries reached
+   */
+  private async deleteMessageWithRetry(
+    message: any,
+    maxRetries: number = 5,
+    retryDelayMs: number = 1000
+  ): Promise<boolean> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await message.delete();
+        logger.debug('Message deleted successfully', {
+          messageId: message.id,
+          attempt,
+        });
+        return true;
+      } catch (error) {
+        logger.warn('Failed to delete message, retrying...', {
+          messageId: message.id,
+          attempt,
+          maxRetries,
+          error: (error as Error).message,
+        });
+        
+        if (attempt < maxRetries) {
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+        }
+      }
+    }
+    
+    logger.error('Failed to delete message after all retries', {
+      messageId: message.id,
+      maxRetries,
+    });
+    return false;
+  }
+
+  /**
    * Initialize all bot components in the correct order
    */
   async initialize(): Promise<void> {
@@ -670,15 +709,14 @@ class TZBotApplication {
           
           if (inCooldown) {
             // User is in cooldown - delete message instantly WITHOUT recording offense
-            // User is in cooldown - delete message instantly WITHOUT recording offense
             try {
-              await message.delete();
+              await this.deleteMessageWithRetry(message, 5, 1000);
               logger.debug('Deleted message from user in warning cooldown', {
                 userId: message.author.id,
                 username: message.author.username,
               });
             } catch (error) {
-              logger.error('Failed to delete message during cooldown', { error });
+              logger.error('Failed to delete message during cooldown after retries', { error });
             }
 
             // Send warning message only if not already issued in this cooldown period
@@ -700,7 +738,7 @@ class TZBotApplication {
                 });
               }
 
-              // Also send reminder in channel (auto-delete after 3 seconds)
+              // Also send reminder in channel (auto-delete after 3 seconds with retry)
               if (message.channel.isTextBased() && 'send' in message.channel) {
                 try {
                   const deleteTime = Math.floor(Date.now() / 1000) + 3; // Unix timestamp 3 seconds from now
@@ -709,13 +747,9 @@ class TZBotApplication {
                     `*This message will be deleted <t:${deleteTime}:R>*`
                   );
                   
-                  // Delete after 3 seconds
+                  // Delete after 3 seconds with retry
                   setTimeout(async () => {
-                    try {
-                      await cooldownReminder.delete();
-                    } catch (deleteError) {
-                      logger.debug('Failed to delete cooldown reminder', { error: deleteError });
-                    }
+                    await this.deleteMessageWithRetry(cooldownReminder, 5, 1000);
                   }, 3000);
                   
                   logger.debug('Cooldown reminder sent in channel', {
@@ -816,23 +850,24 @@ class TZBotApplication {
                   deletedCount,
                 });
               } catch (bulkError) {
-                logger.warn('Bulk delete failed, falling back to individual deletes', {
+                logger.warn('Bulk delete failed, falling back to individual deletes with retry', {
                   error: bulkError,
                   messageCount: userMessagesInWindow.size,
                 });
                 
-                // Fallback: delete messages individually
+                // Fallback: delete messages individually with retry
                 for (const msg of userMessagesInWindow.values()) {
-                  try {
-                    await msg.delete();
+                  const deleted = await this.deleteMessageWithRetry(msg, 5, 1000);
+                  if (deleted) {
                     deletedCount++;
-                  } catch (deleteError) {
-                    logger.debug('Failed to delete individual message', {
-                      messageId: msg.id,
-                      error: deleteError,
-                    });
                   }
                 }
+                
+                logger.info('Individual delete with retry completed', {
+                  userId: message.author.id,
+                  deletedCount,
+                  totalAttempted: userMessagesInWindow.size,
+                });
               }
             }
           } catch (error) {
@@ -869,7 +904,7 @@ class TZBotApplication {
               });
             }
 
-            // Also send warning in channel (auto-delete after 5 seconds)
+            // Also send warning in channel (auto-delete after 5 seconds with retry)
             if (message.channel.isTextBased() && 'send' in message.channel) {
               try {
                 const deleteTime = Math.floor(Date.now() / 1000) + 5; // Unix timestamp 5 seconds from now
@@ -880,13 +915,9 @@ class TZBotApplication {
                   `*This message will be deleted <t:${deleteTime}:R>*`
                 );
                 
-                // Delete the warning message after 5 seconds
+                // Delete the warning message after 5 seconds with retry
                 setTimeout(async () => {
-                  try {
-                    await channelWarning.delete();
-                  } catch (deleteError) {
-                    logger.debug('Failed to delete channel warning', { error: deleteError });
-                  }
+                  await this.deleteMessageWithRetry(channelWarning, 5, 1000);
                 }, 5000);
                 
                 logger.debug('Warning sent in channel', {
