@@ -767,7 +767,7 @@ class TZBotApplication {
     try {
       // Check if this is a giveaway entry button
       if (interaction.customId.startsWith('giveaway_enter_')) {
-        await this.giveawayManager.handleEntry(interaction);
+        await this.giveawayManager.handleEntryInteraction(interaction, interaction.guildId || '');
         
         logger.debug('Giveaway entry button handled', {
           userId: interaction.user.id,
