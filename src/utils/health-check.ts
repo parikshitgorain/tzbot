@@ -23,15 +23,18 @@ async function checkDiscordHealth(): Promise<boolean> {
     
     // Check if client is ready
     if (client.isReady()) {
+      // eslint-disable-next-line no-console
       console.log('Discord bot connection: HEALTHY');
       await client.destroy();
       return true;
     }
     
+    // eslint-disable-next-line no-console
     console.error('Discord bot connection: NOT READY');
     await client.destroy();
     return false;
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('Discord bot connection: FAILED', error);
     return false;
   }
@@ -44,6 +47,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       process.exit(healthy ? 0 : 1);
     })
     .catch((error) => {
+      // eslint-disable-next-line no-console
       console.error('Health check error:', error);
       process.exit(1);
     });
