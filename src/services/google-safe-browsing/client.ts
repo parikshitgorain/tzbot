@@ -104,7 +104,7 @@ export class GoogleSafeBrowsingClient {
     // If apiKey is explicitly provided (even if empty), use it
     // Otherwise, fall back to config
     this.apiKey = apiKey !== undefined ? apiKey : (config.googleSafeBrowsingApiKey || '');
-    
+
     if (!this.apiKey) {
       logger.warn('Google Safe Browsing API key not configured - URL scanning will be disabled');
     }
@@ -177,10 +177,10 @@ export class GoogleSafeBrowsingClient {
 
       return urlResult;
     } catch (error) {
-      logError('Failed to check URL with Google Safe Browsing', error as Error, { 
-        additionalContext: { url } 
+      logError('Failed to check URL with Google Safe Browsing', error as Error, {
+        additionalContext: { url },
       });
-      
+
       // Return safe result on error to avoid blocking legitimate URLs
       return {
         url,
@@ -243,7 +243,7 @@ export class GoogleSafeBrowsingClient {
       } else {
         // Make API request for uncached URLs
         const apiResults = await this.makeApiRequest(uncachedUrls);
-        
+
         // Cache results
         for (const result of apiResults) {
           await this.cacheResult(result);
@@ -327,8 +327,8 @@ export class GoogleSafeBrowsingClient {
 
       return null;
     } catch (error) {
-      logError('Failed to get cached URL result', error as Error, { 
-        additionalContext: { url } 
+      logError('Failed to get cached URL result', error as Error, {
+        additionalContext: { url },
       });
       return null;
     }
@@ -342,8 +342,8 @@ export class GoogleSafeBrowsingClient {
       const cacheKey = this.getCacheKey(result.url);
       await redisClient.set(cacheKey, JSON.stringify(result), this.cacheTTL);
     } catch (error) {
-      logError('Failed to cache URL result', error as Error, { 
-        additionalContext: { url: result.url } 
+      logError('Failed to cache URL result', error as Error, {
+        additionalContext: { url: result.url },
       });
     }
   }
@@ -361,7 +361,7 @@ export class GoogleSafeBrowsingClient {
   private async checkRateLimit(): Promise<boolean> {
     try {
       const stateJson = await redisClient.get(this.rateLimitKey);
-      
+
       if (!stateJson) {
         return true; // No rate limit state, allow request
       }
@@ -443,7 +443,7 @@ export class GoogleSafeBrowsingClient {
   async getRateLimitStatus(): Promise<{ count: number; limit: number; resetAt: Date }> {
     try {
       const stateJson = await redisClient.get(this.rateLimitKey);
-      
+
       if (!stateJson) {
         return {
           count: 0,
@@ -488,8 +488,8 @@ export class GoogleSafeBrowsingClient {
       await redisClient.del(cacheKey);
       logger.debug('Cleared cache for URL', { url });
     } catch (error) {
-      logError('Failed to clear cache for URL', error as Error, { 
-        additionalContext: { url } 
+      logError('Failed to clear cache for URL', error as Error, {
+        additionalContext: { url },
       });
     }
   }

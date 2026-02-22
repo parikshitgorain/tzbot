@@ -74,11 +74,11 @@ export class ViolationRepository {
       FROM violations
       WHERE user_id = $1 AND timestamp >= $2
     `;
-    
+
     const params: (string | Date)[] = [userId, since];
 
     if (type) {
-      query += ` AND type = $3`;
+      query += ' AND type = $3';
       params.push(type);
     }
 
@@ -95,7 +95,7 @@ export class ViolationRepository {
    * Used when violation expiry period passes (7 days)
    */
   async clear(userId: string): Promise<void> {
-    const query = `DELETE FROM violations WHERE user_id = $1`;
+    const query = 'DELETE FROM violations WHERE user_id = $1';
 
     try {
       await this.pool.query(query, [userId]);
@@ -165,10 +165,10 @@ export class ViolationRepository {
   async getCountByPunishment(
     userId: string,
     since: Date,
-    punishmentLevel: PunishmentLevel | PunishmentLevel[]
+    punishmentLevel: PunishmentLevel | PunishmentLevel[],
   ): Promise<number> {
     const punishmentLevels = Array.isArray(punishmentLevel) ? punishmentLevel : [punishmentLevel];
-    
+
     const query = `
       SELECT COUNT(*) as count
       FROM violations

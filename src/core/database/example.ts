@@ -1,7 +1,7 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Database Layer Usage Examples
- * 
+ *
  * This file demonstrates how to use the database layer in TZBOT.
  */
 
@@ -18,7 +18,7 @@ async function exampleInitialize() {
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'password',
   });
-  
+
   console.log('Database initialized with connection pool and migrations');
 }
 
@@ -27,12 +27,12 @@ async function exampleInitialize() {
  */
 async function exampleInsertUser(discordId: string, kickUsername?: string) {
   const pool = getPool();
-  
+
   const result = await pool.query(
     'INSERT INTO users (discord_id, kick_username) VALUES ($1, $2) RETURNING *',
-    [discordId, kickUsername || null]
+    [discordId, kickUsername || null],
   );
-  
+
   return result.rows[0];
 }
 
@@ -44,17 +44,17 @@ async function exampleRecordViolation(
   type: 'spam' | 'malicious_link' | 'unauthorized_post' | 'other',
   severity: number,
   details: string,
-  punishment?: string
+  punishment?: string,
 ) {
   const pool = getPool();
-  
+
   const result = await pool.query(
     `INSERT INTO violations (user_id, type, severity, timestamp, details, punishment_applied)
      VALUES ($1, $2, $3, NOW(), $4, $5)
      RETURNING *`,
-    [userId, type, severity, details, punishment || null]
+    [userId, type, severity, details, punishment || null],
   );
-  
+
   return result.rows[0];
 }
 
@@ -63,15 +63,15 @@ async function exampleRecordViolation(
  */
 async function exampleGetRecentViolations(userId: string) {
   const pool = getPool();
-  
+
   const result = await pool.query(
     `SELECT * FROM violations 
      WHERE user_id = $1 
      AND timestamp > NOW() - INTERVAL '24 hours'
      ORDER BY timestamp DESC`,
-    [userId]
+    [userId],
   );
-  
+
   return result.rows;
 }
 
@@ -85,17 +85,17 @@ async function exampleCreateGiveaway(
   messageId: string,
   requiredRoles: string[],
   winnerCount: number,
-  endsAt: Date
+  endsAt: Date,
 ) {
   const pool = getPool();
-  
+
   const result = await pool.query(
     `INSERT INTO giveaways (title, description, channel_id, message_id, required_roles, winner_count, ends_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [title, description, channelId, messageId, JSON.stringify(requiredRoles), winnerCount, endsAt]
+    [title, description, channelId, messageId, JSON.stringify(requiredRoles), winnerCount, endsAt],
   );
-  
+
   return result.rows[0];
 }
 
@@ -104,11 +104,11 @@ async function exampleCreateGiveaway(
  */
 async function exampleAddGiveawayEntry(giveawayId: string, userId: string) {
   const pool = getPool();
-  
+
   try {
     await pool.query(
       'INSERT INTO giveaway_entries (giveaway_id, user_id) VALUES ($1, $2)',
-      [giveawayId, userId]
+      [giveawayId, userId],
     );
     return true;
   } catch (error: any) {
@@ -125,14 +125,14 @@ async function exampleAddGiveawayEntry(giveawayId: string, userId: string) {
  */
 async function exampleGetActiveGiveaways() {
   const pool = getPool();
-  
+
   const result = await pool.query(
     `SELECT * FROM giveaways 
      WHERE status = 'active' 
      AND ends_at > NOW()
-     ORDER BY ends_at ASC`
+     ORDER BY ends_at ASC`,
   );
-  
+
   return result.rows;
 }
 
@@ -141,10 +141,10 @@ async function exampleGetActiveGiveaways() {
  */
 async function exampleRecordChatActivity(userId: string) {
   const pool = getPool();
-  
+
   await pool.query(
     'INSERT INTO chat_activity (user_id, timestamp) VALUES ($1, NOW())',
-    [userId]
+    [userId],
   );
 }
 
@@ -153,15 +153,15 @@ async function exampleRecordChatActivity(userId: string) {
  */
 async function exampleGetActiveChatters() {
   const pool = getPool();
-  
+
   const result = await pool.query(
     `SELECT user_id, COUNT(*) as message_count
      FROM chat_activity
      WHERE timestamp > NOW() - INTERVAL '10 minutes'
      GROUP BY user_id
-     HAVING COUNT(*) >= 3`
+     HAVING COUNT(*) >= 3`,
   );
-  
+
   return result.rows.map(row => row.user_id);
 }
 
@@ -171,28 +171,28 @@ async function exampleGetActiveChatters() {
 async function exampleTransaction(userId: string) {
   const pool = getPool();
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     // Insert user
     await client.query(
       'INSERT INTO users (discord_id) VALUES ($1) ON CONFLICT DO NOTHING',
-      [userId]
+      [userId],
     );
-    
+
     // Record violation
     await client.query(
       'INSERT INTO violations (user_id, type, severity, timestamp) VALUES ($1, $2, $3, NOW())',
-      [userId, 'spam', 1]
+      [userId, 'spam', 1],
     );
-    
+
     // Log moderation action
     await client.query(
       'INSERT INTO moderation_logs (moderator_id, target_user_id, action_type, reason) VALUES ($1, $2, $3, $4)',
-      ['system', userId, 'warn', 'Automatic spam detection']
+      ['system', userId, 'warn', 'Automatic spam detection'],
     );
-    
+
     await client.query('COMMIT');
     console.log('Transaction completed successfully');
   } catch (error) {
@@ -209,13 +209,13 @@ async function exampleTransaction(userId: string) {
  */
 async function exampleCleanupOldMessages() {
   const pool = getPool();
-  
+
   const result = await pool.query(
     `DELETE FROM message_content 
      WHERE timestamp < NOW() - INTERVAL '7 days'
-     RETURNING message_id`
+     RETURNING message_id`,
   );
-  
+
   console.log(`Deleted ${result.rowCount} old messages`);
   return result.rowCount;
 }

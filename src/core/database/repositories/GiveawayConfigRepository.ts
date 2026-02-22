@@ -36,7 +36,7 @@ export class GiveawayConfigRepository {
       };
     } catch (error) {
       throw new Error(
-        `Failed to get giveaway permissions: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to get giveaway permissions: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -48,7 +48,7 @@ export class GiveawayConfigRepository {
   async updateGiveawayPermissions(
     guildId: string,
     allowedRoles: string[],
-    allowedUsers: string[]
+    allowedUsers: string[],
   ): Promise<void> {
     const query = `
       INSERT INTO giveaway_config (guild_id, allowed_roles, allowed_users)
@@ -64,7 +64,7 @@ export class GiveawayConfigRepository {
       await this.pool.query(query, [guildId, allowedRoles, allowedUsers]);
     } catch (error) {
       throw new Error(
-        `Failed to update giveaway permissions: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to update giveaway permissions: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }

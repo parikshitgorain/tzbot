@@ -3,10 +3,10 @@
  * @file client.ts
  * @description Pusher client for Kick chat monitoring
  * @module services/pusher
- * 
+ *
  * This client connects to Kick's chat system via Pusher WebSocket.
  * It handles connection management, automatic reconnection, and message parsing.
- * 
+ *
  * Requirements: 2.1-2.4
  */
 
@@ -76,7 +76,7 @@ export class PusherClient {
     } catch (error) {
       this.updateConnectionState('failed', options);
       logger.error('Failed to connect to Pusher', { error });
-      
+
       // Attempt reconnection
       this.scheduleReconnect(options);
       throw error;
@@ -130,7 +130,9 @@ export class PusherClient {
    * Set up Pusher connection state handlers
    */
   private setupConnectionHandlers(options: PusherConnectionOptions): void {
-    if (!this.pusher) return;
+    if (!this.pusher) {
+      return;
+    }
 
     this.pusher.connection.bind('connected', () => {
       logger.info('Pusher connection established');
@@ -164,7 +166,9 @@ export class PusherClient {
    * Set up message event handlers
    */
   private setupMessageHandlers(options: PusherConnectionOptions): void {
-    if (!this.channel) return;
+    if (!this.channel) {
+      return;
+    }
 
     // Listen for chat messages
     this.channel.bind('App\\Events\\ChatMessageEvent', (data: any) => {
@@ -284,7 +288,7 @@ export class PusherClient {
     // Calculate delay with exponential backoff
     const delay = Math.min(
       this.reconnectDelay * Math.pow(2, this.reconnectAttempts),
-      this.maxReconnectDelay
+      this.maxReconnectDelay,
     );
 
     this.reconnectAttempts++;
@@ -311,7 +315,7 @@ export class PusherClient {
    */
   private updateConnectionState(
     state: ConnectionState,
-    options?: PusherConnectionOptions
+    options?: PusherConnectionOptions,
   ): void {
     this.connectionState = state;
     logger.debug('Pusher connection state changed', { state });

@@ -24,7 +24,7 @@ export class ChannelTextRateLimiter {
     this.enforcer = new RateLimitEnforcer(dependencies.stateStore, config);
     this.actionHandler = new MessageActionHandler(
       dependencies.logger,
-      config.warningDeleteDelayMs
+      config.warningDeleteDelayMs,
     );
 
     // Start periodic cleanup
@@ -73,7 +73,7 @@ export class ChannelTextRateLimiter {
 
     // Step 5: Check if user is in violation window
     const inViolationWindow = await this.enforcer.isInViolationWindow(userId, channelId, timestamp);
-    
+
     if (inViolationWindow) {
       // Silent deletion during violation window
       await this.actionHandler.deleteSilently(message);
@@ -95,7 +95,7 @@ export class ChannelTextRateLimiter {
           message.channel,
           userId,
           channelName,
-          redirectChannelId
+          redirectChannelId,
         );
       }
 
@@ -104,7 +104,7 @@ export class ChannelTextRateLimiter {
         userId,
         channelId,
         timestamp,
-        this.config.violationWindowMs
+        this.config.violationWindowMs,
       );
 
       return false;

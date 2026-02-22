@@ -19,7 +19,7 @@ export class RateLimitEnforcer {
   async checkRateLimit(
     userId: string,
     channelId: string,
-    timestamp: number
+    timestamp: number,
   ): Promise<RateLimitViolation | null> {
     const lastMessageTime = await this.stateStore.getLastMessageTime(userId, channelId);
 
@@ -50,7 +50,7 @@ export class RateLimitEnforcer {
   async recordMessage(
     userId: string,
     channelId: string,
-    timestamp: number
+    timestamp: number,
   ): Promise<void> {
     await this.stateStore.setLastMessageTime(userId, channelId, timestamp);
   }
@@ -61,7 +61,7 @@ export class RateLimitEnforcer {
   async isInViolationWindow(
     userId: string,
     channelId: string,
-    timestamp: number
+    timestamp: number,
   ): Promise<boolean> {
     const expiryTime = await this.stateStore.getViolationExpiry(userId, channelId);
 
@@ -79,7 +79,7 @@ export class RateLimitEnforcer {
     userId: string,
     channelId: string,
     timestamp: number,
-    durationMs: number
+    durationMs: number,
   ): Promise<void> {
     const expiryTime = timestamp + durationMs;
     await this.stateStore.setViolationExpiry(userId, channelId, expiryTime);

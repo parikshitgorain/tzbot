@@ -1,8 +1,8 @@
 /**
  * Encryption Utilities
- * 
+ *
  * Provides AES-256 encryption for sensitive data at rest and bcrypt password hashing.
- * 
+ *
  * Requirements:
  * - 12.6: Encrypt sensitive configuration values (API keys, tokens)
  * - 15.1: Encrypt all API keys and tokens at rest using AES-256
@@ -44,7 +44,7 @@ export class EncryptionService {
 
   /**
    * Initialize encryption service with a master key
-   * 
+   *
    * @param masterKeyHex - Master encryption key in hex format (64 characters for 256 bits)
    * @throws Error if master key is invalid
    */
@@ -66,7 +66,7 @@ export class EncryptionService {
 
   /**
    * Derive encryption key from master key and salt using PBKDF2
-   * 
+   *
    * @param salt - Salt for key derivation
    * @returns Derived encryption key
    */
@@ -76,9 +76,9 @@ export class EncryptionService {
 
   /**
    * Encrypt sensitive data using AES-256-GCM
-   * 
+   *
    * Validates: Requirements 12.6, 15.1
-   * 
+   *
    * @param plaintext - Data to encrypt
    * @returns Encrypted data with IV, auth tag, and salt
    */
@@ -86,25 +86,25 @@ export class EncryptionService {
     try {
       // Generate random salt for key derivation
       const salt = crypto.randomBytes(SALT_LENGTH);
-      
+
       // Derive encryption key from master key and salt
       const key = this.deriveKey(salt);
-      
+
       // Generate random IV
       const iv = crypto.randomBytes(IV_LENGTH);
-      
+
       // Create cipher
       const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-      
+
       // Encrypt data
       let encrypted = cipher.update(plaintext, 'utf8', 'base64');
       encrypted += cipher.final('base64');
-      
+
       // Get authentication tag
       const authTag = cipher.getAuthTag();
-      
+
       logger.debug('Data encrypted successfully');
-      
+
       return {
         encrypted,
         iv: iv.toString('base64'),
@@ -119,7 +119,7 @@ export class EncryptionService {
 
   /**
    * Decrypt data encrypted with AES-256-GCM
-   * 
+   *
    * @param encryptedData - Encrypted data structure
    * @returns Decrypted plaintext
    * @throws Error if decryption fails or authentication fails
@@ -130,20 +130,20 @@ export class EncryptionService {
       const salt = Buffer.from(encryptedData.salt, 'base64');
       const iv = Buffer.from(encryptedData.iv, 'base64');
       const authTag = Buffer.from(encryptedData.authTag, 'base64');
-      
+
       // Derive encryption key from master key and salt
       const key = this.deriveKey(salt);
-      
+
       // Create decipher
       const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
       decipher.setAuthTag(authTag);
-      
+
       // Decrypt data
       let decrypted = decipher.update(encryptedData.encrypted, 'base64', 'utf8');
       decrypted += decipher.final('utf8');
-      
+
       logger.debug('Data decrypted successfully');
-      
+
       return decrypted;
     } catch (error) {
       logError('Decryption failed', error as Error);
@@ -153,7 +153,7 @@ export class EncryptionService {
 
   /**
    * Encrypt and serialize to JSON string
-   * 
+   *
    * @param plaintext - Data to encrypt
    * @returns JSON string of encrypted data
    */
@@ -164,7 +164,7 @@ export class EncryptionService {
 
   /**
    * Decrypt from JSON string
-   * 
+   *
    * @param json - JSON string of encrypted data
    * @returns Decrypted plaintext
    */
@@ -185,9 +185,9 @@ export class EncryptionService {
 export class PasswordHashingService {
   /**
    * Hash a password using bcrypt with cost factor 12+
-   * 
+   *
    * Validates: Requirement 15.5
-   * 
+   *
    * @param password - Plain text password to hash
    * @returns Hashed password
    */
@@ -208,7 +208,7 @@ export class PasswordHashingService {
 
   /**
    * Verify a password against a bcrypt hash
-   * 
+   *
    * @param password - Plain text password to verify
    * @param hash - Bcrypt hash to compare against
    * @returns True if password matches hash
@@ -230,7 +230,7 @@ export class PasswordHashingService {
 
   /**
    * Check if a hash needs to be rehashed (cost factor changed)
-   * 
+   *
    * @param hash - Bcrypt hash to check
    * @returns True if hash should be regenerated
    */
@@ -247,7 +247,7 @@ export class PasswordHashingService {
 
 /**
  * Generate a cryptographically secure master key
- * 
+ *
  * @returns 256-bit master key in hex format
  */
 export function generateMasterKey(): string {
@@ -264,7 +264,7 @@ let passwordHashingServiceInstance: PasswordHashingService | null = null;
 
 /**
  * Initialize encryption service with master key from environment
- * 
+ *
  * @param masterKeyHex - Master encryption key in hex format
  */
 export function initializeEncryption(masterKeyHex: string): void {
@@ -275,7 +275,7 @@ export function initializeEncryption(masterKeyHex: string): void {
 
 /**
  * Get encryption service instance
- * 
+ *
  * @returns Encryption service instance
  * @throws Error if not initialized
  */
@@ -288,7 +288,7 @@ export function getEncryptionService(): EncryptionService {
 
 /**
  * Get password hashing service instance
- * 
+ *
  * @returns Password hashing service instance
  * @throws Error if not initialized
  */

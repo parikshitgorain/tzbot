@@ -42,7 +42,7 @@ export class UserRepository {
 
     try {
       const result = await this.pool.query(query, [discordId]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
@@ -74,7 +74,7 @@ export class UserRepository {
 
     try {
       const result = await this.pool.query(query, [kickUsername]);
-      
+
       if (result.rows.length === 0) {
         return null;
       }
@@ -137,7 +137,7 @@ export class UserRepository {
    * Cascading deletes will remove related records
    */
   async deleteUserData(discordId: string): Promise<void> {
-    const query = `DELETE FROM users WHERE discord_id = $1`;
+    const query = 'DELETE FROM users WHERE discord_id = $1';
 
     try {
       await this.pool.query(query, [discordId]);

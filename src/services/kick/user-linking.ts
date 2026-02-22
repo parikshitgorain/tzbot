@@ -2,14 +2,14 @@
  * @file user-linking.ts
  * @description User linking system for connecting Kick and Discord accounts
  * @module services/kick
- * 
+ *
  * This system allows users to link their Kick and Discord accounts by:
  * 1. User runs /link command on Discord
  * 2. Bot generates unique token and DMs user
  * 3. User types "!verify TOKEN" in Kick chat
  * 4. Bot monitors Kick chat for verification
  * 5. Bot confirms link and assigns roles
- * 
+ *
  * Requirements: 2.5, 2.6
  */
 
@@ -129,7 +129,7 @@ export class UserLinkingSystem implements IUserLinkingSystem {
   async startLinking(discordId: string): Promise<LinkToken> {
     // Check if user already has a pending link
     const existingToken = Array.from(this.pendingLinks.values()).find(
-      (link) => link.discordId === discordId
+      (link) => link.discordId === discordId,
     );
 
     if (existingToken && existingToken.expiresAt > new Date()) {
@@ -194,7 +194,7 @@ export class UserLinkingSystem implements IUserLinkingSystem {
 
       if (existingUser && existingUser.discordId !== discordId) {
         throw new Error(
-          `Kick username ${kickUsername} is already linked to another Discord account`
+          `Kick username ${kickUsername} is already linked to another Discord account`,
         );
       }
 
@@ -291,7 +291,7 @@ export class UserLinkingSystem implements IUserLinkingSystem {
    * Process a Kick chat message looking for verification commands
    */
   async processVerificationMessage(
-    message: KickChatMessage
+    message: KickChatMessage,
   ): Promise<LinkResult | null> {
     // Check if message is a verification command
     const content = message.content.trim();

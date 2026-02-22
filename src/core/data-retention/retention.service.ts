@@ -35,7 +35,7 @@ export class DataRetentionService {
 
   constructor(
     private readonly pool: Pool,
-    private readonly config: RetentionConfig = DEFAULT_RETENTION_CONFIG
+    private readonly config: RetentionConfig = DEFAULT_RETENTION_CONFIG,
   ) {}
 
   /**
@@ -124,7 +124,7 @@ export class DataRetentionService {
         `DELETE FROM message_content 
          WHERE timestamp < $1 
          AND deleted_at IS NULL`,
-        [cutoffDate]
+        [cutoffDate],
       );
 
       const deletedCount = result.rowCount || 0;
@@ -139,7 +139,7 @@ export class DataRetentionService {
       return deletedCount;
     } catch (error) {
       throw new Error(
-        `Failed to cleanup old message content: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to cleanup old message content: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -155,7 +155,7 @@ export class DataRetentionService {
       const result = await this.pool.query(
         `DELETE FROM chat_activity 
          WHERE timestamp < $1`,
-        [cutoffDate]
+        [cutoffDate],
       );
 
       const deletedCount = result.rowCount || 0;
@@ -170,7 +170,7 @@ export class DataRetentionService {
       return deletedCount;
     } catch (error) {
       throw new Error(
-        `Failed to cleanup old chat activity: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to cleanup old chat activity: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -212,7 +212,7 @@ export class DataRetentionService {
     } catch (error) {
       await client.query('ROLLBACK');
       throw new Error(
-        `Failed to delete user data: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to delete user data: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     } finally {
       client.release();
@@ -252,7 +252,7 @@ export class DataRetentionService {
       };
     } catch (error) {
       throw new Error(
-        `Failed to get retention stats: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to get retention stats: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }

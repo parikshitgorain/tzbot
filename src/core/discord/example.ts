@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+
 /**
  * @file example.ts
  * @description Example usage of the Discord client wrapper
@@ -64,7 +64,7 @@ async function sendEmbedExample(client: DiscordClient, channelId: string) {
 async function moderationExample(
   client: DiscordClient,
   guildId: string,
-  userId: string
+  userId: string,
 ) {
   // Warn a user (send DM)
   const member = await client.getMember(guildId, userId);
@@ -91,7 +91,7 @@ async function roleManagementExample(
   client: DiscordClient,
   guildId: string,
   userId: string,
-  roleId: string
+  roleId: string,
 ) {
   // Add a role to a user
   await client.addRole(guildId, userId, roleId);
@@ -139,7 +139,9 @@ async function eventDrivenModerationExample() {
 
   client.on('messageCreate', async (message) => {
     // Skip bot messages
-    if (message.author.bot) return;
+    if (message.author.bot) {
+      return;
+    }
 
     const userId = message.author.id;
     const now = Date.now();
@@ -167,7 +169,7 @@ async function eventDrivenModerationExample() {
         message.guildId!,
         userId,
         oneHour,
-        'Spam detected: 10+ messages in 10 seconds'
+        'Spam detected: 10+ messages in 10 seconds',
       );
 
       console.log(`User ${userId} timed out for spam`);
@@ -202,7 +204,9 @@ async function completeBotExample() {
   // Message handling
   client.on('messageCreate', async (message) => {
     // Skip bot messages
-    if (message.author.bot) return;
+    if (message.author.bot) {
+      return;
+    }
 
     // Command handling
     if (message.content.startsWith('!')) {
@@ -222,7 +226,7 @@ async function completeBotExample() {
             .setDescription('Available commands:')
             .addFields(
               { name: '!ping', value: 'Check if bot is responsive' },
-              { name: '!help', value: 'Show this help message' }
+              { name: '!help', value: 'Show this help message' },
             )
             .setColor(0x0099ff);
 

@@ -32,17 +32,17 @@ export class RedisClient {
         lazyConnect: false,
         enableReadyCheck: true,
         maxRetriesPerRequest: 3,
-        
+
         // Connection pooling
         enableOfflineQueue: true,
-        
+
         // Reconnection strategy
         retryStrategy: (times: number) => {
           if (times > this.maxReconnectAttempts) {
             logger.error('Redis max reconnection attempts reached', { attempts: times });
             return null; // Stop retrying
           }
-          
+
           // Exponential backoff: 1s, 2s, 4s, 8s, ..., max 60s
           const delay = Math.min(Math.pow(2, times) * 1000, 60000);
           logger.info('Redis reconnection attempt', { attempt: times, delayMs: delay });
@@ -77,7 +77,9 @@ export class RedisClient {
    * Set up Redis event handlers
    */
   private setupEventHandlers(): void {
-    if (!this.client) return;
+    if (!this.client) {
+      return;
+    }
 
     this.client.on('connect', () => {
       logger.info('Redis connection established');
@@ -137,7 +139,7 @@ export class RedisClient {
     }
 
     const startTime = Date.now();
-    
+
     while (!this.isConnected && Date.now() - startTime < timeoutMs) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }

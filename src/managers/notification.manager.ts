@@ -52,7 +52,7 @@ export interface NotificationManagerConfig {
 
 /**
  * Notification manager for delivering Premium_Embeds
- * 
+ *
  * Requirements:
  * - 1.1: Deliver Premium_Embed within 1 second
  * - 1.2: Format embeds with title, description, thumbnail, timestamp, color
@@ -70,7 +70,7 @@ export class NotificationManager {
 
   constructor(
     discordClient: IDiscordClient,
-    config: NotificationManagerConfig
+    config: NotificationManagerConfig,
   ) {
     this.discordClient = discordClient;
     this.config = config;
@@ -114,7 +114,7 @@ export class NotificationManager {
    */
   async sendNotification(
     event: NotificationEvent,
-    embedData: PremiumEmbedData
+    embedData: PremiumEmbedData,
   ): Promise<void> {
     const startTime = Date.now();
 
@@ -163,7 +163,7 @@ export class NotificationManager {
    */
   private formatPremiumEmbed(
     data: PremiumEmbedData,
-    timestamp: Date
+    timestamp: Date,
   ): EmbedBuilder {
     const embed = new EmbedBuilder()
       .setTitle(data.title)
@@ -188,7 +188,7 @@ export class NotificationManager {
    */
   private async handleDeliveryFailure(
     event: NotificationEvent,
-    embedData: PremiumEmbedData
+    embedData: PremiumEmbedData,
   ): Promise<void> {
     // Try fallback channel if configured
     const fallbackChannelId = this.getFallbackChannelId();
@@ -213,7 +213,7 @@ export class NotificationManager {
             eventId: event.id,
             eventType: event.type,
             fallbackChannelId,
-          }
+          },
         );
       }
     }
@@ -227,20 +227,20 @@ export class NotificationManager {
    */
   private queueForRetry(
     event: NotificationEvent,
-    embedData: PremiumEmbedData
+    embedData: PremiumEmbedData,
   ): void {
     // Validate channel IDs before queueing
     const primaryChannelId = this.getPrimaryChannelId();
     const fallbackChannelId = this.getFallbackChannelId();
     const invalidIds = ['123456789012345678']; // Known placeholder IDs
-    
+
     // Don't queue if channel IDs are still placeholders
-    if (invalidIds.includes(primaryChannelId) || 
+    if (invalidIds.includes(primaryChannelId) ||
         (fallbackChannelId && invalidIds.includes(fallbackChannelId))) {
       logger.warn('Skipping notification queue - channel IDs are placeholders', {
         eventId: event.id,
         primaryChannelId,
-        fallbackChannelId
+        fallbackChannelId,
       });
       return;
     }
@@ -303,7 +303,7 @@ export class NotificationManager {
           Date.now() - notification.lastAttempt.getTime();
         if (timeSinceLastAttempt < this.retryDelayMs) {
           await new Promise((resolve) =>
-            setTimeout(resolve, this.retryDelayMs - timeSinceLastAttempt)
+            setTimeout(resolve, this.retryDelayMs - timeSinceLastAttempt),
           );
         }
       }
@@ -315,7 +315,7 @@ export class NotificationManager {
       try {
         const embed = this.formatPremiumEmbed(
           notification.embedData,
-          notification.event.timestamp
+          notification.event.timestamp,
         );
 
         // Get current primary channel ID (supports dynamic updates)
@@ -346,7 +346,7 @@ export class NotificationManager {
           try {
             const embed = this.formatPremiumEmbed(
               notification.embedData,
-              notification.event.timestamp
+              notification.event.timestamp,
             );
             await this.discordClient.sendMessage(fallbackChannelId, {
               embeds: [embed],
@@ -379,11 +379,11 @@ export class NotificationManager {
    * Requirement 1.3: Deliver all Premium_Embeds in chronological order
    */
   async sendNotifications(
-    events: Array<{ event: NotificationEvent; embedData: PremiumEmbedData }>
+    events: Array<{ event: NotificationEvent; embedData: PremiumEmbedData }>,
   ): Promise<void> {
     // Sort by timestamp (chronological order)
     const sortedEvents = events.sort(
-      (a, b) => a.event.timestamp.getTime() - b.event.timestamp.getTime()
+      (a, b) => a.event.timestamp.getTime() - b.event.timestamp.getTime(),
     );
 
     logger.info('Sending multiple notifications', {
@@ -404,10 +404,10 @@ export class NotificationManager {
     queueSize: number;
     processing: boolean;
     oldestQueuedAt?: Date;
-  } {
+    } {
     const entries = Array.from(this.notificationQueue.values());
     const oldestEntry = entries.sort(
-      (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
     )[0];
 
     return {
@@ -434,20 +434,20 @@ export class NotificationManager {
     logger.info('Starting queue validation', {
       currentQueueSize: this.notificationQueue.size,
       primaryChannelId: this.getPrimaryChannelId(),
-      fallbackChannelId: this.getFallbackChannelId()
+      fallbackChannelId: this.getFallbackChannelId(),
     });
 
     const invalidIds = ['123456789012345678']; // Known placeholder IDs
     const primaryChannelId = this.getPrimaryChannelId();
     const fallbackChannelId = this.getFallbackChannelId();
-    
+
     // If current channel IDs are still placeholders, clear entire queue
-    if (invalidIds.includes(primaryChannelId) || 
+    if (invalidIds.includes(primaryChannelId) ||
         (fallbackChannelId && invalidIds.includes(fallbackChannelId))) {
       logger.warn('Current channel IDs are placeholders, clearing notification queue', {
         primaryChannelId,
         fallbackChannelId,
-        queueSize: this.notificationQueue.size
+        queueSize: this.notificationQueue.size,
       });
       this.clearQueue();
       return;
@@ -464,7 +464,7 @@ export class NotificationManager {
         logger.debug('Removed stale notification from queue', {
           queueId: id,
           eventId: notification.event.id,
-          ageMs: age
+          ageMs: age,
         });
       }
     }
@@ -472,11 +472,11 @@ export class NotificationManager {
     if (removedCount > 0) {
       logger.info('Cleaned notification queue on startup', {
         removedCount,
-        remainingCount: this.notificationQueue.size
+        remainingCount: this.notificationQueue.size,
       });
     } else {
       logger.info('No stale notifications found in queue', {
-        queueSize: this.notificationQueue.size
+        queueSize: this.notificationQueue.size,
       });
     }
   }
@@ -484,7 +484,7 @@ export class NotificationManager {
   /**
    * Send punishment notification through triple notification system
    * Requirement 3.1-3.4: DM, ephemeral message, and mod-log notification
-   * 
+   *
    * @param userId - Discord user ID
    * @param channelId - Channel where offense occurred
    * @param punishment - Calculated punishment
@@ -497,7 +497,7 @@ export class NotificationManager {
     channelId: string,
     punishment: Punishment,
     reason: string,
-    offenseCount: number
+    offenseCount: number,
   ): Promise<NotificationResult> {
     const result: NotificationResult = {
       dmSent: false,
@@ -518,7 +518,7 @@ export class NotificationManager {
           { name: 'Reason', value: reason, inline: false },
           { name: 'Offense Count', value: offenseCount.toString(), inline: true },
           { name: 'Current Punishment', value: punishmentDescription, inline: true },
-          { name: 'Next Offense', value: punishment.nextPunishment, inline: false }
+          { name: 'Next Offense', value: punishment.nextPunishment, inline: false },
         )
         .setColor(this.getPunishmentColor(punishment.type))
         .setTimestamp();
@@ -542,7 +542,7 @@ export class NotificationManager {
         .setDescription(`You have received a ${punishmentDescription} for: ${reason}`)
         .addFields(
           { name: 'Offense Count', value: offenseCount.toString(), inline: true },
-          { name: 'Next Offense', value: punishment.nextPunishment, inline: false }
+          { name: 'Next Offense', value: punishment.nextPunishment, inline: false },
         )
         .setColor(this.getPunishmentColor(punishment.type))
         .setTimestamp();
@@ -565,7 +565,7 @@ export class NotificationManager {
     // 3. Send mod-log notification
     try {
       const modLogChannelId = this.getModLogChannelId();
-      
+
       if (modLogChannelId) {
         const modLogEmbed = new EmbedBuilder()
           .setTitle('🔨 Moderation Action Applied')
@@ -575,7 +575,7 @@ export class NotificationManager {
             { name: 'Action', value: punishmentDescription, inline: true },
             { name: 'Offense Count', value: offenseCount.toString(), inline: true },
             { name: 'Reason', value: reason, inline: false },
-            { name: 'Channel', value: `<#${channelId}>`, inline: true }
+            { name: 'Channel', value: `<#${channelId}>`, inline: true },
           )
           .setColor(this.getPunishmentColor(punishment.type))
           .setTimestamp();

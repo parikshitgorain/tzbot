@@ -155,7 +155,7 @@ export class CommandManager implements ICommandManager {
       if (this.config.guildId) {
         await rest.put(
           Routes.applicationGuildCommands(clientId, this.config.guildId),
-          { body: commandsJson }
+          { body: commandsJson },
         );
 
         logger.info('Commands deployed to guild', {
@@ -265,7 +265,7 @@ export class CommandManager implements ICommandManager {
         this.setCooldown(
           commandName,
           interaction.user.id,
-          command.cooldown.duration
+          command.cooldown.duration,
         );
       }
 
@@ -294,7 +294,7 @@ export class CommandManager implements ICommandManager {
       // Send error message to user with proper error handling
       try {
         const errorMessage = 'An error occurred while executing this command.';
-        
+
         if (interaction.replied) {
           // Already replied, try followUp
           await interaction.followUp({
@@ -332,7 +332,7 @@ export class CommandManager implements ICommandManager {
    */
   validatePermissions(
     interaction: CommandInteraction,
-    requiredPermissions: bigint[]
+    requiredPermissions: bigint[],
   ): boolean {
     if (!interaction.guild || !interaction.member) {
       return false;
@@ -376,11 +376,11 @@ export class CommandManager implements ICommandManager {
       'cache' in member.roles &&
       this.config.moderatorRoleId &&
       (member.roles.cache as Map<string, unknown>).has(
-        this.config.moderatorRoleId
+        this.config.moderatorRoleId,
       );
 
     const hasAdminPerms = member.permissions.has(
-      PermissionFlagsBits.Administrator
+      PermissionFlagsBits.Administrator,
     );
 
     return hasModRole || hasAdminPerms;

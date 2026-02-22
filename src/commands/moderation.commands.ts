@@ -27,7 +27,7 @@ import { getPool } from '@/core/database/pool.js';
  */
 function initializeOffenseManager(
   client: IDiscordClient,
-  channelId: string
+  channelId: string,
 ): OffenseManager {
   const pool = getPool();
   const offenseRepo = new OffenseRepository(pool);
@@ -40,7 +40,7 @@ function initializeOffenseManager(
     pool,
     offenseRepo,
     punishmentCalc,
-    notificationManager
+    notificationManager,
   );
 }
 
@@ -50,7 +50,7 @@ function initializeOffenseManager(
 export function createModerationCommands(
   _client: IDiscordClient,
   database: Database,
-  rateLimiter?: import('@/moderation/rate-limiter/channel-text-rate-limiter.js').ChannelTextRateLimiter
+  rateLimiter?: import('@/moderation/rate-limiter/channel-text-rate-limiter.js').ChannelTextRateLimiter,
 ): CommandDefinition[] {
   return [
     createBanCommand(_client, database),
@@ -73,7 +73,7 @@ export function createModerationCommands(
  */
 function createBanCommand(
   _client: IDiscordClient,
-  database: Database
+  database: Database,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('ban')
@@ -82,13 +82,13 @@ function createBanCommand(
       option
         .setName('user')
         .setDescription('The user to ban')
-        .setRequired(true)
+        .setRequired(true),
     )
     .addStringOption((option) =>
       option
         .setName('reason')
         .setDescription('Reason for the ban')
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers);
 
@@ -126,7 +126,7 @@ function createBanCommand(
       // Send DM to user
       try {
         await user.send(
-          `<@${user.id}> You have been banned from ${interaction.guild?.name}.\nReason: ${reason}`
+          `<@${user.id}> You have been banned from ${interaction.guild?.name}.\nReason: ${reason}`,
         );
       } catch (dmError) {
         logger.debug('Failed to send ban DM to user', {
@@ -177,7 +177,7 @@ function createBanCommand(
  */
 function createTimeoutCommand(
   _client: IDiscordClient,
-  database: Database
+  database: Database,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('timeout')
@@ -186,7 +186,7 @@ function createTimeoutCommand(
       option
         .setName('user')
         .setDescription('The user to timeout')
-        .setRequired(true)
+        .setRequired(true),
     )
     .addIntegerOption((option) =>
       option
@@ -194,13 +194,13 @@ function createTimeoutCommand(
         .setDescription('Duration in minutes (1-40320 = 28 days max)')
         .setRequired(true)
         .setMinValue(1)
-        .setMaxValue(40320)
+        .setMaxValue(40320),
     )
     .addStringOption((option) =>
       option
         .setName('reason')
         .setDescription('Reason for the timeout')
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers);
 
@@ -250,7 +250,7 @@ function createTimeoutCommand(
       // Send DM to user
       try {
         await user.send(
-          `<@${user.id}> You have been timed out in ${interaction.guild?.name} for ${durationMinutes} minutes.\nReason: ${reason}`
+          `<@${user.id}> You have been timed out in ${interaction.guild?.name} for ${durationMinutes} minutes.\nReason: ${reason}`,
         );
       } catch (dmError) {
         logger.debug('Failed to send timeout DM to user', {
@@ -303,7 +303,7 @@ function createTimeoutCommand(
  */
 function createWarnCommand(
   _client: IDiscordClient,
-  _database: Database
+  _database: Database,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('warn')
@@ -312,13 +312,13 @@ function createWarnCommand(
       option
         .setName('user')
         .setDescription('The user to warn')
-        .setRequired(true)
+        .setRequired(true),
     )
     .addStringOption((option) =>
       option
         .setName('reason')
         .setDescription('Reason for the warning')
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers);
 
@@ -347,7 +347,7 @@ function createWarnCommand(
         user.id,
         reason,
         interaction.user.id,
-        interaction.channelId
+        interaction.channelId,
       );
 
       // Apply punishment based on type
@@ -363,7 +363,7 @@ function createWarnCommand(
         // Apply timeout
         const durationMs = punishment.duration * 60 * 60 * 1000; // Convert hours to ms
         await member.timeout(durationMs, reason);
-        
+
         logger.info('User timed out via /warn command', {
           guildId,
           userId: user.id,
@@ -376,7 +376,7 @@ function createWarnCommand(
       } else if (punishment.type === PunishmentType.PERMANENT_BAN) {
         // Apply ban
         await member.ban({ reason });
-        
+
         logger.info('User banned via /warn command', {
           guildId,
           userId: user.id,
@@ -407,17 +407,17 @@ function createWarnCommand(
         dmMessage += `**Reason:** ${reason}\n`;
         dmMessage += `**Offense Count:** ${offenseCount}\n`;
         dmMessage += `**Next Offense:** ${punishment.nextPunishment}\n\n`;
-        
+
         if (punishment.type === PunishmentType.WARNING) {
-          dmMessage += `You have been warned. Please follow the server rules to avoid further action.`;
+          dmMessage += 'You have been warned. Please follow the server rules to avoid further action.';
         } else if (punishment.type === PunishmentType.TIMEOUT && punishment.duration) {
           dmMessage += `You have been timed out for ${punishment.duration} hour${punishment.duration > 1 ? 's' : ''}.`;
         } else if (punishment.type === PunishmentType.PERMANENT_BAN) {
-          dmMessage += `You have been permanently banned from the server.`;
+          dmMessage += 'You have been permanently banned from the server.';
         }
-        
+
         await user.send(dmMessage);
-        
+
         logger.debug('Warn command DM sent', {
           userId: user.id,
           username: user.username,
@@ -472,7 +472,7 @@ function createWarnCommand(
  */
 function createKickCommand(
   _client: IDiscordClient,
-  database: Database
+  database: Database,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('kick')
@@ -481,13 +481,13 @@ function createKickCommand(
       option
         .setName('user')
         .setDescription('The user to kick')
-        .setRequired(true)
+        .setRequired(true),
     )
     .addStringOption((option) =>
       option
         .setName('reason')
         .setDescription('Reason for the kick')
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers);
 
@@ -525,7 +525,7 @@ function createKickCommand(
       // Send DM to user
       try {
         await user.send(
-          `<@${user.id}> You have been kicked from ${interaction.guild?.name}.\nReason: ${reason}`
+          `<@${user.id}> You have been kicked from ${interaction.guild?.name}.\nReason: ${reason}`,
         );
       } catch (dmError) {
         logger.debug('Failed to send kick DM to user', {
@@ -576,7 +576,7 @@ function createKickCommand(
  */
 function createWarnListCommand(
   _client: IDiscordClient,
-  _database: Database
+  _database: Database,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('warnlist')
@@ -585,7 +585,7 @@ function createWarnListCommand(
       option
         .setName('user')
         .setDescription('The user to check')
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers);
 
@@ -607,7 +607,7 @@ function createWarnListCommand(
         pool,
         offenseRepo,
         punishmentCalc,
-        notificationManager
+        notificationManager,
       );
 
       // Get offense history
@@ -628,7 +628,7 @@ function createWarnListCommand(
         .addFields(
           { name: 'Total Offenses', value: record.total_offenses.toString(), inline: true },
           { name: 'Current Timeout', value: `${record.current_timeout_duration}h`, inline: true },
-          { name: 'Status', value: record.is_banned ? '🚫 Banned' : '✅ Active', inline: true }
+          { name: 'Status', value: record.is_banned ? '🚫 Banned' : '✅ Active', inline: true },
         );
 
       if (record.last_offense_timestamp) {
@@ -683,7 +683,7 @@ function createWarnListCommand(
  */
 function createWarnAllCommand(
   _client: IDiscordClient,
-  _database: Database
+  _database: Database,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('warnall')
@@ -763,7 +763,7 @@ function createWarnAllCommand(
  */
 function createClearWarnCommand(
   _client: IDiscordClient,
-  _database: Database
+  _database: Database,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('clearwarn')
@@ -772,7 +772,7 @@ function createClearWarnCommand(
       option
         .setName('user')
         .setDescription('The user to clear warning for')
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers);
 
@@ -794,12 +794,12 @@ function createClearWarnCommand(
         pool,
         offenseRepo,
         punishmentCalc,
-        notificationManager
+        notificationManager,
       );
 
       // Get current offense count
       const beforeRecord = await offenseManager.getOffenseHistory(user.id);
-      
+
       if (!beforeRecord || beforeRecord.total_offenses === 0) {
         await interaction.editReply({
           content: `${user.username} has no offenses to clear.`,
@@ -842,14 +842,14 @@ function createClearWarnCommand(
       // Send DM notification to user
       try {
         let dmMessage = `<@${user.id}> ✅ **Offense Cleared**\n\n`;
-        dmMessage += `One of your offenses has been removed by a moderator.\n\n`;
+        dmMessage += 'One of your offenses has been removed by a moderator.\n\n';
         dmMessage += `**Previous offense count:** ${beforeCount}\n`;
         dmMessage += `**New offense count:** ${afterCount}`;
-        
+
         if (timeoutRemoved) {
-          dmMessage += `\n\n**Timeout removed:** Your timeout has been lifted.`;
+          dmMessage += '\n\n**Timeout removed:** Your timeout has been lifted.';
         }
-        
+
         await user.send(dmMessage);
         logger.debug('Clearwarn DM sent', {
           userId: user.id,
@@ -902,7 +902,7 @@ function createClearWarnCommand(
  */
 function createResetOffensesCommand(
   _client: IDiscordClient,
-  _database: Database
+  _database: Database,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('resetoffenses')
@@ -911,7 +911,7 @@ function createResetOffensesCommand(
       option
         .setName('user')
         .setDescription('The user to reset offenses for')
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers);
 
@@ -933,7 +933,7 @@ function createResetOffensesCommand(
         pool,
         offenseRepo,
         punishmentCalc,
-        notificationManager
+        notificationManager,
       );
 
       // Get current offense count
@@ -972,8 +972,8 @@ function createResetOffensesCommand(
       try {
         await user.send(
           `<@${user.id}> ✅ **Your offenses have been cleared!**\n\n` +
-          `All your previous offenses have been reset by a moderator.\n` +
-          `You now have a clean record. Please continue to follow the server rules.`
+          'All your previous offenses have been reset by a moderator.\n' +
+          'You now have a clean record. Please continue to follow the server rules.',
         );
         logger.debug('Offense reset notification DM sent', {
           userId: user.id,
@@ -995,8 +995,8 @@ function createResetOffensesCommand(
         timeoutRemoved: member?.communicationDisabledUntil ? true : false,
       });
 
-      const timeoutMessage = member?.communicationDisabledUntil 
-        ? '\n**Timeout removed:** Yes' 
+      const timeoutMessage = member?.communicationDisabledUntil
+        ? '\n**Timeout removed:** Yes'
         : '';
 
       await interaction.editReply({
@@ -1028,7 +1028,7 @@ function createResetOffensesCommand(
  */
 function createModLogCommand(
   _client: IDiscordClient,
-  _database: Database
+  _database: Database,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('modlog')
@@ -1037,7 +1037,7 @@ function createModLogCommand(
       option
         .setName('user')
         .setDescription('The user to check')
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers);
 
@@ -1059,7 +1059,7 @@ function createModLogCommand(
         pool,
         offenseRepo,
         punishmentCalc,
-        notificationManager
+        notificationManager,
       );
 
       // Get offense history
@@ -1081,7 +1081,7 @@ function createModLogCommand(
 
       // Show all entries (or last 10 if too many)
       const displayEntries = record.warning_history.slice(-10);
-      
+
       for (let i = 0; i < displayEntries.length; i++) {
         const entry = displayEntries[i];
         const timestamp = `<t:${Math.floor(entry.timestamp.getTime() / 1000)}:f>`;
@@ -1130,7 +1130,7 @@ function createModLogCommand(
 function createRateLimitAddCommand(
   _client: IDiscordClient,
   _database: Database,
-  rateLimiter?: import('@/moderation/rate-limiter/channel-text-rate-limiter.js').ChannelTextRateLimiter
+  rateLimiter?: import('@/moderation/rate-limiter/channel-text-rate-limiter.js').ChannelTextRateLimiter,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('ratelimit-add')
@@ -1139,13 +1139,13 @@ function createRateLimitAddCommand(
       option
         .setName('restricted')
         .setDescription('The channel to restrict')
-        .setRequired(true)
+        .setRequired(true),
     )
     .addChannelOption((option) =>
       option
         .setName('redirect')
         .setDescription('The channel to redirect users to')
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels);
 
@@ -1170,7 +1170,7 @@ function createRateLimitAddCommand(
       if (rateLimiter) {
         const restrictedChannelsMap = new Map(Object.entries(channelMap));
         await rateLimiter.reloadConfig(restrictedChannelsMap);
-        
+
         logger.info('Rate limiter configuration reloaded', {
           restrictedChannelId: restrictedChannel.id,
           redirectChannelId: redirectChannel.id,
@@ -1221,7 +1221,7 @@ function createRateLimitAddCommand(
 function createRateLimitRemoveCommand(
   _client: IDiscordClient,
   _database: Database,
-  rateLimiter?: import('@/moderation/rate-limiter/channel-text-rate-limiter.js').ChannelTextRateLimiter
+  rateLimiter?: import('@/moderation/rate-limiter/channel-text-rate-limiter.js').ChannelTextRateLimiter,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('ratelimit-remove')
@@ -1230,7 +1230,7 @@ function createRateLimitRemoveCommand(
       option
         .setName('channel')
         .setDescription('The channel to remove from rate limiting')
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels);
 
@@ -1262,7 +1262,7 @@ function createRateLimitRemoveCommand(
       if (rateLimiter) {
         const restrictedChannelsMap = new Map(Object.entries(channelMap));
         await rateLimiter.reloadConfig(restrictedChannelsMap);
-        
+
         logger.info('Rate limiter configuration reloaded (channel removed)', {
           channelId: channel.id,
           moderator: interaction.user.username,
@@ -1309,7 +1309,7 @@ function createRateLimitRemoveCommand(
  */
 function createRateLimitListCommand(
   _client: IDiscordClient,
-  _database: Database
+  _database: Database,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('ratelimit-list')

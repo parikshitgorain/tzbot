@@ -2,10 +2,10 @@
  * @file chat-client.ts
  * @description Kick chat monitoring client using Pusher
  * @module services/kick
- * 
+ *
  * This client provides a high-level interface for monitoring Kick chat,
  * extracting user badges, and handling chat events for role synchronization.
- * 
+ *
  * Requirements: 2.1-2.4
  */
 
@@ -146,7 +146,9 @@ export class KickChatClient {
    * Handle incoming chat messages
    */
   private async handleMessage(message: KickChatMessage): Promise<void> {
-    if (!this.options) return;
+    if (!this.options) {
+      return;
+    }
 
     try {
       // Extract badge information
@@ -166,7 +168,7 @@ export class KickChatClient {
       if (badgeInfo.isSubscriber && this.options.onSubscriberDetected) {
         await this.options.onSubscriberDetected(
           badgeInfo.username,
-          badgeInfo.subscriberMonths
+          badgeInfo.subscriberMonths,
         );
       }
 

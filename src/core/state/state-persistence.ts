@@ -2,7 +2,7 @@
  * @file state-persistence.ts
  * @description State persistence service for saving and recovering critical bot state
  * @module core/state
- * 
+ *
  * Requirements:
  * - 14.3: Persist critical state to disk every 60 seconds
  * - 14.4: Restore state from most recent persisted data on restart
@@ -57,7 +57,7 @@ export interface StatePersistenceConfig {
 /**
  * State persistence service
  * Handles saving and loading critical bot state to/from disk
- * 
+ *
  * Validates: Requirements 14.3, 14.4
  */
 export class StatePersistenceService {
@@ -247,7 +247,7 @@ export class StatePersistenceService {
       state.timestamp = new Date(state.timestamp);
       if (state.data.chatRain?.lastExecutionTime) {
         state.data.chatRain.lastExecutionTime = new Date(
-          state.data.chatRain.lastExecutionTime
+          state.data.chatRain.lastExecutionTime,
         );
       }
       if (state.data.notificationQueue) {
@@ -327,7 +327,7 @@ export class StatePersistenceService {
             state.timestamp = new Date(state.timestamp);
             if (state.data.chatRain?.lastExecutionTime) {
               state.data.chatRain.lastExecutionTime = new Date(
-                state.data.chatRain.lastExecutionTime
+                state.data.chatRain.lastExecutionTime,
               );
             }
             if (state.data.notificationQueue) {
@@ -338,7 +338,7 @@ export class StatePersistenceService {
                   lastAttempt: item.lastAttempt
                     ? new Date(item.lastAttempt)
                     : undefined,
-                })
+                }),
               );
             }
             if (state.data.activeGiveaways) {
@@ -346,7 +346,7 @@ export class StatePersistenceService {
                 (item) => ({
                   ...item,
                   endsAt: new Date(item.endsAt),
-                })
+                }),
               );
             }
 

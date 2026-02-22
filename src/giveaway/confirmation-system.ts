@@ -10,7 +10,7 @@ import { logger } from '../core/logger/logger.js';
 
 /**
  * ConfirmationSystem orchestrates the winner confirmation workflow
- * 
+ *
  * Coordinates between Timer Manager, Message Listener, State Manager, and Reroll Handler
  * to implement the complete winner confirmation and reroll process.
  */
@@ -24,11 +24,11 @@ export class ConfirmationSystem {
   constructor(
     private winnerStateRepo: WinnerStateRepository,
     private giveawayRepo: GiveawayRepository,
-    configManager: ConfigManager
+    configManager: ConfigManager,
   ) {
     this.configManager = configManager;
     this.rerollHandler = new RerollHandler(giveawayRepo, winnerStateRepo);
-    
+
     // Initialize timer manager with callbacks
     this.timerManager = new TimerManager({
       onReminder: this.handleReminder.bind(this),
@@ -38,7 +38,7 @@ export class ConfirmationSystem {
     // Initialize message listener with confirmation callback
     this.messageListener = new MessageListener(
       winnerStateRepo,
-      this.confirmWinner.bind(this)
+      this.confirmWinner.bind(this),
     );
   }
 
@@ -208,7 +208,7 @@ export class ConfirmationSystem {
   async manualReroll(
     giveawayId: string,
     userId: string,
-    moderatorId: string
+    moderatorId: string,
   ): Promise<void> {
     try {
       if (!this.client) {
@@ -228,7 +228,7 @@ export class ConfirmationSystem {
       // Validate moderator permissions
       const canUse = await this.configManager.canUseGiveawayCommands(
         giveaway.guildId,
-        moderatorMember
+        moderatorMember,
       );
 
       if (!canUse) {
@@ -296,7 +296,7 @@ export class ConfirmationSystem {
 
       // Filter out winners without timer start time
       const winnersWithTimers = pendingWinners.filter(
-        (w): w is typeof w & { timerStartTime: Date } => w.timerStartTime !== null
+        (w): w is typeof w & { timerStartTime: Date } => w.timerStartTime !== null,
       );
 
       this.timerManager.restoreTimers(winnersWithTimers);
@@ -315,9 +315,11 @@ export class ConfirmationSystem {
   private async sendWinnerAnnouncement(
     channelId: string,
     giveawayId: string,
-    winners: User[]
+    winners: User[],
   ): Promise<void> {
-    if (!this.client) return;
+    if (!this.client) {
+      return;
+    }
 
     const winnerMentions = winners.map(w => `<@${w.id}>`).join(', ');
 
@@ -325,10 +327,10 @@ export class ConfirmationSystem {
       .setTitle('🎉 Giveaway Winners Selected!')
       .setDescription(
         `Congratulations ${winnerMentions}!\n\n` +
-        `**⏰ IMPORTANT:** You must send any message in this server within the next **5 minutes** to confirm your win!\n\n` +
-        `**Failure to respond will result in an automatic reroll.**\n\n` +
-        `**Moderators:** To manually reroll a winner, use:\n` +
-        `\`\`\`\n/giveaway reroll giveaway_id:${giveawayId} winner:@user\n\`\`\``
+        '**⏰ IMPORTANT:** You must send any message in this server within the next **5 minutes** to confirm your win!\n\n' +
+        '**Failure to respond will result in an automatic reroll.**\n\n' +
+        '**Moderators:** To manually reroll a winner, use:\n' +
+        `\`\`\`\n/giveaway reroll giveaway_id:${giveawayId} winner:@user\n\`\`\``,
       )
       .setColor(0x00ff00)
       .setTimestamp();
@@ -346,8 +348,8 @@ export class ConfirmationSystem {
           .setTitle(`🎉 Congratulations ${winner.username}!`)
           .setDescription(
             `You won: **${giveaway?.title || 'a giveaway'}**\n\n` +
-            `**⏰ IMPORTANT:** You must send any message in the server within the next **5 minutes** to confirm your win!\n\n` +
-            `**Failure to respond will result in an automatic reroll.**`
+            '**⏰ IMPORTANT:** You must send any message in the server within the next **5 minutes** to confirm your win!\n\n' +
+            '**Failure to respond will result in an automatic reroll.**',
           )
           .setColor(0x00ff00)
           .setTimestamp();
@@ -369,17 +371,21 @@ export class ConfirmationSystem {
    * Requirements: 2.4, 8.2
    */
   private async sendConfirmationMessage(giveawayId: string, userId: string): Promise<void> {
-    if (!this.client) return;
+    if (!this.client) {
+      return;
+    }
 
     const giveaway = await this.giveawayRepo.get(giveawayId);
-    if (!giveaway) return;
+    if (!giveaway) {
+      return;
+    }
 
     const embed = new EmbedBuilder()
       .setTitle('✅ Winner Confirmed!')
       .setDescription(
         `<@${userId}> has confirmed their win!\n\n` +
-        `**Next Steps:**\n` +
-        (giveaway.condition || 'Check with the giveaway host for prize details.')
+        '**Next Steps:**\n' +
+        (giveaway.condition || 'Check with the giveaway host for prize details.'),
       )
       .setColor(0x00ff00)
       .setTimestamp();
@@ -395,16 +401,20 @@ export class ConfirmationSystem {
    * Requirements: 3.2, 3.3, 8.3
    */
   private async sendReminderMessage(giveawayId: string, userId: string): Promise<void> {
-    if (!this.client) return;
+    if (!this.client) {
+      return;
+    }
 
     const giveaway = await this.giveawayRepo.get(giveawayId);
-    if (!giveaway) return;
+    if (!giveaway) {
+      return;
+    }
 
     const embed = new EmbedBuilder()
       .setTitle('⏰ Giveaway Winner Reminder')
       .setDescription(
         `<@${userId}>, you have **3 minutes remaining** to confirm your win!\n\n` +
-        `Send any message in this server to confirm.`
+        'Send any message in this server to confirm.',
       )
       .setColor(0xffa500)
       .setTimestamp();
@@ -422,21 +432,25 @@ export class ConfirmationSystem {
   private async sendRerollAnnouncement(
     giveawayId: string,
     originalUserId: string,
-    newWinnerId: string
+    newWinnerId: string,
   ): Promise<void> {
-    if (!this.client) return;
+    if (!this.client) {
+      return;
+    }
 
     const giveaway = await this.giveawayRepo.get(giveawayId);
-    if (!giveaway) return;
+    if (!giveaway) {
+      return;
+    }
 
     const embed = new EmbedBuilder()
       .setTitle('🔄 Winner Rerolled')
       .setDescription(
         `<@${originalUserId}> did not respond in time.\n\n` +
         `**New Winner:** <@${newWinnerId}>\n\n` +
-        `**⏰ IMPORTANT:** You must send any message in this server within the next **5 minutes** to confirm your win!\n\n` +
-        `**Moderators:** To manually reroll, use:\n` +
-        `\`\`\`\n/giveaway reroll giveaway_id:${giveawayId} winner:@user\n\`\`\``
+        '**⏰ IMPORTANT:** You must send any message in this server within the next **5 minutes** to confirm your win!\n\n' +
+        '**Moderators:** To manually reroll, use:\n' +
+        `\`\`\`\n/giveaway reroll giveaway_id:${giveawayId} winner:@user\n\`\`\``,
       )
       .setColor(0xffa500)
       .setTimestamp();
@@ -453,8 +467,8 @@ export class ConfirmationSystem {
         .setTitle(`🎉 Congratulations ${newWinner.username}!`)
         .setDescription(
           `You won: **${giveaway.title}**\n\n` +
-          `**⏰ IMPORTANT:** You must send any message in the server within the next **5 minutes** to confirm your win!\n\n` +
-          `**Failure to respond will result in an automatic reroll.**`
+          '**⏰ IMPORTANT:** You must send any message in the server within the next **5 minutes** to confirm your win!\n\n' +
+          '**Failure to respond will result in an automatic reroll.**',
         )
         .setColor(0x00ff00)
         .setTimestamp();
@@ -474,10 +488,14 @@ export class ConfirmationSystem {
    * Announce giveaway complete (no eligible participants)
    */
   private async announceGiveawayComplete(giveawayId: string): Promise<void> {
-    if (!this.client) return;
+    if (!this.client) {
+      return;
+    }
 
     const giveaway = await this.giveawayRepo.get(giveawayId);
-    if (!giveaway) return;
+    if (!giveaway) {
+      return;
+    }
 
     const embed = new EmbedBuilder()
       .setTitle('🎉 Giveaway Complete')

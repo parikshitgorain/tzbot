@@ -59,7 +59,7 @@ export class RateLimiter {
   async checkLimit(
     key: string,
     config: RateLimitConfig,
-    tokens = 1
+    tokens = 1,
   ): Promise<RateLimitResult> {
     try {
       const redisKey = this.buildKey(key, config.keyPrefix);

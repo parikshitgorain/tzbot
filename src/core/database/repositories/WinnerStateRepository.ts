@@ -32,7 +32,7 @@ export class WinnerStateRepository {
       ]);
     } catch (error) {
       throw new Error(
-        `Failed to create winner: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to create winner: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -45,7 +45,7 @@ export class WinnerStateRepository {
   async updateStatus(
     giveawayId: string,
     userId: string,
-    newStatus: WinnerStatus
+    newStatus: WinnerStatus,
   ): Promise<void> {
     const client = await this.pool.connect();
 
@@ -58,7 +58,7 @@ export class WinnerStateRepository {
         WHERE giveaway_id = $1 AND user_id = $2
         FOR UPDATE
       `;
-      
+
       const result = await client.query(selectQuery, [giveawayId, userId]);
 
       if (result.rows.length === 0) {
@@ -96,7 +96,7 @@ export class WinnerStateRepository {
     } catch (error) {
       await client.query('ROLLBACK');
       throw new Error(
-        `Failed to update winner status: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to update winner status: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     } finally {
       client.release();
@@ -127,7 +127,7 @@ export class WinnerStateRepository {
       return this.mapRowToWinnerRecord(row);
     } catch (error) {
       throw new Error(
-        `Failed to get winner: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to get winner: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -151,7 +151,7 @@ export class WinnerStateRepository {
       return result.rows.map(row => this.mapRowToWinnerRecord(row));
     } catch (error) {
       throw new Error(
-        `Failed to get winners: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to get winners: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -175,7 +175,7 @@ export class WinnerStateRepository {
       return result.rows.map(row => this.mapRowToWinnerRecord(row));
     } catch (error) {
       throw new Error(
-        `Failed to get pending winners: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to get pending winners: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -195,7 +195,7 @@ export class WinnerStateRepository {
       return result.rows.length > 0;
     } catch (error) {
       throw new Error(
-        `Failed to check winner state: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to check winner state: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -219,7 +219,7 @@ export class WinnerStateRepository {
       return result.rows.map(row => this.mapRowToWinnerRecord(row));
     } catch (error) {
       throw new Error(
-        `Failed to get pending winners by user: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to get pending winners by user: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -229,7 +229,7 @@ export class WinnerStateRepository {
    * Provides transaction support for complex operations
    */
   async withTransaction<T>(
-    callback: (client: PoolClient) => Promise<T>
+    callback: (client: PoolClient) => Promise<T>,
   ): Promise<T> {
     const client = await this.pool.connect();
 

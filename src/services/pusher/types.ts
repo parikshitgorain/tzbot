@@ -22,7 +22,7 @@ export interface PusherConfig {
   encrypted: boolean;
 }
 
-export type ConnectionState = 
+export type ConnectionState =
   | 'initialized'
   | 'connecting'
   | 'connected'

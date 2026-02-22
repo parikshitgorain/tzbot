@@ -31,7 +31,7 @@ interface RelayResult {
 
 /**
  * Announcement relay manager
- * 
+ *
  * Requirements:
  * - 6.1: Relay messages within 2 seconds
  * - 6.2: Preserve message formatting, embeds, and attachments
@@ -47,7 +47,7 @@ export class AnnouncementRelayManager {
 
   constructor(
     discordClient: IDiscordClient,
-    config: AnnouncementRelayConfig
+    config: AnnouncementRelayConfig,
   ) {
     this.discordClient = discordClient;
     this.config = config;
@@ -126,7 +126,7 @@ export class AnnouncementRelayManager {
     try {
       const member = await this.discordClient.getMember(
         this.config.guildId,
-        message.author.id
+        message.author.id,
       );
 
       if (!member) {
@@ -171,14 +171,14 @@ export class AnnouncementRelayManager {
     // Relay to all public channels (Requirement 6.4)
     const relayResults = await Promise.allSettled(
       this.config.publicChannelIds.map((channelId) =>
-        this.relayToChannel(channelId, messageContent)
-      )
+        this.relayToChannel(channelId, messageContent),
+      ),
     );
 
     // Process results
     const results: RelayResult[] = relayResults.map((result, index) => {
       const channelId = this.config.publicChannelIds[index];
-      
+
       if (result.status === 'fulfilled') {
         return {
           channelId,
@@ -230,9 +230,9 @@ export class AnnouncementRelayManager {
     // Convert Discord Embed objects to EmbedBuilder for sending
     const embeds = message.embeds.length > 0
       ? message.embeds.map((embed) => {
-          const builder = new EmbedBuilder(embed.data);
-          return builder;
-        })
+        const builder = new EmbedBuilder(embed.data);
+        return builder;
+      })
       : undefined;
 
     return {
@@ -240,9 +240,9 @@ export class AnnouncementRelayManager {
       embeds,
       files: message.attachments.size > 0
         ? Array.from(message.attachments.values()).map((attachment) => ({
-            attachment: attachment.url,
-            name: attachment.name,
-          }))
+          attachment: attachment.url,
+          name: attachment.name,
+        }))
         : undefined,
     };
   }
@@ -252,7 +252,7 @@ export class AnnouncementRelayManager {
    */
   private async relayToChannel(
     channelId: string,
-    messageContent: ReturnType<typeof this.prepareMessageContent>
+    messageContent: ReturnType<typeof this.prepareMessageContent>,
   ): Promise<Message> {
     try {
       // Send message (Requirement 6.3: Attributed to TZBOT)
@@ -278,7 +278,7 @@ export class AnnouncementRelayManager {
    */
   private async notifyModeratorOfFailures(
     originalMessage: Message,
-    failures: RelayResult[]
+    failures: RelayResult[],
   ): Promise<void> {
     try {
       const failureList = failures
@@ -291,7 +291,7 @@ export class AnnouncementRelayManager {
 
       await this.discordClient.sendMessage(
         this.config.privateChannelId,
-        notificationContent
+        notificationContent,
       );
 
       logger.info('Moderator notified of relay failures', {

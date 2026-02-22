@@ -1,19 +1,19 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Database Layer
- * 
+ *
  * Provides PostgreSQL connection pooling, migration system, and database utilities.
- * 
+ *
  * Features:
  * - Connection pool with max 20 connections
  * - Automatic migration execution on startup
  * - Version tracking for schema changes
  * - Connection health testing
- * 
+ *
  * Usage:
  * ```typescript
  * import { initializeDatabase } from './core/database';
- * 
+ *
  * // Initialize on startup
  * await initializeDatabase({
  *   host: 'localhost',
@@ -84,23 +84,23 @@ try {
  * This should be called on application startup
  */
 export async function initializeDatabase(
-  config: DatabaseConfig
+  config: DatabaseConfig,
 ): Promise<void> {
   try {
     logger.info('Initializing database');
-    
+
     // Create connection pool
     createPool(config);
-    
+
     // Test connectivity
     const connected = await testConnection();
     if (!connected) {
       throw new Error('Failed to connect to database');
     }
-    
+
     // Run migrations automatically on startup (per requirements)
     await runMigrations();
-    
+
     logger.info('Database initialized successfully');
   } catch (error) {
     logger.error('Failed to initialize database', { error });

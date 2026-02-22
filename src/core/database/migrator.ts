@@ -1,4 +1,4 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -81,7 +81,7 @@ const MIGRATIONS: Migration[] = [
  */
 async function ensureMigrationsTable(): Promise<void> {
   const pool = getPool();
-  
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version INTEGER PRIMARY KEY,
@@ -89,7 +89,7 @@ async function ensureMigrationsTable(): Promise<void> {
       applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  
+
   logger.debug('Ensured schema_migrations table exists');
 }
 
@@ -98,12 +98,12 @@ async function ensureMigrationsTable(): Promise<void> {
  */
 async function getCurrentVersion(): Promise<number> {
   const pool = getPool();
-  
+
   try {
     const result = await pool.query(
-      'SELECT MAX(version) as version FROM schema_migrations'
+      'SELECT MAX(version) as version FROM schema_migrations',
     );
-    
+
     const version = result.rows[0]?.version || 0;
     logger.debug('Current database version', { version });
     return version;
@@ -119,24 +119,24 @@ async function getCurrentVersion(): Promise<number> {
 async function applyMigration(migration: Migration): Promise<void> {
   const pool = getPool();
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     logger.info('Applying migration', {
       version: migration.version,
       name: migration.name,
     });
-    
+
     // Read and execute migration SQL
     const sql = await readFile(migration.upPath, 'utf-8');
     await client.query(sql);
-    
+
     logger.info('Migration applied successfully', {
       version: migration.version,
       name: migration.name,
     });
-    
+
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -157,24 +157,24 @@ async function applyMigration(migration: Migration): Promise<void> {
 async function rollbackMigration(migration: Migration): Promise<void> {
   const pool = getPool();
   const client = await pool.connect();
-  
+
   try {
     await client.query('BEGIN');
-    
+
     logger.info('Rolling back migration', {
       version: migration.version,
       name: migration.name,
     });
-    
+
     // Read and execute rollback SQL
     const sql = await readFile(migration.downPath, 'utf-8');
     await client.query(sql);
-    
+
     logger.info('Migration rolled back successfully', {
       version: migration.version,
       name: migration.name,
     });
-    
+
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -196,29 +196,29 @@ async function rollbackMigration(migration: Migration): Promise<void> {
 export async function runMigrations(): Promise<void> {
   try {
     logger.info('Starting database migrations');
-    
+
     await ensureMigrationsTable();
     const currentVersion = await getCurrentVersion();
-    
+
     const pendingMigrations = MIGRATIONS.filter(
-      (m) => m.version > currentVersion
+      (m) => m.version > currentVersion,
     );
-    
+
     if (pendingMigrations.length === 0) {
       logger.info('Database is up to date', { version: currentVersion });
       return;
     }
-    
+
     logger.info('Found pending migrations', {
       count: pendingMigrations.length,
       currentVersion,
       targetVersion: MIGRATIONS[MIGRATIONS.length - 1].version,
     });
-    
+
     for (const migration of pendingMigrations) {
       await applyMigration(migration);
     }
-    
+
     const newVersion = await getCurrentVersion();
     logger.info('All migrations completed successfully', {
       oldVersion: currentVersion,
@@ -237,10 +237,10 @@ export async function runMigrations(): Promise<void> {
 export async function rollbackTo(targetVersion: number): Promise<void> {
   try {
     logger.info('Starting migration rollback', { targetVersion });
-    
+
     await ensureMigrationsTable();
     const currentVersion = await getCurrentVersion();
-    
+
     if (targetVersion >= currentVersion) {
       logger.warn('Target version is not lower than current version', {
         currentVersion,
@@ -248,21 +248,21 @@ export async function rollbackTo(targetVersion: number): Promise<void> {
       });
       return;
     }
-    
+
     const migrationsToRollback = MIGRATIONS.filter(
-      (m) => m.version > targetVersion && m.version <= currentVersion
+      (m) => m.version > targetVersion && m.version <= currentVersion,
     ).reverse(); // Rollback in reverse order
-    
+
     logger.info('Rolling back migrations', {
       count: migrationsToRollback.length,
       currentVersion,
       targetVersion,
     });
-    
+
     for (const migration of migrationsToRollback) {
       await rollbackMigration(migration);
     }
-    
+
     const newVersion = await getCurrentVersion();
     logger.info('Rollback completed successfully', {
       oldVersion: currentVersion,
@@ -287,12 +287,12 @@ export async function getMigrationStatus(): Promise<{
   const currentVersion = await getCurrentVersion();
   const latestVersion = MIGRATIONS[MIGRATIONS.length - 1]?.version || 0;
   const pendingMigrations = MIGRATIONS.filter(
-    (m) => m.version > currentVersion
+    (m) => m.version > currentVersion,
   ).length;
   const appliedMigrations = MIGRATIONS.filter(
-    (m) => m.version <= currentVersion
+    (m) => m.version <= currentVersion,
   );
-  
+
   return {
     currentVersion,
     latestVersion,
