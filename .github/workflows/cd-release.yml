@@ -3,7 +3,7 @@ name: CD - Deploy to Production
 on:
   push:
     branches:
-      - release
+      - Release_Branch
   workflow_dispatch:
     inputs:
       environment:
@@ -33,7 +33,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to Production
+    name: Deploy to VPS
     runs-on: ubuntu-latest
     environment: production
     
@@ -59,114 +59,137 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Build project
-        run: npm run build
-      
-      - name: Run production tests
-        run: npm run test:unit
-        env:
-          NODE_ENV: production
-      
-      - name: Create deployment package
+      - name: Setup deployment scripts
         run: |
-          mkdir -p deployment
-          cp -r dist deployment/
-          cp package.json deployment/
-          cp package-lock.json deployment/
-          cp -r src/core/database/schema deployment/
-          cd deployment
-          tar -czf ../deployment.tar.gz .
+          chmod +x deployment/scripts/*.sh
+          echo "Deployment scripts ready"
       
-      - name: Upload deployment artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: production-deployment
-          path: deployment.tar.gz
-          retention-days: 30
-      
-      # Add your deployment steps here based on your hosting provider
-      # Examples below for common platforms:
-      
-      # For Railway:
-      # - name: Deploy to Railway
-      #   uses: bervProject/railway-deploy@main
-      #   with:
-      #     railway_token: ${{ secrets.RAILWAY_TOKEN }}
-      #     service: tzbot-discord-bot
-      
-      # For Heroku:
-      # - name: Deploy to Heroku
-      #   uses: akhileshns/heroku-deploy@v3.13.15
-      #   with:
-      #     heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
-      #     heroku_app_name: tzbot-discord-bot
-      #     heroku_email: ${{ secrets.HEROKU_EMAIL }}
-      
-      # For AWS EC2/ECS:
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #     aws-region: us-east-1
-      
-      # - name: Deploy to AWS
-      #   run: |
-      #     # Your AWS deployment commands here
-      
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: deployment.tar.gz
-          generate_release_notes: true
+      - name: Resolve VPS IP address
+        id: dns
+        run: |
+          IP=$(bash deployment/scripts/resolve-dns.sh "${{ secrets.VPS_HOSTNAME }}")
+          echo "vps_ip=$IP" >> $GITHUB_OUTPUT
+          echo "Resolved VPS IP: $IP"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VPS_HOSTNAME: ${{ secrets.VPS_HOSTNAME }}
       
-      - name: Notify deployment success
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ steps.dns.outputs.vps_ip }} >> ~/.ssh/known_hosts
+      
+      - name: Send deployment start notification
+        run: |
+          bash deployment/scripts/notify.sh start \
+            "Deploying commit ${{ github.sha }} to production" \
+            "Branch: ${{ github.ref_name }}\nTriggered by: ${{ github.actor }}"
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        continue-on-error: true
+      
+      - name: Record deployment start
+        run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          echo "DEPLOY_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
+            "bash -s" < deployment/scripts/deployment-state.sh record-start \
+            "${{ github.sha }}" "$TIMESTAMP" "${{ github.actor }}"
+        env:
+          APP_NAME: tzbot
+          DEPLOY_BASE: /var/www/tzbot
+      
+      - name: Execute deployment on VPS
+        id: deploy
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
+            "export APP_NAME=tzbot && \
+             export DEPLOY_BASE=/var/www/tzbot && \
+             export REPO_URL=${{ github.server_url }}/${{ github.repository }}.git && \
+             export BRANCH=Release_Branch && \
+             bash /var/www/tzbot/deployment/scripts/deploy.sh ${{ github.sha }} ${{ env.DEPLOY_TIMESTAMP }}"
+      
+      - name: Restart application service
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
+            "export SERVICE_NAME=tzbot && \
+             export SERVICE_TYPE=pm2 && \
+             bash /var/www/tzbot/deployment/scripts/service-manager.sh restart"
+      
+      - name: Run health checks
+        id: health
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
+            "export SERVICE_NAME=tzbot && \
+             export SERVICE_TYPE=pm2 && \
+             bash /var/www/tzbot/deployment/scripts/health-check.sh"
+      
+      - name: Record deployment success
         if: success()
         run: |
-          echo "🚀 Deployment to production successful!"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
-          
-          if [ -n "${{ inputs.commit_sha }}" ]; then
-            echo ""
-            echo "Promoted from: ${{ inputs.source_branch }}"
-            echo "Original commit: ${{ inputs.commit_sha }}"
-            echo "Original author: ${{ inputs.commit_author }}"
-            echo "Promoted at: ${{ inputs.promoted_at }}"
-          fi
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
+            "bash -s" < deployment/scripts/deployment-state.sh record-complete \
+            "${{ github.sha }}" "success" "Deployment completed successfully"
+        env:
+          APP_NAME: tzbot
+          DEPLOY_BASE: /var/www/tzbot
       
-      - name: Notify deployment failure
+      - name: Send success notification
+        if: success()
+        run: |
+          bash deployment/scripts/notify.sh success \
+            "Deployment successful!" \
+            "Commit: ${{ github.sha }}\nBranch: ${{ github.ref_name }}\nDeployed by: ${{ github.actor }}"
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        continue-on-error: true
+      
+      - name: Rollback on failure
+        if: failure() && steps.deploy.outcome == 'success'
+        run: |
+          echo "Health checks failed, initiating rollback..."
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
+            "export APP_NAME=tzbot && \
+             export DEPLOY_BASE=/var/www/tzbot && \
+             export SERVICE_NAME=tzbot && \
+             bash /var/www/tzbot/deployment/scripts/rollback.sh previous"
+      
+      - name: Record deployment failure
         if: failure()
         run: |
-          echo "❌ Deployment to production failed!"
-          echo "Please check the logs for details"
-
-  post-deploy-verification:
-    name: Post-Deployment Verification
-    runs-on: ubuntu-latest
-    needs: deploy
-    
-    steps:
-      - name: Wait for deployment
-        run: sleep 30
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
+            "bash -s" < deployment/scripts/deployment-state.sh record-complete \
+            "${{ github.sha }}" "failed" "Deployment failed - see logs for details"
+        env:
+          APP_NAME: tzbot
+          DEPLOY_BASE: /var/www/tzbot
+        continue-on-error: true
       
-      - name: Health check
+      - name: Send failure notification
+        if: failure()
         run: |
-          echo "Running post-deployment health checks..."
-          # Add your health check endpoints here
-          # curl -f https://your-bot-api.com/health || exit 1
+          bash deployment/scripts/notify.sh failure \
+            "Deployment failed!" \
+            "Commit: ${{ github.sha }}\nBranch: ${{ github.ref_name }}\nCheck logs for details"
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        continue-on-error: true
       
-      - name: Verify deployment
-        run: echo "✅ Deployment verified successfully"
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
