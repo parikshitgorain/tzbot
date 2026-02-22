@@ -178,6 +178,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality-gate
     if: github.ref == 'refs/heads/Development' && github.event_name == 'push' && needs.quality-gate.outputs.tests-passed == 'true'
+    continue-on-error: true
     
     steps:
       - name: Checkout code
@@ -197,36 +198,17 @@ jobs:
       
       - name: Trigger promotion workflow
         uses: actions/github-script@v7
-        continue-on-error: true
         with:
           github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             try {
-              // First, verify the workflow exists
-              const workflows = await github.rest.actions.listRepoWorkflows({
-                owner: context.repo.owner,
-                repo: context.repo.repo
-              });
+              console.log('🚀 Attempting to trigger promotion workflow...');
+              console.log(`Repository: ${context.repo.owner}/${context.repo.repo}`);
+              console.log(`Commit SHA: ${context.sha}`);
+              console.log(`Commit Author: ${context.actor}`);
               
-              const promoteWorkflow = workflows.data.workflows.find(w => w.path === '.github/workflows/promote.yml');
-              
-              if (!promoteWorkflow) {
-                console.error('❌ promote.yml workflow not found in repository');
-                console.log('⚠️ Skipping automatic promotion - workflow not configured');
-                return;
-              }
-              
-              console.log(`Found workflow: ${promoteWorkflow.name} (ID: ${promoteWorkflow.id})`);
-              console.log(`Workflow state: ${promoteWorkflow.state}`);
-              
-              // Check if workflow has workflow_dispatch trigger
-              if (!promoteWorkflow.path.includes('promote.yml')) {
-                console.log('⚠️ Workflow path mismatch, skipping promotion');
-                return;
-              }
-              
-              // Trigger the workflow using the workflow filename (more reliable than ID)
-              await github.rest.actions.createWorkflowDispatch({
+              // Trigger the workflow directly without checking (GitHub API may be cached)
+              const response = await github.rest.actions.createWorkflowDispatch({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 workflow_id: 'promote.yml',
@@ -239,11 +221,35 @@ jobs:
                 }
               });
               
-              console.log('✅ Promotion workflow triggered successfully');
+              console.log('✅ Promotion workflow triggered successfully!');
+              console.log('📋 The Branch Promotion workflow will start shortly');
+              console.log('🔗 Check the Actions tab to monitor progress');
+              
             } catch (error) {
-              console.error('⚠️ Failed to trigger promotion workflow:', error.message);
-              console.log('This is not a critical error - CI passed successfully');
-              console.log('You can manually trigger the promotion workflow from GitHub Actions UI');
+              console.error('❌ Failed to trigger promotion workflow');
+              console.error(`Error: ${error.message}`);
+              
+              // Check if it's a permissions issue
+              if (error.message.includes('Resource not accessible') || error.message.includes('Not Found')) {
+                console.log('');
+                console.log('⚠️ This appears to be a permissions issue.');
+                console.log('');
+                console.log('Possible solutions:');
+                console.log('1. Verify PAT_TOKEN secret is set with "repo" and "workflow" scopes');
+                console.log('2. Enable "Read and write permissions" in Settings → Actions → General');
+                console.log('3. Enable "Allow GitHub Actions to create and approve pull requests"');
+              } else if (error.message.includes('workflow_dispatch')) {
+                console.log('');
+                console.log('⚠️ GitHub API may be cached. The workflow file has workflow_dispatch trigger.');
+                console.log('Wait a few minutes and try pushing another commit, or manually trigger the workflow.');
+              }
+              
+              console.log('');
+              console.log('✅ CI Pipeline completed successfully - all tests passed!');
+              console.log('📝 You can manually trigger promotion from: Actions → Branch Promotion → Run workflow');
+              
+              // Don't fail the CI pipeline
+              throw error;
             }
       
       - name: Promotion summary
