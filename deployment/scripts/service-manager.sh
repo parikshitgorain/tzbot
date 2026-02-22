@@ -10,11 +10,19 @@
 
 set -e
 
+# Load retry wrapper
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/retry-wrapper.sh"
+
 # Configuration
 SERVICE_NAME="${SERVICE_NAME:-tzbot}"
 SERVICE_TYPE="${SERVICE_TYPE:-pm2}" # pm2 or systemd
 DEPLOY_BASE="${DEPLOY_BASE:-/var/www/tzbot}"
 STARTUP_DELAY="${STARTUP_DELAY:-5}"
+
+# Retry configuration
+export MAX_RETRIES=3
+export INITIAL_DELAY=2
 
 # Colors for output
 RED='\033[0;31m'
@@ -84,18 +92,18 @@ pm2_restart() {
     # Check if process exists
     if pm2 describe "$SERVICE_NAME" > /dev/null 2>&1; then
         log_info "Process exists, restarting..."
-        pm2 restart "$SERVICE_NAME"
+        retry_command "Restart PM2 process" "pm2 restart '$SERVICE_NAME'"
     else
         log_warn "Process not found, starting fresh..."
         if [ -f "$DEPLOY_BASE/ecosystem.config.js" ]; then
-            pm2 start "$DEPLOY_BASE/ecosystem.config.js"
+            retry_command "Start PM2 from ecosystem" "pm2 start '$DEPLOY_BASE/ecosystem.config.js'"
         elif [ -f "ecosystem.config.js" ]; then
-            pm2 start ecosystem.config.js
+            retry_command "Start PM2 from local ecosystem" "pm2 start ecosystem.config.js"
         else
             log_info "Starting from dist/index.js..."
-            pm2 start dist/index.js --name "$SERVICE_NAME"
+            retry_command "Start PM2 from index" "pm2 start dist/index.js --name '$SERVICE_NAME'"
         fi
-        pm2 save
+        retry_command "Save PM2 config" "pm2 save"
     fi
     
     log_info "Waiting ${STARTUP_DELAY}s for service initialization..."
