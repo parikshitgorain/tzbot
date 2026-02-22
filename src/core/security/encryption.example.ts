@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Encryption Service Usage Examples
  * 

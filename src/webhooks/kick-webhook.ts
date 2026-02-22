@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @file kick-webhook.ts
  * @description Webhook receiver for Kick.com events with signature verification

@@ -118,6 +118,8 @@ export enum EventType {
   NEW_VIP = 'new_vip',
   RAID = 'raid',
   HOST = 'host',
+  SPAM_DETECTED = 'spam_detected',
+  MALICIOUS_LINK_DETECTED = 'malicious_link_detected',
 }
 
 /**

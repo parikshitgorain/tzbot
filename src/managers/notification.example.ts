@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * @file notification.example.ts
  * @description Example usage of NotificationManager

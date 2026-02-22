@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * @file example.ts
  * @description Example usage of the Pusher client for Kick chat monitoring

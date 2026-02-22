@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @file client.ts
  * @description Pusher client for Kick chat monitoring

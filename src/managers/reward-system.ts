@@ -1,5 +1,6 @@
 import type { Client, TextChannel, GuildMember } from 'discord.js';
 import type { ChatActivityRepository, RewardRecord } from '../core/database/repositories/ChatActivityRepository.js';
+import { logger, logError } from '../core/logger/logger.js';
 
 /**
  * RewardSystem handles distribution of rewards to chat rain winners
@@ -167,7 +168,7 @@ export class RewardSystem {
             await currentMember.roles.remove(currentRole);
           }
         } catch (error) {
-          console.error(`Failed to remove temporary role from ${member.id}:`, error);
+          logError(`Failed to remove temporary role from ${member.id}`, error as Error);
         }
       }, reward.durationMs);
     }
@@ -189,7 +190,7 @@ export class RewardSystem {
     // 3. Trigger a webhook to external system
     
     // For now, we just log it
-    console.log(`Would award ${reward.value} currency to ${member.id}`);
+    logger.info(`Would award ${reward.value} currency to ${member.id}`);
     
     // You could integrate with popular economy bots like:
     // - UnbelievaBoat
@@ -211,7 +212,7 @@ export class RewardSystem {
     // 2. Send webhook to external system
     // 3. Execute custom logic
     
-    console.log(`Would execute custom reward for ${member.id}:`, reward.value);
+    logger.info(`Would execute custom reward for ${member.id}:`, { value: reward.value });
   }
 
   /**
@@ -236,7 +237,7 @@ export class RewardSystem {
       
       await channel.send(message);
     } catch (error) {
-      console.error('Failed to announce winners:', error);
+      logError('Failed to announce winners', error as Error);
       throw error;
     }
   }

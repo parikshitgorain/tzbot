@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * @file announcement-relay.example.ts
  * @description Example usage of the announcement relay manager

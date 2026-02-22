@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 import pg from 'pg';
 
 const { Pool } = pg;

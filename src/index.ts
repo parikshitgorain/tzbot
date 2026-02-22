@@ -43,6 +43,7 @@ import { createGiveawayCommands } from '@/commands/giveaway.commands.js';
 import { createAnnouncementCommands } from '@/commands/announcement.commands.js';
 import type { Message, ButtonInteraction } from 'discord.js';
 import type { NotificationEvent } from '@/types/models.js';
+import { EventType } from '@/types/models.js';
 
 /**
  * Batched spam notification data
@@ -109,7 +110,7 @@ class TZBotApplication {
    * Retries with delays: 1s, 2s, 4s, 8s, 16s...
    */
   private async deleteMessageWithRetry(
-    message: any,
+    message: Message,
     maxRetries: number = 5,
     initialDelayMs: number = 1000
   ): Promise<boolean> {
@@ -316,7 +317,7 @@ class TZBotApplication {
       try {
         const notificationEvent: NotificationEvent = {
           id: `spam-${notification.userId}-${notification.timestamp.getTime()}`,
-          type: 'SPAM_DETECTED' as any,
+          type: EventType.SPAM_DETECTED,
           channelId: notification.channelId,
           data: { userId: notification.userId, reason: notification.reason },
           timestamp: notification.timestamp,
@@ -720,6 +721,7 @@ class TZBotApplication {
         discordClient: this.discordClient.client,
         stateStore,
         logger,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         configManager: null as any, // Not used in current implementation
       }
     );
@@ -1107,11 +1109,12 @@ class TZBotApplication {
             }),
           };
           
+           
           const offenseManager = new OffenseManager(
             pool,
             offenseRepo,
             punishmentCalc,
-            customNotificationService as any
+            customNotificationService as any // eslint-disable-line @typescript-eslint/no-explicit-any
           );
 
           // Process offense and get punishment
@@ -1474,11 +1477,12 @@ class TZBotApplication {
             }),
           };
           
+           
           const offenseManager = new OffenseManager(
             pool,
             offenseRepo,
             punishmentCalc,
-            customNotificationService as any
+            customNotificationService as any // eslint-disable-line @typescript-eslint/no-explicit-any
           );
 
           // Process offense and get punishment
@@ -1534,7 +1538,7 @@ class TZBotApplication {
           // Notify moderators
           const notificationEvent: NotificationEvent = {
             id: `malicious-link-${message.author.id}-${Date.now()}`,
-            type: 'MALICIOUS_LINK_DETECTED' as any,
+            type: EventType.MALICIOUS_LINK_DETECTED,
             channelId: message.channel.id,
             data: { userId: message.author.id },
             timestamp: new Date(),

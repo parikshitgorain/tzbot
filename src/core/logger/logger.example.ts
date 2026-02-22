@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * @file logger.example.ts
  * @description Example usage of the comprehensive logging system
