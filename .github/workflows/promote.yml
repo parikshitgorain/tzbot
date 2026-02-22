@@ -72,10 +72,7 @@ jobs:
           
           # Requirement 2.1: Merge changes to Release_Branch
           # Requirement 2.2: Use --no-ff to preserve commit history
-          if git merge --no-ff ${{ inputs.source_branch }} -m "Merge ${{ inputs.source_branch }} into ${{ inputs.target_branch }} - Auto-promotion after successful CI
-
-Promoted commit: ${{ inputs.commit_sha }}
-Original author: ${{ inputs.commit_author }}"; then
+          if git merge --no-ff ${{ inputs.source_branch }} -m "Merge ${{ inputs.source_branch }} into ${{ inputs.target_branch }} - Auto-promotion after successful CI" -m "Promoted commit: ${{ inputs.commit_sha }}" -m "Original author: ${{ inputs.commit_author }}"; then
             echo "✅ Merge successful"
             echo "merge_status=success" >> $GITHUB_OUTPUT
           else
