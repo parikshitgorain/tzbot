@@ -191,6 +191,13 @@ jobs:
           node-version: '20'
           cache: 'npm'
       
+      - name: Configure Git for semantic-release
+        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+      
       - name: Install semantic-release dependencies
         if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
         run: |
@@ -203,13 +210,27 @@ jobs:
         id: semantic_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
         run: |
           echo "🔢 Running semantic-release to auto-bump version..."
-          npx semantic-release
+          echo ""
+          echo "Current version: $(node -p "require('./package.json').version")"
+          echo "Branch: $(git branch --show-current)"
+          echo "Last 5 commits:"
+          git log --oneline -5
+          echo ""
+          
+          # Run semantic-release with verbose output
+          npx semantic-release --debug 2>&1 | tee semantic-release.log || true
+          
           # Get the new version
           NEW_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "✅ Version updated to $NEW_VERSION"
+          echo ""
+          echo "✅ Version: $NEW_VERSION"
       
       - name: Send versioning success notification
         if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
