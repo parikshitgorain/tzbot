@@ -77,8 +77,18 @@ jobs:
           
           # Requirement 2.1: Merge changes to Release_Branch
           # Requirement 2.2: Use --no-ff to preserve commit history
-          if git merge --no-ff ${{ inputs.source_branch }} -m "Merge ${{ inputs.source_branch }} into ${{ inputs.target_branch }} - Auto-promotion after successful CI" -m "Promoted commit: ${{ inputs.commit_sha }}" -m "Original author: ${{ inputs.commit_author }}"; then
-            echo "✅ Merge successful"
+          
+          # Strategy: Merge with ours strategy for workflow files to avoid permission issues
+          if git merge --no-ff --no-commit ${{ inputs.source_branch }}; then
+            echo "✅ Merge successful (no conflicts)"
+            
+            # Keep release branch version of workflow files to avoid GitHub App permission issues
+            if [ -d ".github/workflows" ]; then
+              git checkout HEAD -- .github/workflows/ || true
+              echo "✅ Preserved release branch workflow files"
+            fi
+            
+            git commit -m "Merge ${{ inputs.source_branch }} into ${{ inputs.target_branch }} - Auto-promotion after successful CI" -m "Promoted commit: ${{ inputs.commit_sha }}" -m "Original author: ${{ inputs.commit_author }}"
             echo "merge_status=success" >> $GITHUB_OUTPUT
           else
             echo "⚠️ Merge conflicts detected - attempting auto-resolution"
@@ -90,8 +100,14 @@ jobs:
             git rm -f scripts/clear-commands.ts scripts/register-commands-to-guild.ts scripts/setup-test-db.ts || true
             find . -name "*.example.ts" -o -name "*.example.js" 2>/dev/null | xargs git rm -f || true
             
-            # For production files with conflicts, prefer Development version
-            git checkout --theirs -- src/ deployment/ docs/ .github/ package.json package-lock.json tsconfig.json README.md .gitignore .env.example || true
+            # For production files with conflicts, prefer Development version EXCEPT workflow files
+            git checkout --theirs -- src/ deployment/ docs/ package.json package-lock.json tsconfig.json README.md .gitignore .env.example || true
+            
+            # Keep release branch version of workflow files to avoid GitHub App permission issues
+            if [ -d ".github/workflows" ]; then
+              git checkout HEAD -- .github/workflows/ || true
+              echo "✅ Preserved release branch workflow files"
+            fi
             
             # Add resolved files
             git add -A
