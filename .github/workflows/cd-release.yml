@@ -234,8 +234,8 @@ jobs:
           DATABASE_URL=${{ secrets.DATABASE_URL }}
           
           # Redis Configuration (optional)
-          REDIS_URL=${{ secrets.REDIS_URL }}
-          
+          REDIS_URL=${REDIS_URL:-redis://localhost:6379}
+          REDIS_PASSWORD=
           # Notification Channels
           NOTIFICATION_CHANNEL_ID=${{ secrets.NOTIFICATION_CHANNEL_ID }}
           FALLBACK_CHANNEL_ID=${{ secrets.FALLBACK_CHANNEL_ID }}
