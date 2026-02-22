@@ -47,6 +47,7 @@ describe('GiveawayManager', () => {
       getEntries: vi.fn().mockResolvedValue([]),
       hasEntry: vi.fn().mockResolvedValue(false),
       updateStatus: vi.fn().mockResolvedValue(undefined),
+      updateWinners: vi.fn().mockResolvedValue(undefined),
     } as unknown as GiveawayRepository;
 
     giveawayManager = new GiveawayManager(mockDiscordClient, mockGiveawayRepository);

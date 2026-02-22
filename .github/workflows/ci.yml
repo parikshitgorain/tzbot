@@ -201,10 +201,26 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             try {
-              const result = await github.rest.actions.createWorkflowDispatch({
+              // First, verify the workflow exists
+              const workflows = await github.rest.actions.listRepoWorkflows({
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              });
+              
+              const promoteWorkflow = workflows.data.workflows.find(w => w.path === '.github/workflows/promote.yml');
+              
+              if (!promoteWorkflow) {
+                console.error('❌ promote.yml workflow not found in repository');
+                throw new Error('Workflow file not found');
+              }
+              
+              console.log(`Found workflow: ${promoteWorkflow.name} (ID: ${promoteWorkflow.id})`);
+              
+              // Trigger the workflow using the workflow ID
+              await github.rest.actions.createWorkflowDispatch({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                workflow_id: 'promote.yml',
+                workflow_id: promoteWorkflow.id,
                 ref: 'Development',
                 inputs: {
                   source_branch: 'Development',
@@ -213,9 +229,11 @@ jobs:
                   commit_author: context.actor
                 }
               });
+              
               console.log('✅ Promotion workflow triggered successfully');
             } catch (error) {
               console.error('Failed to trigger promotion workflow:', error.message);
+              console.error('Error details:', error);
               throw error;
             }
       
