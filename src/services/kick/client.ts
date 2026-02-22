@@ -2,10 +2,10 @@
  * @file client.ts
  * @description Kick API client with OAuth 2.0 authentication
  * @module services/kick
- * 
+ *
  * This client handles OAuth 2.0 authentication, token management,
  * and API requests with automatic retry logic and exponential backoff.
- * 
+ *
  * Requirements: 2.1-2.4, 8.1-8.7, 14.6
  */
 
@@ -38,7 +38,7 @@ export class KickAPIClient {
   constructor(config: KickAPIConfig) {
     this.config = config;
     this.baseUrl = config.baseUrl || 'https://kick.com/api/v2';
-    
+
     logger.info('Kick API client initialized', {
       baseUrl: this.baseUrl,
       clientId: config.clientId,
@@ -62,7 +62,7 @@ export class KickAPIClient {
 
     const authUrl = `https://kick.com/oauth/authorize?${params.toString()}`;
     logger.debug('Generated OAuth authorization URL', { authUrl });
-    
+
     return authUrl;
   }
 
@@ -169,7 +169,9 @@ export class KickAPIClient {
    * Check if access token is expired or about to expire
    */
   private isTokenExpired(): boolean {
-    if (!this.tokens) return true;
+    if (!this.tokens) {
+      return true;
+    }
 
     // Consider token expired if it expires within 5 minutes
     const bufferTime = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -194,7 +196,7 @@ export class KickAPIClient {
    */
   private async makeRequest<T>(
     endpoint: string,
-    options: RequestOptions = {}
+    options: RequestOptions = {},
   ): Promise<T> {
     await this.ensureValidToken();
 
@@ -226,7 +228,7 @@ export class KickAPIClient {
         if (response.status === 401) {
           logger.warn('Received 401, attempting token refresh');
           await this.refreshAccessToken();
-          
+
           // Retry the request with new token
           if (attempt < maxRetries) {
             continue;
@@ -238,14 +240,14 @@ export class KickAPIClient {
             error: 'Unknown error',
             status: response.status,
           })) as KickAPIError;
-          
+
           throw new Error(
-            `API request failed: ${error.error} (status: ${response.status})`
+            `API request failed: ${error.error} (status: ${response.status})`,
           );
         }
 
         const data = await response.json() as T;
-        
+
         logger.debug('API request successful', {
           url,
           attempt: attempt + 1,
@@ -254,7 +256,7 @@ export class KickAPIClient {
         return data;
       } catch (error) {
         lastError = error as Error;
-        
+
         logger.warn('API request failed', {
           url,
           attempt: attempt + 1,
@@ -269,7 +271,7 @@ export class KickAPIClient {
 
         // Calculate exponential backoff delay
         const delay = this.calculateBackoffDelay(attempt);
-        
+
         logger.debug('Retrying after delay', {
           delayMs: delay,
           nextAttempt: attempt + 2,
@@ -296,7 +298,7 @@ export class KickAPIClient {
   private calculateBackoffDelay(attempt: number): number {
     const delay = Math.min(
       this.retryConfig.initialDelay * Math.pow(this.retryConfig.backoffMultiplier, attempt),
-      this.retryConfig.maxDelay
+      this.retryConfig.maxDelay,
     );
 
     return delay;
@@ -323,10 +325,10 @@ export class KickAPIClient {
    */
   async getSubscribers(channelId: number): Promise<KickSubscriber[]> {
     logger.info('Fetching channel subscribers', { channelId });
-    
+
     try {
       return await this.makeRequest<KickSubscriber[]>(
-        `/channels/${channelId}/subscribers`
+        `/channels/${channelId}/subscribers`,
       );
     } catch (error) {
       logger.warn('Subscribers endpoint not available, returning empty array', {
@@ -343,7 +345,7 @@ export class KickAPIClient {
    */
   async getVIPs(channelId: number): Promise<KickVIP[]> {
     logger.info('Fetching channel VIPs', { channelId });
-    
+
     try {
       return await this.makeRequest<KickVIP[]>(`/channels/${channelId}/vips`);
     } catch (error) {
@@ -368,14 +370,14 @@ export class KickAPIClient {
    */
   async getLiveEvents(channelId: number, since: Date): Promise<KickEvent[]> {
     logger.info('Fetching live events', { channelId, since });
-    
+
     const params = new URLSearchParams({
       since: since.toISOString(),
     });
 
     try {
       return await this.makeRequest<KickEvent[]>(
-        `/channels/${channelId}/events?${params.toString()}`
+        `/channels/${channelId}/events?${params.toString()}`,
       );
     } catch (error) {
       logger.warn('Events endpoint not available, returning empty array', {

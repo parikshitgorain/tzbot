@@ -15,7 +15,9 @@ dotenv.config();
  * Parse comma-separated string into array
  */
 function parseArray(value: string | undefined): string[] {
-  if (!value) return [];
+  if (!value) {
+    return [];
+  }
   return value.split(',').map((item) => item.trim()).filter(Boolean);
 }
 
@@ -23,7 +25,9 @@ function parseArray(value: string | undefined): string[] {
  * Parse boolean from string
  */
 function parseBoolean(value: string | undefined, defaultValue: boolean): boolean {
-  if (!value) return defaultValue;
+  if (!value) {
+    return defaultValue;
+  }
   return value.toLowerCase() === 'true';
 }
 
@@ -31,7 +35,9 @@ function parseBoolean(value: string | undefined, defaultValue: boolean): boolean
  * Parse number from string
  */
 function parseNumber(value: string | undefined, defaultValue: number): number {
-  if (!value) return defaultValue;
+  if (!value) {
+    return defaultValue;
+  }
   const parsed = parseInt(value, 10);
   return isNaN(parsed) ? defaultValue : parsed;
 }

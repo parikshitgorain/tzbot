@@ -29,7 +29,7 @@ interface RequestWithRawBody extends Request {
 
 /**
  * Webhook server for receiving Kick events
- * 
+ *
  * Requirements:
  * - 8.1: Receive webhook callbacks as primary mechanism
  * - Implement HTTPS setup (via reverse proxy recommended)
@@ -79,7 +79,7 @@ export class WebhookServer {
           // Store raw body for signature verification
           req.rawBody = buf.toString('utf8');
         },
-      })
+      }),
     );
 
     // Request logging middleware
@@ -151,7 +151,7 @@ export class WebhookServer {
           const rawBody = req.rawBody || JSON.stringify(req.body);
           const verification = this.webhookHandler.verifySignature(
             rawBody,
-            signature
+            signature,
           );
 
           if (!verification.valid) {
@@ -205,7 +205,7 @@ export class WebhookServer {
             message: 'Failed to process webhook',
           });
         }
-      }
+      },
     );
 
     // 404 handler
@@ -237,7 +237,7 @@ export class WebhookServer {
           error: 'Internal server error',
           message: err.message,
         });
-      }
+      },
     );
   }
 
@@ -258,7 +258,7 @@ export class WebhookServer {
               url: `http://${this.config.host}:${this.config.port}${this.config.webhookPath}`,
             });
             resolve();
-          }
+          },
         );
 
         this.server.on('error', (error: Error) => {
@@ -302,7 +302,7 @@ export class WebhookServer {
     requestCount: number;
     errorCount: number;
     isRunning: boolean;
-  } {
+    } {
     return {
       requestCount: this.requestCount,
       errorCount: this.errorCount,

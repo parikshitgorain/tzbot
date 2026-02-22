@@ -53,7 +53,7 @@ export interface KickWebhookHandlerConfig {
 
 /**
  * Kick webhook handler with signature verification
- * 
+ *
  * Requirements:
  * - 8.1: Use webhooks as primary mechanism for receiving Kick events
  * - 8.2: Disable polling while webhooks are functioning
@@ -81,7 +81,7 @@ export class KickWebhookHandler {
 
   /**
    * Verify webhook signature using HMAC-SHA256
-   * 
+   *
    * @param payload - Raw request body as string
    * @param signature - Signature from x-kick-signature header
    * @returns Verification result
@@ -142,7 +142,7 @@ export class KickWebhookHandler {
 
   /**
    * Validate webhook payload structure
-   * 
+   *
    * @param payload - Parsed webhook payload
    * @returns True if payload is valid
    */
@@ -189,7 +189,7 @@ export class KickWebhookHandler {
 
   /**
    * Handle incoming webhook event
-   * 
+   *
    * @param payload - Validated webhook payload
    */
   async handleWebhook(payload: KickWebhookPayload): Promise<void> {
@@ -209,7 +209,7 @@ export class KickWebhookHandler {
       // Send notification
       await this.notificationManager.sendNotification(
         notificationEvent,
-        embedData
+        embedData,
       );
 
       // Record successful webhook
@@ -238,7 +238,7 @@ export class KickWebhookHandler {
    * Convert Kick webhook payload to NotificationEvent
    */
   private convertToNotificationEvent(
-    payload: KickWebhookPayload
+    payload: KickWebhookPayload,
   ): NotificationEvent {
     return {
       id: uuidv4(),
@@ -413,7 +413,7 @@ export class KickWebhookHandler {
     failureCount: number;
     lastSuccess: Date | null;
     shouldFallback: boolean;
-  } {
+    } {
     return {
       failureCount: this.webhookFailureCount,
       lastSuccess: this.lastWebhookSuccess,

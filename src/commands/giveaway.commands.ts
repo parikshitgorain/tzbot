@@ -20,7 +20,7 @@ import { logger, logError } from '@/core/logger/logger.js';
  */
 export function createGiveawayCommands(
   _client: IDiscordClient,
-  giveawayManager: GiveawayManager
+  giveawayManager: GiveawayManager,
 ): CommandDefinition[] {
   return [
     createGiveawayCommand(_client, giveawayManager),
@@ -32,7 +32,7 @@ export function createGiveawayCommands(
  */
 function createGiveawayCommand(
   _client: IDiscordClient,
-  giveawayManager: GiveawayManager
+  giveawayManager: GiveawayManager,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('giveaway')
@@ -47,14 +47,14 @@ function createGiveawayCommand(
             .setName('title')
             .setDescription('Title of the giveaway')
             .setRequired(true)
-            .setMaxLength(256)
+            .setMaxLength(256),
         )
         .addStringOption((option) =>
           option
             .setName('description')
             .setDescription('Description of the giveaway')
             .setRequired(true)
-            .setMaxLength(1024)
+            .setMaxLength(1024),
         )
         .addIntegerOption((option) =>
           option
@@ -62,7 +62,7 @@ function createGiveawayCommand(
             .setDescription('Duration in minutes (1-10080 = 7 days max)')
             .setRequired(true)
             .setMinValue(1)
-            .setMaxValue(10080)
+            .setMaxValue(10080),
         )
         .addIntegerOption((option) =>
           option
@@ -70,39 +70,39 @@ function createGiveawayCommand(
             .setDescription('Number of winners (1-10)')
             .setRequired(true)
             .setMinValue(1)
-            .setMaxValue(10)
+            .setMaxValue(10),
         )
         .addChannelOption((option) =>
           option
             .setName('channel')
             .setDescription('Channel to post the giveaway (defaults to current channel)')
-            .setRequired(false)
+            .setRequired(false),
         )
         .addStringOption((option) =>
           option
             .setName('condition')
             .setDescription('Optional condition/requirement for winners (e.g., "DM me your email")')
             .setRequired(false)
-            .setMaxLength(512)
+            .setMaxLength(512),
         )
         .addRoleOption((option) =>
           option
             .setName('role1')
             .setDescription('Required role 1 (optional - leave empty for no role requirement)')
-            .setRequired(false)
+            .setRequired(false),
         )
         .addRoleOption((option) =>
           option
             .setName('role2')
             .setDescription('Required role 2 (optional)')
-            .setRequired(false)
+            .setRequired(false),
         )
         .addRoleOption((option) =>
           option
             .setName('role3')
             .setDescription('Required role 3 (optional)')
-            .setRequired(false)
-        )
+            .setRequired(false),
+        ),
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -112,13 +112,13 @@ function createGiveawayCommand(
           option
             .setName('giveaway_id')
             .setDescription('ID of the giveaway to cancel')
-            .setRequired(true)
-        )
+            .setRequired(true),
+        ),
     )
     .addSubcommand((subcommand) =>
       subcommand
         .setName('list')
-        .setDescription('List all active giveaways')
+        .setDescription('List all active giveaways'),
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -128,14 +128,14 @@ function createGiveawayCommand(
           option
             .setName('giveaway_id')
             .setDescription('ID of the giveaway')
-            .setRequired(true)
+            .setRequired(true),
         )
         .addUserOption((option) =>
           option
             .setName('winner')
             .setDescription('The winner to reroll/replace')
-            .setRequired(true)
-        )
+            .setRequired(true),
+        ),
     )
     .addSubcommand((subcommand) =>
       subcommand
@@ -145,32 +145,32 @@ function createGiveawayCommand(
           option
             .setName('show')
             .setDescription('Show current configuration (leave empty to show)')
-            .setRequired(false)
+            .setRequired(false),
         )
         .addRoleOption((option) =>
           option
             .setName('add_role')
             .setDescription('Add a role that can use giveaway commands')
-            .setRequired(false)
+            .setRequired(false),
         )
         .addRoleOption((option) =>
           option
             .setName('remove_role')
             .setDescription('Remove a role from giveaway command permissions')
-            .setRequired(false)
+            .setRequired(false),
         )
         .addUserOption((option) =>
           option
             .setName('add_user')
             .setDescription('Add a user that can use giveaway commands')
-            .setRequired(false)
+            .setRequired(false),
         )
         .addUserOption((option) =>
           option
             .setName('remove_user')
             .setDescription('Remove a user from giveaway command permissions')
-            .setRequired(false)
-        )
+            .setRequired(false),
+        ),
     );
 
   const handler = async (interaction: ChatInputCommandInteraction) => {
@@ -204,7 +204,7 @@ function createGiveawayCommand(
  */
 async function handleCreateGiveaway(
   interaction: ChatInputCommandInteraction,
-  giveawayManager: GiveawayManager
+  giveawayManager: GiveawayManager,
 ): Promise<void> {
   const title = interaction.options.getString('title', true);
   const description = interaction.options.getString('description', true);
@@ -237,9 +237,15 @@ async function handleCreateGiveaway(
 
     // Collect required roles
     const requiredRoles: string[] = [];
-    if (role1) requiredRoles.push(role1.id);
-    if (role2) requiredRoles.push(role2.id);
-    if (role3) requiredRoles.push(role3.id);
+    if (role1) {
+      requiredRoles.push(role1.id);
+    }
+    if (role2) {
+      requiredRoles.push(role2.id);
+    }
+    if (role3) {
+      requiredRoles.push(role3.id);
+    }
 
     // Convert minutes to milliseconds
     const durationMs = durationMinutes * 60 * 1000;
@@ -268,19 +274,19 @@ async function handleCreateGiveaway(
     });
 
     // Build response
-    let response = `✅ Giveaway created successfully!\n\n`;
+    let response = '✅ Giveaway created successfully!\n\n';
     response += `**ID:** ${giveaway.id}\n`;
     response += `**Title:** ${title}\n`;
     response += `**Channel:** <#${channel.id}>\n`;
     response += `**Duration:** ${durationMinutes} minutes\n`;
     response += `**Winners:** ${winnerCount}\n`;
-    
+
     if (requiredRoles.length > 0) {
       response += `**Required Roles:** ${requiredRoles.map(id => `<@&${id}>`).join(', ')}\n`;
     } else {
-      response += `**Required Roles:** None (open to everyone)\n`;
+      response += '**Required Roles:** None (open to everyone)\n';
     }
-    
+
     response += `\nThe giveaway has been posted in <#${channel.id}>. Users can enter by clicking the button!`;
 
     await interaction.editReply({ content: response });
@@ -305,7 +311,7 @@ async function handleCreateGiveaway(
  */
 async function handleCancelGiveaway(
   interaction: ChatInputCommandInteraction,
-  giveawayManager: GiveawayManager
+  giveawayManager: GiveawayManager,
 ): Promise<void> {
   const giveawayId = interaction.options.getString('giveaway_id', true);
 
@@ -344,7 +350,7 @@ async function handleCancelGiveaway(
  */
 async function handleListGiveaways(
   interaction: ChatInputCommandInteraction,
-  giveawayManager: GiveawayManager
+  giveawayManager: GiveawayManager,
 ): Promise<void> {
   if (!interaction.guildId) {
     await interaction.reply({
@@ -377,7 +383,7 @@ async function handleListGiveaways(
     for (const giveaway of giveaways) {
       const endsAt = Math.floor(giveaway.endsAt.getTime() / 1000);
       const entryCount = giveaway.entries.length;
-      
+
       let fieldValue = `**Channel:** <#${giveaway.channelId}>\n`;
       fieldValue += `**Entries:** ${entryCount}\n`;
       fieldValue += `**Winners:** ${giveaway.winnerCount}\n`;
@@ -411,7 +417,7 @@ async function handleListGiveaways(
  */
 async function handleRerollWinner(
   interaction: ChatInputCommandInteraction,
-  giveawayManager: GiveawayManager
+  giveawayManager: GiveawayManager,
 ): Promise<void> {
   const giveawayId = interaction.options.getString('giveaway_id', true);
   const winner = interaction.options.getUser('winner', true);
@@ -438,7 +444,7 @@ async function handleRerollWinner(
     });
 
     await interaction.editReply({
-      content: `✅ Winner rerolled successfully! Check the giveaway channel for the announcement.`,
+      content: '✅ Winner rerolled successfully! Check the giveaway channel for the announcement.',
     });
   } catch (error) {
     logError('Failed to reroll winner', error as Error, {
@@ -461,7 +467,7 @@ async function handleRerollWinner(
  */
 async function handleConfigGiveaway(
   interaction: ChatInputCommandInteraction,
-  giveawayManager: GiveawayManager
+  giveawayManager: GiveawayManager,
 ): Promise<void> {
   if (!interaction.guildId) {
     await interaction.reply({
@@ -503,7 +509,7 @@ async function handleConfigGiveaway(
 
       embed.addFields(
         { name: 'Allowed Roles', value: roleList, inline: false },
-        { name: 'Allowed Users', value: userList, inline: false }
+        { name: 'Allowed Users', value: userList, inline: false },
       );
 
       await interaction.editReply({ embeds: [embed] });
@@ -536,7 +542,7 @@ async function handleConfigGiveaway(
     await configManager.updateGiveawayPermissions(
       interaction.guildId,
       config.allowedRoles,
-      config.allowedUsers
+      config.allowedUsers,
     );
 
     logger.info('Giveaway config updated', {

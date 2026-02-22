@@ -1,6 +1,6 @@
 /**
  * CI/CD Deployment System Types
- * 
+ *
  * Type definitions for the automated deployment system that manages
  * deployment records, configurations, and health checks.
  */
@@ -12,7 +12,7 @@ export type DeploymentStatus = 'in_progress' | 'success' | 'failed' | 'rolled_ba
 
 /**
  * Deployment record tracking a single deployment operation
- * 
+ *
  * @property id - Unique deployment identifier
  * @property commitHash - Git commit SHA being deployed
  * @property branch - Source branch (should be 'release')
@@ -39,7 +39,7 @@ export interface DeploymentRecord {
 
 /**
  * Health check result for a single verification
- * 
+ *
  * @property checkName - Name of the health check
  * @property passed - Whether the check passed
  * @property timestamp - When the check was performed
@@ -54,7 +54,7 @@ export interface HealthCheckResult {
 
 /**
  * VPS configuration for deployment operations
- * 
+ *
  * @property dynamicDnsHostname - Dynamic DNS hostname (e.g., "mybot.ddns.net")
  * @property sshUser - SSH username for authentication
  * @property sshPort - SSH port (default 22)
@@ -94,15 +94,15 @@ export interface VPSConfig {
 /**
  * Notification message types
  */
-export type NotificationType = 
-  | 'deployment_started' 
-  | 'deployment_success' 
-  | 'deployment_failed' 
+export type NotificationType =
+  | 'deployment_started'
+  | 'deployment_success'
+  | 'deployment_failed'
   | 'rollback_executed';
 
 /**
  * Notification message for deployment events
- * 
+ *
  * @property type - Type of notification event
  * @property deploymentId - Unique deployment identifier
  * @property commitHash - Git commit SHA
@@ -125,7 +125,7 @@ export interface NotificationMessage {
 
 /**
  * Deployment history containing multiple deployment records
- * 
+ *
  * @property deployments - Array of deployment records
  * @property currentDeployment - Currently active deployment record
  */
@@ -136,7 +136,7 @@ export interface DeploymentHistory {
 
 /**
  * DNS resolution result
- * 
+ *
  * @property hostname - DNS hostname that was resolved
  * @property ipAddress - Resolved IP address
  * @property timestamp - When resolution occurred
@@ -151,7 +151,7 @@ export interface DNSResolutionResult {
 
 /**
  * SSH connection result
- * 
+ *
  * @property success - Whether connection was successful
  * @property host - Target host (IP or hostname)
  * @property port - SSH port
@@ -170,7 +170,7 @@ export interface SSHConnectionResult {
 
 /**
  * Deployment step tracking individual operations
- * 
+ *
  * @property name - Step name/identifier
  * @property startTime - When step started
  * @property endTime - When step completed

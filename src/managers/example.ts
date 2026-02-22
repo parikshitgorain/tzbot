@@ -34,7 +34,7 @@ async function basicExample() {
     async (error) => {
       logger.error('Discord error occurred', { error });
     },
-    90 // High priority
+    90, // High priority
   );
 
   // Start event processing
@@ -59,7 +59,7 @@ async function multipleHandlersExample() {
     async (message) => {
       logger.debug('Message logged', { messageId: message.id });
     },
-    10
+    10,
   );
 
   // Handler 2: Check for spam (higher priority)
@@ -69,7 +69,7 @@ async function multipleHandlersExample() {
       // Spam detection logic here
       logger.debug('Spam check completed', { messageId: message.id });
     },
-    50
+    50,
   );
 
   // Handler 3: Check for malicious links (highest priority)
@@ -79,7 +79,7 @@ async function multipleHandlersExample() {
       // Link scanning logic here
       logger.debug('Link scan completed', { messageId: message.id });
     },
-    100
+    100,
   );
 
   eventManager.start();

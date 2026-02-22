@@ -73,7 +73,7 @@ export class GiveawayRepository {
       }
 
       const row = result.rows[0];
-      
+
       // Fetch entries separately
       const entries = await this.getEntries(giveawayId);
 
@@ -119,7 +119,7 @@ export class GiveawayRepository {
       const giveaways: Giveaway[] = [];
       for (const row of result.rows) {
         const entries = await this.getEntries(row.id);
-        
+
         giveaways.push({
           id: row.id,
           guildId: row.guild_id,
@@ -240,11 +240,11 @@ export class GiveawayRepository {
     const params: (string | GiveawayStatus)[] = [channelId];
 
     if (status) {
-      query += ` AND status = $2`;
+      query += ' AND status = $2';
       params.push(status);
     }
 
-    query += ` ORDER BY created_at DESC`;
+    query += ' ORDER BY created_at DESC';
 
     try {
       const result = await this.pool.query(query, params);
@@ -252,7 +252,7 @@ export class GiveawayRepository {
       const giveaways: Giveaway[] = [];
       for (const row of result.rows) {
         const entries = await this.getEntries(row.id);
-        
+
         giveaways.push({
           id: row.id,
           guildId: row.guild_id,

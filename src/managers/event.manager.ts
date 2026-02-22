@@ -75,7 +75,7 @@ export class EventManager {
   registerHandler<K extends DiscordEvent>(
     event: K,
     handler: EventHandler<K>,
-    priority: number = 0
+    priority: number = 0,
   ): void {
     const registration: EventHandlerRegistration = {
       event,
@@ -357,7 +357,7 @@ export class EventManager {
    */
   private incrementStat(
     event: DiscordEvent,
-    type: 'processed' | 'queued' | 'dropped'
+    type: 'processed' | 'queued' | 'dropped',
   ): void {
     if (!this.stats.has(event)) {
       this.stats.set(event, {

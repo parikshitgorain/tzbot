@@ -1,4 +1,4 @@
-/* eslint-disable no-console, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // @ts-nocheck - Example file for documentation purposes
 /**
  * @file example.ts
@@ -31,7 +31,7 @@ async function exampleOAuthFlow() {
     const tokens = await client.exchangeCodeForToken(authorizationCode);
     console.log('Successfully authenticated!');
     console.log('Access token expires at:', tokens.expiresAt);
-    
+
     // Store tokens in database for later use
     await saveTokensToDatabase(tokens);
   } catch (error) {
@@ -155,7 +155,7 @@ async function exampleSubscriberMonitoring() {
       if (currentCount > lastSubscriberCount) {
         const newSubscribers = subscribers.slice(0, currentCount - lastSubscriberCount);
         console.log('New subscribers detected:', newSubscribers.length);
-        
+
         newSubscribers.forEach(sub => {
           console.log(`- ${sub.username} just subscribed!`);
           // Trigger Discord role assignment here
@@ -184,7 +184,7 @@ async function loadTokensFromDatabase(): Promise<StoredTokens | null> {
 // Run examples
 if (import.meta.url === `file://${process.argv[1]}`) {
   console.log('Kick API Client Examples\n');
-  
+
   // Uncomment to run specific examples:
   // await exampleOAuthFlow();
   // await exampleAPIRequests();

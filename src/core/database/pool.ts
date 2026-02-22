@@ -1,4 +1,4 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import pg from 'pg';
 
 const { Pool } = pg;
@@ -109,11 +109,11 @@ export async function testConnection(): Promise<boolean> {
     const client = await getPool().connect();
     const result = await client.query('SELECT NOW() as current_time');
     client.release();
-    
+
     logger.info('Database connection test successful', {
       currentTime: result.rows[0].current_time,
     });
-    
+
     return true;
   } catch (error) {
     logger.error('Database connection test failed', { error });

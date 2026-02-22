@@ -2,7 +2,7 @@
  * @file logger.ts
  * @description Comprehensive structured logging system using Winston
  * @module core/logger
- * 
+ *
  * Validates Requirements:
  * - 3.5: Log all deleted messages with user ID, message content, and timestamp
  * - 5.6: Log moderation actions with moderator ID, target user ID, action type, reason, and timestamp
@@ -116,7 +116,7 @@ const logFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
   winston.format.errors({ stack: true }),
   winston.format.splat(),
-  winston.format.json()
+  winston.format.json(),
 );
 
 // Console format for development
@@ -129,7 +129,7 @@ const consoleFormat = winston.format.combine(
       msg += ` [${eventType}]`;
     }
     msg += `: ${message}`;
-    
+
     const metaKeys = Object.keys(meta).filter(k => k !== 'service' && k !== 'timestamp');
     if (metaKeys.length > 0) {
       const filteredMeta: Record<string, unknown> = {};
@@ -137,7 +137,7 @@ const consoleFormat = winston.format.combine(
       msg += ` ${JSON.stringify(filteredMeta)}`;
     }
     return msg;
-  })
+  }),
 );
 
 // Create rotating file transport for general logs
@@ -202,7 +202,7 @@ export const logStream = {
 export const logError = (
   message: string,
   error: Error,
-  context?: ErrorLogContext
+  context?: ErrorLogContext,
 ): void => {
   logger.error(message, {
     eventType: LogEventType.ERROR,
@@ -270,7 +270,7 @@ export const logViolation = (
   userId: string,
   violationType: string,
   details: string,
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>,
 ): void => {
   logger.warn('Violation detected', {
     eventType: LogEventType.VIOLATION_DETECTED,
@@ -288,7 +288,7 @@ export const logViolation = (
  */
 export const logSecurityEvent = (
   message: string,
-  context: Record<string, unknown>
+  context: Record<string, unknown>,
 ): void => {
   logger.warn(message, {
     eventType: LogEventType.SECURITY_EVENT,
@@ -303,7 +303,7 @@ export const logSecurityEvent = (
  */
 export const logPerformanceWarning = (
   message: string,
-  context: Record<string, unknown>
+  context: Record<string, unknown>,
 ): void => {
   logger.warn(message, {
     eventType: LogEventType.PERFORMANCE_WARNING,
@@ -318,7 +318,7 @@ export const logPerformanceWarning = (
  */
 export const logDatabaseOperation = (
   operation: string,
-  context: Record<string, unknown>
+  context: Record<string, unknown>,
 ): void => {
   logger.debug('Database operation', {
     eventType: LogEventType.DATABASE_OPERATION,

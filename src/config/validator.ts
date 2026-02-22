@@ -96,7 +96,7 @@ export function validateConfig(config: unknown): ConfigSchema {
 
       throw new Error(
         `Configuration validation failed:\n${errorMessages.join('\n')}\n\n` +
-          'Please check your .env file and ensure all required variables are set correctly.'
+          'Please check your .env file and ensure all required variables are set correctly.',
       );
     }
     throw error;

@@ -157,7 +157,7 @@ export class ConfigRepository {
    * Returns true if key was deleted, false if key didn't exist
    */
   async delete(key: string): Promise<boolean> {
-    const query = `DELETE FROM config WHERE key = $1`;
+    const query = 'DELETE FROM config WHERE key = $1';
 
     try {
       const result = await this.pool.query(query, [key]);
@@ -172,7 +172,7 @@ export class ConfigRepository {
    * Useful for listing available configuration options
    */
   async getAllKeys(): Promise<string[]> {
-    const query = `SELECT key FROM config ORDER BY key`;
+    const query = 'SELECT key FROM config ORDER BY key';
 
     try {
       const result = await this.pool.query(query);
@@ -187,7 +187,7 @@ export class ConfigRepository {
    * Returns a map of all key-value pairs
    */
   async getAll(): Promise<Map<string, unknown>> {
-    const query = `SELECT key, value FROM config`;
+    const query = 'SELECT key, value FROM config';
 
     try {
       const result = await this.pool.query(query);
@@ -226,7 +226,7 @@ export class ConfigRepository {
    * Returns true if key exists, false otherwise
    */
   async has(key: string): Promise<boolean> {
-    const query = `SELECT 1 FROM config WHERE key = $1`;
+    const query = 'SELECT 1 FROM config WHERE key = $1';
 
     try {
       const result = await this.pool.query(query, [key]);

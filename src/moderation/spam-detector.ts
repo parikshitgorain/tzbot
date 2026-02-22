@@ -70,7 +70,7 @@ export class SpamDetector {
     userId: string,
     messageId: string,
     messageContent: string,
-    timestamp: Date = new Date()
+    timestamp: Date = new Date(),
   ): SpamResult {
     // Get or create user history
     let history = this.userHistory.get(userId);
@@ -89,7 +89,7 @@ export class SpamDetector {
     // Clean up old messages outside all detection windows
     const maxWindow = Math.max(
       this.thresholds.identicalWindow,
-      this.thresholds.rapidWindow
+      this.thresholds.rapidWindow,
     );
     this.cleanupOldMessages(history, timestamp, maxWindow);
 
@@ -97,7 +97,7 @@ export class SpamDetector {
     const identicalSpam = this.checkIdenticalMessages(
       history,
       messageContent,
-      timestamp
+      timestamp,
     );
     if (identicalSpam.isSpam) {
       return identicalSpam;
@@ -119,10 +119,10 @@ export class SpamDetector {
   private checkIdenticalMessages(
     history: UserMessageHistory,
     messageContent: string,
-    timestamp: Date
+    timestamp: Date,
   ): SpamResult {
     const windowStart = new Date(
-      timestamp.getTime() - this.thresholds.identicalWindow * 1000
+      timestamp.getTime() - this.thresholds.identicalWindow * 1000,
     );
 
     // Get all identical messages within the window
@@ -130,7 +130,7 @@ export class SpamDetector {
       (msg) =>
         msg.content === messageContent &&
         msg.timestamp >= windowStart &&
-        msg.timestamp <= timestamp
+        msg.timestamp <= timestamp,
     );
 
     if (identicalMessages.length >= this.thresholds.identicalMessages) {
@@ -151,15 +151,15 @@ export class SpamDetector {
    */
   private checkRapidMessages(
     history: UserMessageHistory,
-    timestamp: Date
+    timestamp: Date,
   ): SpamResult {
     const windowStart = new Date(
-      timestamp.getTime() - this.thresholds.rapidWindow * 1000
+      timestamp.getTime() - this.thresholds.rapidWindow * 1000,
     );
 
     // Get all messages within the window
     const rapidMessages = history.messages.filter(
-      (msg) => msg.timestamp >= windowStart && msg.timestamp <= timestamp
+      (msg) => msg.timestamp >= windowStart && msg.timestamp <= timestamp,
     );
 
     if (rapidMessages.length >= this.thresholds.rapidMessages) {
@@ -180,11 +180,11 @@ export class SpamDetector {
   private cleanupOldMessages(
     history: UserMessageHistory,
     currentTime: Date,
-    maxWindowSeconds: number
+    maxWindowSeconds: number,
   ): void {
     const cutoffTime = new Date(currentTime.getTime() - maxWindowSeconds * 1000);
     history.messages = history.messages.filter(
-      (msg) => msg.timestamp >= cutoffTime
+      (msg) => msg.timestamp >= cutoffTime,
     );
   }
 
@@ -206,7 +206,7 @@ export class SpamDetector {
       history = { messages: [] };
       this.userHistory.set(userId, history);
     }
-    
+
     // Set cooldown for 1 minute from now
     history.spamCooldownUntil = new Date(Date.now() + 60000); // 60 seconds
     history.totalSpamMessages = 0;
@@ -221,14 +221,14 @@ export class SpamDetector {
     if (!history || !history.spamCooldownUntil) {
       return false;
     }
-    
+
     // Check if cooldown has expired
     if (new Date() > history.spamCooldownUntil) {
       // Cooldown expired, clear it
       history.spamCooldownUntil = undefined;
       return false;
     }
-    
+
     return true;
   }
 
@@ -270,17 +270,19 @@ export class SpamDetector {
   getUserMessageCount(
     userId: string,
     windowSeconds: number,
-    referenceTime: Date = new Date()
+    referenceTime: Date = new Date(),
   ): number {
     const history = this.userHistory.get(userId);
-    if (!history) return 0;
+    if (!history) {
+      return 0;
+    }
 
     const windowStart = new Date(
-      referenceTime.getTime() - windowSeconds * 1000
+      referenceTime.getTime() - windowSeconds * 1000,
     );
 
     return history.messages.filter(
-      (msg) => msg.timestamp >= windowStart && msg.timestamp <= referenceTime
+      (msg) => msg.timestamp >= windowStart && msg.timestamp <= referenceTime,
     ).length;
   }
 }

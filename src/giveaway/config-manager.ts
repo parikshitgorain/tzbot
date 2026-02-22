@@ -53,13 +53,13 @@ export class ConfigManager {
   async updateGiveawayPermissions(
     guildId: string,
     allowedRoles: string[],
-    allowedUsers: string[]
+    allowedUsers: string[],
   ): Promise<void> {
     try {
       await this.configRepository.updateGiveawayPermissions(
         guildId,
         allowedRoles,
-        allowedUsers
+        allowedUsers,
       );
 
       logger.info('Updated giveaway permissions', {
@@ -86,7 +86,7 @@ export class ConfigManager {
    */
   async canUseGiveawayCommands(
     guildId: string,
-    member: GuildMember
+    member: GuildMember,
   ): Promise<boolean> {
     try {
       // Administrators always have access
@@ -109,7 +109,7 @@ export class ConfigManager {
 
       // Check if user has any of the allowed roles
       const hasAllowedRole = Array.from(member.roles.cache.values()).some((role) =>
-        config.allowedRoles.includes(role.id)
+        config.allowedRoles.includes(role.id),
       );
 
       return hasAllowedRole;

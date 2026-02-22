@@ -22,7 +22,7 @@ import { logger, logError } from '@/core/logger/logger.js';
 export function createUtilityCommands(
   _client: IDiscordClient,
   database: Database,
-  config: BotConfig
+  config: BotConfig,
 ): CommandDefinition[] {
   return [
     createConfigCommand(config),
@@ -55,8 +55,8 @@ function createSetupCommand(database: Database, config: BotConfig): CommandDefin
               option
                 .setName('channel')
                 .setDescription('The channel for notifications')
-                .setRequired(true)
-            )
+                .setRequired(true),
+            ),
         )
         .addSubcommand((subcommand) =>
           subcommand
@@ -66,9 +66,9 @@ function createSetupCommand(database: Database, config: BotConfig): CommandDefin
               option
                 .setName('channel')
                 .setDescription('The fallback channel for notifications')
-                .setRequired(true)
-            )
-        )
+                .setRequired(true),
+            ),
+        ),
     )
     .addSubcommandGroup((group) =>
       group
@@ -82,8 +82,8 @@ function createSetupCommand(database: Database, config: BotConfig): CommandDefin
               option
                 .setName('role')
                 .setDescription('The role for subscribers')
-                .setRequired(true)
-            )
+                .setRequired(true),
+            ),
         )
         .addSubcommand((subcommand) =>
           subcommand
@@ -93,8 +93,8 @@ function createSetupCommand(database: Database, config: BotConfig): CommandDefin
               option
                 .setName('role')
                 .setDescription('The role for VIPs')
-                .setRequired(true)
-            )
+                .setRequired(true),
+            ),
         )
         .addSubcommand((subcommand) =>
           subcommand
@@ -104,9 +104,9 @@ function createSetupCommand(database: Database, config: BotConfig): CommandDefin
               option
                 .setName('role')
                 .setDescription('The role for moderators')
-                .setRequired(true)
-            )
-        )
+                .setRequired(true),
+            ),
+        ),
     );
 
   const handler = async (interaction: ChatInputCommandInteraction) => {
@@ -288,7 +288,7 @@ function createConfigCommand(config: BotConfig): CommandDefinition {
             name: 'Spam Threshold',
             value: `${config.spamThreshold.identicalMessages} identical messages in ${config.spamThreshold.identicalWindow}s\n${config.spamThreshold.rapidMessages} rapid messages in ${config.spamThreshold.rapidWindow}s`,
             inline: false,
-          }
+          },
         );
 
       await interaction.reply({
@@ -331,7 +331,7 @@ function createUserInfoCommand(database: Database): CommandDefinition {
       option
         .setName('user')
         .setDescription('The user to get information about (leave empty for yourself)')
-        .setRequired(false)
+        .setRequired(false),
     );
 
   const handler = async (interaction: ChatInputCommandInteraction) => {
@@ -347,7 +347,7 @@ function createUserInfoCommand(database: Database): CommandDefinition {
 
       // Create user info embed
       const embed = new EmbedBuilder()
-        .setTitle(`👤 User Information`)
+        .setTitle('👤 User Information')
         .setColor(0x5865f2)
         .setThumbnail(targetUser.displayAvatarURL())
         .setTimestamp()
@@ -368,7 +368,7 @@ function createUserInfoCommand(database: Database): CommandDefinition {
               ? `<t:${Math.floor(member.joinedTimestamp! / 1000)}:R>`
               : 'Unknown',
             inline: true,
-          }
+          },
         );
 
       // Add Kick account info if linked
@@ -466,7 +466,7 @@ function createLinkCommand(database: Database): CommandDefinition {
       option
         .setName('kick_username')
         .setDescription('Your Kick username')
-        .setRequired(true)
+        .setRequired(true),
     );
 
   const handler = async (interaction: ChatInputCommandInteraction) => {
@@ -488,7 +488,7 @@ function createLinkCommand(database: Database): CommandDefinition {
       const existingKickUser = await database.getUserByKickUsername(kickUsername);
       if (existingKickUser) {
         await interaction.editReply({
-          content: `❌ This Kick username is already linked to another Discord account.`,
+          content: '❌ This Kick username is already linked to another Discord account.',
         });
         return;
       }

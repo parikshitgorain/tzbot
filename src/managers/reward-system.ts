@@ -5,7 +5,7 @@ import { logger, logError } from '../core/logger/logger.js';
 /**
  * RewardSystem handles distribution of rewards to chat rain winners
  * Supports multiple reward types: role, currency, announcement
- * 
+ *
  * Requirements:
  * - 11.7: Announce winners in chat
  */
@@ -30,7 +30,7 @@ export enum RewardType {
 export interface Reward {
   /** Type of reward */
   type: RewardType;
-  
+
   /** Value depends on type:
    * - ROLE: Discord role ID
    * - CURRENCY: Amount as string
@@ -38,10 +38,10 @@ export interface Reward {
    * - CUSTOM: JSON payload for webhook
    */
   value?: string;
-  
+
   /** Duration in milliseconds for temporary rewards (e.g., temporary role) */
   durationMs?: number;
-  
+
   /** Custom message to include in announcement */
   customMessage?: string;
 }
@@ -52,10 +52,10 @@ export interface Reward {
 export interface RewardDistributionResult {
   /** User IDs that successfully received rewards */
   successful: string[];
-  
+
   /** User IDs that failed to receive rewards */
   failed: string[];
-  
+
   /** Error messages for failed distributions */
   errors: Map<string, string>;
 }
@@ -67,28 +67,28 @@ export class RewardSystem {
   constructor(
     private client: Client,
     private chatActivityRepo: ChatActivityRepository,
-    private guildId: string
+    private guildId: string,
   ) {}
 
   /**
    * Distribute rewards to multiple winners
-   * 
+   *
    * @param userIds Array of Discord user IDs
    * @param reward Reward configuration
    * @param channelId Channel to announce winners in
    * @returns Distribution result with successful and failed recipients
-   * 
+   *
    * Validates: Requirement 11.7
    */
   async distributeRewards(
     userIds: string[],
     reward: Reward,
-    channelId: string
+    channelId: string,
   ): Promise<RewardDistributionResult> {
     const result: RewardDistributionResult = {
       successful: [],
       failed: [],
-      errors: new Map()
+      errors: new Map(),
     };
 
     // Distribute rewards to each winner
@@ -96,7 +96,7 @@ export class RewardSystem {
       try {
         await this.distributeRewardToUser(userId, reward);
         result.successful.push(userId);
-        
+
         // Record reward in database
         await this.recordRewardDistribution(userId, reward);
       } catch (error) {
@@ -122,19 +122,19 @@ export class RewardSystem {
       case RewardType.ROLE:
         await this.assignRole(member, reward);
         break;
-      
+
       case RewardType.CURRENCY:
         await this.awardCurrency(member, reward);
         break;
-      
+
       case RewardType.ANNOUNCEMENT:
         // No action needed, just announcement
         break;
-      
+
       case RewardType.CUSTOM:
         await this.handleCustomReward(member, reward);
         break;
-      
+
       default:
         throw new Error(`Unknown reward type: ${reward.type}`);
     }
@@ -163,7 +163,7 @@ export class RewardSystem {
           const guild = await this.client.guilds.fetch(this.guildId);
           const currentMember = await guild.members.fetch(member.id);
           const currentRole = await guild.roles.fetch(reward.value!);
-          
+
           if (currentRole) {
             await currentMember.roles.remove(currentRole);
           }
@@ -188,10 +188,10 @@ export class RewardSystem {
     // 1. Call an economy bot API
     // 2. Update a currency database
     // 3. Trigger a webhook to external system
-    
+
     // For now, we just log it
     logger.info(`Would award ${reward.value} currency to ${member.id}`);
-    
+
     // You could integrate with popular economy bots like:
     // - UnbelievaBoat
     // - Dank Memer
@@ -211,30 +211,30 @@ export class RewardSystem {
     // 1. Parse the custom payload
     // 2. Send webhook to external system
     // 3. Execute custom logic
-    
+
     logger.info(`Would execute custom reward for ${member.id}:`, { value: reward.value });
   }
 
   /**
    * Announce winners in the chat channel
-   * 
+   *
    * Validates: Requirement 11.7
    */
   private async announceWinners(
     reward: Reward,
     channelId: string,
-    result: RewardDistributionResult
+    result: RewardDistributionResult,
   ): Promise<void> {
     try {
       const channel = await this.client.channels.fetch(channelId) as TextChannel;
-      
+
       if (!channel || !channel.isTextBased()) {
         throw new Error(`Channel ${channelId} is not a text channel`);
       }
 
       // Build announcement message
       const message = this.buildAnnouncementMessage(reward, result);
-      
+
       await channel.send(message);
     } catch (error) {
       logError('Failed to announce winners', error as Error);
@@ -247,43 +247,43 @@ export class RewardSystem {
    */
   private buildAnnouncementMessage(
     reward: Reward,
-    result: RewardDistributionResult
+    result: RewardDistributionResult,
   ): string {
     const successfulMentions = result.successful.map(id => `<@${id}>`).join(', ');
-    
+
     let message = '🌧️ **Chat Rain!** 🌧️\n\n';
-    
+
     if (result.successful.length > 0) {
       message += `Congratulations to: ${successfulMentions}\n\n`;
-      
+
       // Add reward-specific message
       switch (reward.type) {
         case RewardType.ROLE:
-          message += `You've been awarded a special role!`;
+          message += 'You\'ve been awarded a special role!';
           if (reward.durationMs) {
             const hours = Math.floor(reward.durationMs / (1000 * 60 * 60));
             message += ` (${hours} hour${hours !== 1 ? 's' : ''})`;
           }
           break;
-        
+
         case RewardType.CURRENCY:
           message += `You've been awarded ${reward.value} currency!`;
           break;
-        
+
         case RewardType.ANNOUNCEMENT:
           message += reward.customMessage || 'You\'ve been recognized as an active chatter!';
           break;
-        
+
         case RewardType.CUSTOM:
           message += reward.customMessage || 'You\'ve received a special reward!';
           break;
       }
     }
-    
+
     if (result.failed.length > 0) {
       message += `\n\n⚠️ Failed to distribute rewards to ${result.failed.length} user(s).`;
     }
-    
+
     return message;
   }
 
@@ -295,13 +295,13 @@ export class RewardSystem {
       userId,
       new Date(),
       reward.type,
-      reward.value
+      reward.value,
     );
   }
 
   /**
    * Get reward history for a user
-   * 
+   *
    * @param userId Discord user ID
    * @param since Optional date to filter rewards after
    * @returns Array of reward records

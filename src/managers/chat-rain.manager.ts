@@ -8,7 +8,7 @@ import { ViolationType } from '../types/models.js';
 /**
  * ChatRainManager handles automated reward distribution for active chatters
  * Implements eligibility filtering, cooldown enforcement, and CSPRNG-based selection
- * 
+ *
  * Requirements:
  * - 11.2: Select 3-10 random recipients
  * - 11.3: Use CSPRNG for random selection
@@ -24,16 +24,16 @@ export class ChatRainManager {
     private chatActivityRepo: ChatActivityRepository,
     private violationRepo: ViolationRepository,
     private rewardSystem: RewardSystem,
-    private config: ChatRainConfig
+    private config: ChatRainConfig,
   ) {}
 
   /**
    * Execute a chat rain event
    * Selects eligible active chatters, distributes rewards, and announces winners
-   * 
+   *
    * @param channelId Channel to announce winners in
    * @returns Array of winner user IDs, or null if event cannot proceed
-   * 
+   *
    * Validates: Requirements 11.7
    */
   async executeChatRain(channelId: string): Promise<string[] | null> {
@@ -66,7 +66,7 @@ export class ChatRainManager {
   /**
    * Check if chat rain can be executed
    * Enforces minimum 5-minute delay between events
-   * 
+   *
    * Validates: Requirement 11.5
    */
   private canExecuteChatRain(): boolean {
@@ -86,7 +86,7 @@ export class ChatRainManager {
    * - Users without minimum message count (3+ messages in 10 minutes)
    * - Spam-flagged users (violations in last 24 hours)
    * - Recent winners (won in last 60 minutes)
-   * 
+   *
    * Validates: Requirements 11.1, 11.4, 11.8
    */
   private async getEligibleRecipients(): Promise<string[]> {
@@ -94,7 +94,7 @@ export class ChatRainManager {
     const activeWindow = new Date(Date.now() - this.config.activeWindowMinutes * 60 * 1000);
     const activeChatters = await this.chatActivityRepo.getQualifiedChatters(
       activeWindow,
-      this.config.minMessages
+      this.config.minMessages,
     );
 
     if (activeChatters.length === 0) {
@@ -118,7 +118,7 @@ export class ChatRainManager {
 
   /**
    * Get users who have spam violations in the specified time window
-   * 
+   *
    * Validates: Requirement 11.4
    */
   private async getSpamFlaggedUsers(userIds: string[], since: Date): Promise<string[]> {
@@ -138,7 +138,7 @@ export class ChatRainManager {
   /**
    * Select the number of recipients for this chat rain event
    * Returns a random number between 3 and 10, capped by available users
-   * 
+   *
    * Validates: Requirement 11.2
    */
   private selectRecipientCount(availableUsers: number): number {
@@ -147,7 +147,7 @@ export class ChatRainManager {
 
     // Cap by available users
     const maxPossible = Math.min(max, availableUsers);
-    
+
     if (maxPossible < min) {
       return maxPossible;
     }
@@ -159,7 +159,7 @@ export class ChatRainManager {
   /**
    * Select random recipients using CSPRNG
    * Implements Fisher-Yates shuffle with cryptographically secure randomness
-   * 
+   *
    * Validates: Requirement 11.3
    */
   private selectRandomRecipients(users: string[], count: number): string[] {
@@ -190,7 +190,7 @@ export class ChatRainManager {
         userId,
         timestamp,
         this.config.rewardType,
-        this.config.rewardValue
+        this.config.rewardValue,
       );
     }
   }
@@ -203,14 +203,14 @@ export class ChatRainManager {
       type: this.config.rewardType,
       value: this.config.rewardValue,
       durationMs: this.config.rewardDurationMs,
-      customMessage: this.config.customMessage
+      customMessage: this.config.customMessage,
     };
   }
 
   /**
    * Generate cryptographically secure random integer in range [min, max)
    * Uses rejection sampling to ensure uniform distribution
-   * 
+   *
    * Validates: Requirement 11.3 (CSPRNG usage)
    */
   private secureRandomInt(min: number, max: number): number {
@@ -261,25 +261,25 @@ export class ChatRainManager {
 export interface ChatRainConfig {
   /** Minimum delay between chat rain events in minutes (default: 5) */
   minDelayMinutes: number;
-  
+
   /** Time window for active chatter tracking in minutes (default: 10) */
   activeWindowMinutes: number;
-  
+
   /** Minimum messages required to be considered active (default: 3) */
   minMessages: number;
-  
+
   /** Cooldown period for winners in minutes (default: 60) */
   cooldownMinutes: number;
-  
+
   /** Type of reward to distribute */
   rewardType: RewardType;
-  
+
   /** Value of reward (role ID, currency amount, etc.) */
   rewardValue?: string;
-  
+
   /** Duration for temporary rewards in milliseconds */
   rewardDurationMs?: number;
-  
+
   /** Custom message to include in announcement */
   customMessage?: string;
 }

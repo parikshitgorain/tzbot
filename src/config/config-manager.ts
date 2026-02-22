@@ -2,7 +2,7 @@
  * @file config-manager.ts
  * @description Configuration hot-reload manager
  * @module config
- * 
+ *
  * Implements Property 52: Configuration Hot-Reload
  * Validates: Requirements 12.4
  */
@@ -30,7 +30,7 @@ export interface ConfigManagerOptions {
 
 /**
  * Configuration manager with hot-reload support
- * 
+ *
  * Features:
  * - Watches .env file for changes
  * - Validates new configuration before applying
@@ -199,17 +199,23 @@ export class ConfigManager extends EventEmitter {
    */
   private buildConfigFromEnv(env: Record<string, string>): unknown {
     const parseArray = (value: string | undefined): string[] => {
-      if (!value) return [];
+      if (!value) {
+        return [];
+      }
       return value.split(',').map((item) => item.trim()).filter(Boolean);
     };
 
     const parseBoolean = (value: string | undefined, defaultValue: boolean): boolean => {
-      if (!value) return defaultValue;
+      if (!value) {
+        return defaultValue;
+      }
       return value.toLowerCase() === 'true';
     };
 
     const parseNumber = (value: string | undefined, defaultValue: number): number => {
-      if (!value) return defaultValue;
+      if (!value) {
+        return defaultValue;
+      }
       const parsed = parseInt(value, 10);
       return isNaN(parsed) ? defaultValue : parsed;
     };

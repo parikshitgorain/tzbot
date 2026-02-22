@@ -4,7 +4,7 @@ import { logger } from '../core/logger/logger.js';
 
 /**
  * Message Listener for Giveaway Winner Confirmation
- * 
+ *
  * Monitors Discord message events to detect when pending winners send messages,
  * triggering the confirmation process. Uses an in-memory cache for performance.
  */
@@ -16,7 +16,7 @@ export class MessageListener {
 
   constructor(
     winnerStateRepo: WinnerStateRepository,
-    confirmationCallback: (giveawayId: string, userId: string) => Promise<void>
+    confirmationCallback: (giveawayId: string, userId: string) => Promise<void>,
   ) {
     this.winnerStateRepo = winnerStateRepo;
     this.confirmationCallback = confirmationCallback;
@@ -68,7 +68,7 @@ export class MessageListener {
       for (const giveawayId of giveawayIds) {
         logger.info(`Winner confirmation detected: giveaway=${giveawayId}, user=${userId}`);
         await this.confirmationCallback(giveawayId, userId);
-        
+
         // Invalidate cache for this user
         this.invalidateCache(guildId, userId);
       }

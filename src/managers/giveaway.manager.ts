@@ -53,7 +53,7 @@ export class GiveawayManager {
 
   constructor(
     private discordClient: IDiscordClient,
-    private giveawayRepository: GiveawayRepository
+    private giveawayRepository: GiveawayRepository,
   ) {}
 
   /**
@@ -97,7 +97,7 @@ export class GiveawayManager {
         options.description,
         endsAt,
         options.winnerCount,
-        options.requiredRoles
+        options.requiredRoles,
       );
 
       // Create entry button
@@ -167,7 +167,7 @@ export class GiveawayManager {
    */
   async handleEntryInteraction(
     interaction: ButtonInteraction,
-    guildId: string
+    guildId: string,
   ): Promise<void> {
     try {
       // Extract giveaway ID from button custom ID
@@ -197,7 +197,7 @@ export class GiveawayManager {
       const validation = await this.validateEntry(
         interaction.user.id,
         guildId,
-        giveaway
+        giveaway,
       );
 
       if (!validation.allowed) {
@@ -213,7 +213,7 @@ export class GiveawayManager {
       // Requirement 9.6: Prevent duplicate entries
       const hasEntry = await this.giveawayRepository.hasEntry(
         giveawayId,
-        interaction.user.id
+        interaction.user.id,
       );
 
       if (hasEntry) {
@@ -264,7 +264,7 @@ export class GiveawayManager {
   private async validateEntry(
     userId: string,
     guildId: string,
-    giveaway: Giveaway
+    giveaway: Giveaway,
   ): Promise<EntryValidationResult> {
     try {
       // If no role restrictions, allow entry
@@ -284,7 +284,7 @@ export class GiveawayManager {
 
       // Check if user has at least one required role
       const hasRequiredRole = giveaway.requiredRoles.some((roleId) =>
-        member.roles.cache.has(roleId)
+        member.roles.cache.has(roleId),
       );
 
       if (!hasRequiredRole) {
@@ -456,7 +456,7 @@ export class GiveawayManager {
   private async announceWinners(
     giveaway: Giveaway,
     winners: string[],
-    guildId: string
+    guildId: string,
   ): Promise<void> {
     try {
       // If confirmation system is available, use it
@@ -496,7 +496,7 @@ export class GiveawayManager {
 
       // Build announcement description with reroll command
       let description = `Congratulations to the winners!\n\n**Winners:** ${winnerMentions}`;
-      
+
       if (winners.length > 0) {
         description += `\n\n**Moderators:** To reroll a winner, use:\n\`\`\`\n/giveaway reroll giveaway_id:${giveaway.id} winner: @user\n\`\`\``;
       }
@@ -521,11 +521,11 @@ export class GiveawayManager {
           const member = await this.discordClient.getMember(guildId, winnerId);
           if (member) {
             let dmMessage = `<@${winnerId}> 🎉 You Won!\n\nCongratulations! You won the giveaway: **${giveaway.title}**`;
-            
+
             if (giveaway.condition) {
               dmMessage += `\n\n**Next Steps:**\n${giveaway.condition}`;
             } else {
-              dmMessage += `\n\nCheck the giveaway channel for more details!`;
+              dmMessage += '\n\nCheck the giveaway channel for more details!';
             }
 
             await member.send(dmMessage);
@@ -579,7 +579,7 @@ export class GiveawayManager {
     description: string,
     endsAt: Date,
     winnerCount: number,
-    requiredRoles: string[]
+    requiredRoles: string[],
   ): EmbedBuilder {
     const embed = new EmbedBuilder()
       .setTitle(`🎉 ${title}`)
@@ -592,7 +592,7 @@ export class GiveawayManager {
           value: `<t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
           inline: true,
         },
-        { name: 'Entries', value: '0', inline: true }
+        { name: 'Entries', value: '0', inline: true },
       )
       .setTimestamp();
 
@@ -612,7 +612,7 @@ export class GiveawayManager {
    */
   private async updateGiveawayMessage(
     giveaway: Giveaway,
-    entryCount: number
+    entryCount: number,
   ): Promise<void> {
     try {
       // Fetch the message
@@ -620,11 +620,11 @@ export class GiveawayManager {
 
       if (message.embeds.length > 0) {
         const embed = EmbedBuilder.from(message.embeds[0]);
-        
+
         // Update entries field
         const fields = embed.data.fields || [];
         const entryFieldIndex = fields.findIndex((f) => f.name === 'Entries');
-        
+
         if (entryFieldIndex !== -1) {
           fields[entryFieldIndex].value = `${entryCount}`;
           embed.setFields(fields);
@@ -645,7 +645,7 @@ export class GiveawayManager {
    */
   private async updateGiveawayMessageEnded(
     giveaway: Giveaway,
-    winners: string[]
+    winners: string[],
   ): Promise<void> {
     try {
       // Fetch the message
@@ -799,7 +799,7 @@ export class GiveawayManager {
 
       if (availableEntries.length === 0) {
         throw new Error(
-          `No remaining entries available for reroll. Total entries: ${allEntries.length}, Current winners: ${giveaway.winners?.length || 0}. All participants have already won.`
+          `No remaining entries available for reroll. Total entries: ${allEntries.length}, Current winners: ${giveaway.winners?.length || 0}. All participants have already won.`,
         );
       }
 
@@ -808,8 +808,8 @@ export class GiveawayManager {
       const newWinnerId = newWinners[0];
 
       // Update winners array (replace old with new)
-      const updatedWinners = giveaway.winners.map(id => 
-        id === oldWinnerId ? newWinnerId : id
+      const updatedWinners = giveaway.winners.map(id =>
+        id === oldWinnerId ? newWinnerId : id,
       );
       await this.giveawayRepository.updateWinners(giveawayId, updatedWinners);
 
@@ -818,11 +818,11 @@ export class GiveawayManager {
         const member = await this.discordClient.getMember(guildId, newWinnerId);
         if (member) {
           let dmMessage = `<@${newWinnerId}> 🎉 You Won!\n\nCongratulations! You won the giveaway: **${giveaway.title}**`;
-          
+
           if (giveaway.condition) {
             dmMessage += `\n\n**Next Steps:**\n${giveaway.condition}`;
           } else {
-            dmMessage += `\n\nCheck the giveaway channel for more details!`;
+            dmMessage += '\n\nCheck the giveaway channel for more details!';
           }
 
           await member.send(dmMessage);
@@ -838,10 +838,10 @@ export class GiveawayManager {
       const embed = new EmbedBuilder()
         .setTitle(`🔄 ${giveaway.title} - Winner Rerolled`)
         .setDescription(
-          `A winner has been rerolled!\n\n` +
+          'A winner has been rerolled!\n\n' +
           `**Previous Winner:** <@${oldWinnerId}>\n` +
           `**New Winner:** <@${newWinnerId}>\n\n` +
-          `Congratulations to the new winner!`
+          'Congratulations to the new winner!',
         )
         .setColor(0xffa500)
         .setTimestamp();

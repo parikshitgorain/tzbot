@@ -1,14 +1,14 @@
 /**
  * Health Check System
- * 
+ *
  * Monitors the health of all system components:
  * - Discord connection
  * - Kick API
  * - Database
  * - Redis cache
- * 
+ *
  * Provides periodic health checks and alerts administrators on critical issues.
- * 
+ *
  * Requirements: 13.5, 14.1
  */
 
@@ -118,7 +118,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
    */
   async checkDiscordHealth(): Promise<HealthStatus> {
     const startTime = Date.now();
-    
+
     try {
       if (!this.discordClient) {
         return {
@@ -141,7 +141,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
 
       // Check WebSocket ping
       const ping = this.discordClient.ws.ping;
-      
+
       // Consider unhealthy if ping is too high (>500ms) or negative (not connected)
       const healthy = ping >= 0 && ping < 500;
 
@@ -162,7 +162,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
     } catch (error) {
       const latency = Date.now() - startTime;
       this.updateFailureCount('discord', false);
-      
+
       return {
         healthy: false,
         latency,
@@ -177,7 +177,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
    */
   async checkKickHealth(): Promise<HealthStatus> {
     const startTime = Date.now();
-    
+
     try {
       if (!this.kickClient) {
         return {
@@ -191,7 +191,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
       // Try to make a simple API call to check connectivity
       // Using a lightweight endpoint if available
       await this.kickClient.healthCheck();
-      
+
       const latency = Date.now() - startTime;
       const healthy = latency < 5000; // Consider unhealthy if response takes >5s
 
@@ -210,7 +210,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
     } catch (error) {
       const latency = Date.now() - startTime;
       this.updateFailureCount('kick', false);
-      
+
       return {
         healthy: false,
         latency,
@@ -225,7 +225,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
    */
   async checkDatabaseHealth(): Promise<HealthStatus> {
     const startTime = Date.now();
-    
+
     try {
       if (!this.database) {
         return {
@@ -238,7 +238,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
 
       // Execute a simple query to check connectivity
       await this.database.healthCheck();
-      
+
       const latency = Date.now() - startTime;
       const healthy = latency < 1000; // Consider unhealthy if query takes >1s
 
@@ -257,7 +257,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
     } catch (error) {
       const latency = Date.now() - startTime;
       this.updateFailureCount('database', false);
-      
+
       return {
         healthy: false,
         latency,
@@ -272,7 +272,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
    */
   async checkCacheHealth(): Promise<HealthStatus> {
     const startTime = Date.now();
-    
+
     try {
       if (!this.cache) {
         return {
@@ -285,7 +285,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
 
       // Execute a simple ping to check connectivity
       await this.cache.ping();
-      
+
       const latency = Date.now() - startTime;
       const healthy = latency < 500; // Consider unhealthy if ping takes >500ms
 
@@ -304,7 +304,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
     } catch (error) {
       const latency = Date.now() - startTime;
       this.updateFailureCount('cache', false);
-      
+
       return {
         healthy: false,
         latency,
@@ -376,7 +376,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
     this.checkInterval = setInterval(async () => {
       try {
         const health = await this.getSystemHealth();
-        
+
         // Log health status
         this.logger.debug('Health check completed', {
           overall: health.overall,
@@ -423,7 +423,7 @@ export class HealthCheckSystem implements IHealthCheckSystem {
   private async alertAdministrators(health: SystemHealth): Promise<void> {
     const failures = this.consecutiveFailures;
     const shouldAlert = Array.from(failures.values()).some(
-      count => count >= this.config.alertThreshold
+      count => count >= this.config.alertThreshold,
     );
 
     if (!shouldAlert) {
@@ -442,11 +442,11 @@ export class HealthCheckSystem implements IHealthCheckSystem {
         .map(([name, status]) => `- ${name}: ${status.error || 'Unknown error'}`)
         .join('\n');
 
-      const message = `🚨 **System Health Critical** 🚨\n\n` +
+      const message = '🚨 **System Health Critical** 🚨\n\n' +
         `Overall Status: ${health.overall}\n` +
         `Uptime: ${Math.floor(health.uptime)}s\n\n` +
         `Failed Components:\n${failedComponents}\n\n` +
-        `Please investigate immediately.`;
+        'Please investigate immediately.';
 
       for (const userId of this.config.adminUserIds) {
         try {

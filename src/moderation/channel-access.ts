@@ -2,13 +2,13 @@
  * @file channel-access.ts
  * @description Channel access enforcement system for TZBOT
  * @module moderation
- * 
+ *
  * Implements read-only channel enforcement:
  * - Deletes unauthorized messages within 1 second
  * - Sends DM notifications to users
  * - Allows moderators and whitelisted roles to post
  * - Logs all deleted messages
- * 
+ *
  * Validates: Requirements 3.1-3.4
  */
 
@@ -50,11 +50,11 @@ export class ChannelAccessEnforcer {
     private discordClient: IDiscordClient,
     private violationRepo: ViolationRepository,
     moderatorRoleId: string,
-    readOnlyChannelConfigs: ReadOnlyChannelConfig[] = []
+    readOnlyChannelConfigs: ReadOnlyChannelConfig[] = [],
   ) {
     this.moderatorRoleId = moderatorRoleId;
     this.readOnlyChannels = new Map();
-    
+
     // Initialize read-only channel configurations
     for (const config of readOnlyChannelConfigs) {
       this.readOnlyChannels.set(config.channelId, config);
@@ -74,7 +74,7 @@ export class ChannelAccessEnforcer {
    * Check if a user is authorized to post in a read-only channel
    * Requirements 3.3: Moderators can post
    * Requirements 3.4: Users with whitelist roles can post
-   * 
+   *
    * @param message - Discord message object
    * @returns Channel access result
    */
@@ -136,7 +136,7 @@ export class ChannelAccessEnforcer {
    * Requirements 3.1: Delete unauthorized messages within 1 second
    * Requirements 3.2: Send DM notification to user
    * Requirements 3.5: Log deleted messages
-   * 
+   *
    * @param message - Discord message object
    * @returns True if message was deleted, false if allowed
    */
@@ -192,23 +192,23 @@ export class ChannelAccessEnforcer {
   /**
    * Send DM notification to user about deleted message
    * Requirements 3.2: Explain the restriction
-   * 
+   *
    * @param message - Original message that was deleted
    * @param reason - Reason for deletion
    */
   private async sendDMNotification(message: Message, reason: string): Promise<void> {
     try {
       const user = message.author;
-      const channelName = message.channel && 'name' in message.channel 
-        ? message.channel.name 
+      const channelName = message.channel && 'name' in message.channel
+        ? message.channel.name
         : 'unknown-channel';
 
       const dmContent = {
-        content: `⚠️ **Message Deleted**\n\n` +
+        content: '⚠️ **Message Deleted**\n\n' +
           `Your message in **#${channelName}** was deleted because it's a read-only channel.\n\n` +
           `**Reason:** ${reason}\n\n` +
-          `Only moderators and users with specific roles can post in this channel. ` +
-          `If you believe this is an error, please contact a moderator.`,
+          'Only moderators and users with specific roles can post in this channel. ' +
+          'If you believe this is an error, please contact a moderator.',
       };
 
       await user.send(dmContent);

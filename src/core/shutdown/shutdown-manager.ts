@@ -1,12 +1,12 @@
 /**
  * Graceful Shutdown Manager
- * 
+ *
  * Handles clean shutdown of the bot by:
  * - Registering cleanup functions for all components
  * - Handling SIGTERM and SIGINT signals
  * - Waiting for in-flight operations (max 30s)
  * - Closing all connections cleanly
- * 
+ *
  * Validates: Requirements 14.2
  */
 
@@ -101,10 +101,10 @@ export class GracefulShutdownManager implements ShutdownManager {
     }
 
     this.shuttingDown = true;
-    this.logger.info('Initiating graceful shutdown', { 
+    this.logger.info('Initiating graceful shutdown', {
       signal,
       inflightOperations: this.inflightOperations,
-      cleanupFunctions: this.cleanupFunctions.length
+      cleanupFunctions: this.cleanupFunctions.length,
     });
 
     try {
@@ -130,7 +130,7 @@ export class GracefulShutdownManager implements ShutdownManager {
 
     this.logger.info('Waiting for in-flight operations to complete', {
       count: this.inflightOperations,
-      timeout: this.shutdownTimeout
+      timeout: this.shutdownTimeout,
     });
 
     const start = Date.now();
@@ -142,7 +142,7 @@ export class GracefulShutdownManager implements ShutdownManager {
       if (elapsed >= this.shutdownTimeout) {
         this.logger.warn('Shutdown timeout reached, forcing shutdown', {
           remainingOperations: this.inflightOperations,
-          elapsed
+          elapsed,
         });
         break;
       }
@@ -153,13 +153,13 @@ export class GracefulShutdownManager implements ShutdownManager {
     const elapsed = Date.now() - start;
     this.logger.info('In-flight operations completed', {
       elapsed,
-      remainingOperations: this.inflightOperations
+      remainingOperations: this.inflightOperations,
     });
   }
 
   private async runCleanupFunctions(): Promise<void> {
     this.logger.info('Running cleanup functions', {
-      count: this.cleanupFunctions.length
+      count: this.cleanupFunctions.length,
     });
 
     for (const { name, fn } of this.cleanupFunctions) {

@@ -52,11 +52,11 @@ export class MessageActionHandler {
     channel: TextChannel,
     userId: string,
     channelName: string,
-    redirectChannelId: string
+    redirectChannelId: string,
   ): Promise<void> {
     try {
       const warningMessage = `Hey <@${userId}> looks like you are chatting in ${channelName}. Kindly go <#${redirectChannelId}> for chatting. I'm deleting the message to keep the channel clean.`;
-      
+
       const sentMessage = await channel.send(warningMessage);
 
       // Schedule deletion after delay
@@ -91,7 +91,7 @@ export class MessageActionHandler {
    */
   async deleteSilently(message: Message): Promise<void> {
     const deleted = await this.deleteMessage(message);
-    
+
     if (deleted) {
       this.logger.debug('Message deleted silently during violation window', {
         userId: message.author.id,

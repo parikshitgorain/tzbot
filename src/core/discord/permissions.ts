@@ -86,7 +86,7 @@ export function verifyBotPermissions(guild: Guild): PermissionsCheckResult {
  */
 export function formatPermissionsError(
   result: PermissionsCheckResult,
-  guild: Guild
+  guild: Guild,
 ): string {
   if (result.hasAllPermissions) {
     return '';
@@ -112,7 +112,7 @@ export function formatPermissionsError(
     '2. Find the TZBOT role',
     '3. Enable the missing permissions',
     '',
-    `Or re-invite the bot with the correct permissions:`,
+    'Or re-invite the bot with the correct permissions:',
     inviteUrl,
   ].join('\n');
 }

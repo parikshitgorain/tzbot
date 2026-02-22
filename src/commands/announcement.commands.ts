@@ -22,7 +22,7 @@ import { logger } from '@/core/logger/logger.js';
 export function createAnnouncementCommands(
   discordClient: IDiscordClient,
   database: Database,
-  announcementRelay: AnnouncementRelayManager | null
+  announcementRelay: AnnouncementRelayManager | null,
 ): CommandDefinition[] {
   return [
     createAnnouncementSetupCommand(database, announcementRelay, discordClient),
@@ -39,7 +39,7 @@ export function createAnnouncementCommands(
 function createAnnouncementSetupCommand(
   database: Database,
   announcementRelay: AnnouncementRelayManager | null,
-  discordClient: IDiscordClient
+  discordClient: IDiscordClient,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('announcement-setup')
@@ -49,42 +49,42 @@ function createAnnouncementSetupCommand(
         .setName('private_channel')
         .setDescription('Private channel where moderators post announcements')
         .addChannelTypes(ChannelType.GuildText)
-        .setRequired(true)
+        .setRequired(true),
     )
     .addChannelOption((option) =>
       option
         .setName('public_channel_1')
         .setDescription('Public channel 1 to relay to')
         .addChannelTypes(ChannelType.GuildText)
-        .setRequired(true)
+        .setRequired(true),
     )
     .addChannelOption((option) =>
       option
         .setName('public_channel_2')
         .setDescription('Public channel 2 to relay to (optional)')
         .addChannelTypes(ChannelType.GuildText)
-        .setRequired(false)
+        .setRequired(false),
     )
     .addChannelOption((option) =>
       option
         .setName('public_channel_3')
         .setDescription('Public channel 3 to relay to (optional)')
         .addChannelTypes(ChannelType.GuildText)
-        .setRequired(false)
+        .setRequired(false),
     )
     .addChannelOption((option) =>
       option
         .setName('public_channel_4')
         .setDescription('Public channel 4 to relay to (optional)')
         .addChannelTypes(ChannelType.GuildText)
-        .setRequired(false)
+        .setRequired(false),
     )
     .addChannelOption((option) =>
       option
         .setName('public_channel_5')
         .setDescription('Public channel 5 to relay to (optional)')
         .addChannelTypes(ChannelType.GuildText)
-        .setRequired(false)
+        .setRequired(false),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .setDMPermission(false);
@@ -111,7 +111,7 @@ function createAnnouncementSetupCommand(
         }
 
         const privateChannel = interaction.options.getChannel('private_channel', true);
-        
+
         // Collect all public channels (up to 5)
         const publicChannelIds: string[] = [];
         for (let i = 1; i <= 5; i++) {
@@ -124,7 +124,7 @@ function createAnnouncementSetupCommand(
               });
               return;
             }
-            
+
             // Check for duplicates
             if (publicChannelIds.includes(channel.id)) {
               await interaction.editReply({
@@ -132,7 +132,7 @@ function createAnnouncementSetupCommand(
               });
               return;
             }
-            
+
             publicChannelIds.push(channel.id);
           }
         }
@@ -152,14 +152,14 @@ function createAnnouncementSetupCommand(
           publicChannelIds: publicChannelIds,
           publicChannelIdsJoined: publicChannelIds.join(','),
         });
-        
+
         await database.setConfig('privateAnnouncementChannelId', privateChannel.id);
         await database.setConfig('publicAnnouncementChannelIds', publicChannelIds.join(','));
-        
+
         // Verify what was saved
         const savedPrivate = await database.getConfig('privateAnnouncementChannelId');
         const savedPublic = await database.getConfig('publicAnnouncementChannelIds');
-        
+
         logger.info('Verified saved configuration', {
           savedPrivate,
           savedPublic,
@@ -172,16 +172,16 @@ function createAnnouncementSetupCommand(
             // Create new instance if it doesn't exist
             const { AnnouncementRelayManager } = await import('@/managers/announcement-relay.manager.js');
             const { config } = await import('@/config/index.js');
-            
+
             announcementRelay = new AnnouncementRelayManager(discordClient, {
               privateChannelId: privateChannel.id,
               publicChannelIds: publicChannelIds,
               guildId: interaction.guildId!,
               moderatorRoleId: config.moderatorRoleId,
             });
-            
+
             announcementRelay.start();
-            
+
             logger.info('Announcement relay initialized and started', {
               privateChannel: privateChannel.id,
               publicChannels: publicChannelIds,
@@ -190,13 +190,13 @@ function createAnnouncementSetupCommand(
           } else {
             // Stop old instance before updating to prevent duplicate listeners
             announcementRelay.stop();
-            
+
             // Update existing instance
             announcementRelay.updateConfig({
               privateChannelId: privateChannel.id,
               publicChannelIds: publicChannelIds,
             });
-            
+
             // Restart with new config
             announcementRelay.start();
 
@@ -207,8 +207,8 @@ function createAnnouncementSetupCommand(
             });
           }
         } catch (relayError) {
-          logger.error('Failed to initialize/update announcement relay manager', { 
-            error: relayError 
+          logger.error('Failed to initialize/update announcement relay manager', {
+            error: relayError,
           });
           // Continue anyway - config is saved, relay can be restarted later
         }
@@ -218,14 +218,14 @@ function createAnnouncementSetupCommand(
 
         await interaction.editReply({
           content:
-            `✅ **Announcement Relay Configured & Active**\n\n` +
+            '✅ **Announcement Relay Configured & Active**\n\n' +
             `**Private Channel:** <#${privateChannel.id}>\n` +
             `**Public Channels (${publicChannelIds.length}/5):** ${publicChannelMentions}\n\n` +
             `✨ The relay is now active! Messages from moderators in <#${privateChannel.id}> will be automatically relayed to all public channels.`,
         });
       } catch (error) {
         logger.error('Failed to configure announcement relay', { error });
-        
+
         try {
           // Check if we can still respond to the interaction
           if (interaction.deferred && !interaction.replied) {
@@ -247,7 +247,7 @@ function createAnnouncementSetupCommand(
           }
         } catch (replyError) {
           // If we can't respond at all (token expired), just log it
-          logger.error('Failed to send error response to user', { 
+          logger.error('Failed to send error response to user', {
             error: replyError,
             originalError: error,
           });
@@ -262,7 +262,7 @@ function createAnnouncementSetupCommand(
  */
 function createAnnouncementAddChannelCommand(
   database: Database,
-  announcementRelay: AnnouncementRelayManager | null
+  announcementRelay: AnnouncementRelayManager | null,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('announcement-add-channel')
@@ -272,7 +272,7 @@ function createAnnouncementAddChannelCommand(
         .setName('channel')
         .setDescription('Public channel to add')
         .addChannelTypes(ChannelType.GuildText)
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .setDMPermission(false);
@@ -327,14 +327,14 @@ function createAnnouncementAddChannelCommand(
 
         await interaction.editReply({
           content:
-            `✅ **Channel Added**\n\n` +
+            '✅ **Channel Added**\n\n' +
             `<#${channel.id}> has been added to the announcement relay.\n\n` +
             `**Current public channels (${updatedChannels.length}/5):**\n` +
             updatedChannels.map((id) => `• <#${id}>`).join('\n'),
         });
       } catch (error) {
         logger.error('Failed to add channel to announcement relay', { error });
-        
+
         if (interaction.deferred) {
           await interaction.editReply({
             content: '❌ Failed to add channel. Check logs for details.',
@@ -350,7 +350,7 @@ function createAnnouncementAddChannelCommand(
  */
 function createAnnouncementRemoveChannelCommand(
   database: Database,
-  announcementRelay: AnnouncementRelayManager | null
+  announcementRelay: AnnouncementRelayManager | null,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('announcement-remove-channel')
@@ -360,7 +360,7 @@ function createAnnouncementRemoveChannelCommand(
         .setName('channel')
         .setDescription('Public channel to remove')
         .addChannelTypes(ChannelType.GuildText)
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .setDMPermission(false);
@@ -407,7 +407,7 @@ function createAnnouncementRemoveChannelCommand(
 
         await interaction.editReply({
           content:
-            `✅ **Channel Removed**\n\n` +
+            '✅ **Channel Removed**\n\n' +
             `<#${channel.id}> has been removed from the announcement relay.\n\n` +
             (updatedChannels.length > 0
               ? `**Current public channels (${updatedChannels.length}/5):**\n` +
@@ -416,7 +416,7 @@ function createAnnouncementRemoveChannelCommand(
         });
       } catch (error) {
         logger.error('Failed to remove channel from announcement relay', { error });
-        
+
         if (interaction.deferred) {
           await interaction.editReply({
             content: '❌ Failed to remove channel. Check logs for details.',
@@ -432,7 +432,7 @@ function createAnnouncementRemoveChannelCommand(
  */
 function createAnnouncementStatusCommand(
   database: Database,
-  announcementRelay: AnnouncementRelayManager | null
+  announcementRelay: AnnouncementRelayManager | null,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('announcement-status')
@@ -465,11 +465,11 @@ function createAnnouncementStatusCommand(
         }
 
         const status = announcementRelay?.isEnabled() ? '🟢 Active' : '🔴 Inactive';
-        
+
         // Try to fetch and validate channels
         const guild = interaction.guild;
         let privateChannelDisplay = `<#${privateChannelId}>`;
-        
+
         if (guild) {
           try {
             const privateChannel = await guild.channels.fetch(String(privateChannelId));
@@ -480,12 +480,12 @@ function createAnnouncementStatusCommand(
             privateChannelDisplay = `❌ Invalid (ID: ${privateChannelId}) - Channel not found or bot lacks access`;
           }
         }
-        
+
         // Validate public channels
         const publicChannelList: string[] = [];
         for (const channelId of publicChannels) {
           let channelDisplay = `• <#${channelId}>`;
-          
+
           if (guild) {
             try {
               const channel = await guild.channels.fetch(String(channelId));
@@ -496,23 +496,23 @@ function createAnnouncementStatusCommand(
               channelDisplay = `• ❌ Invalid (ID: ${channelId}) - Channel not found or bot lacks access`;
             }
           }
-          
+
           publicChannelList.push(channelDisplay);
         }
 
         await interaction.editReply({
           content:
-            `📢 **Announcement Relay Status**\n\n` +
+            '📢 **Announcement Relay Status**\n\n' +
             `**Status:** ${status}\n` +
             `**Private Channel:** ${privateChannelDisplay}\n\n` +
             `**Public Channels (${publicChannels.length}/5):**\n${publicChannelList.join('\n')}\n\n` +
-            `**How it works:**\n` +
-            `Messages from moderators in the private channel are automatically relayed to all public channels listed above.\n\n` +
-            `**Note:** If channels show as "Invalid", they may have been deleted or the bot lacks permission to see them. Use \`/announcement-setup\` to reconfigure.`,
+            '**How it works:**\n' +
+            'Messages from moderators in the private channel are automatically relayed to all public channels listed above.\n\n' +
+            '**Note:** If channels show as "Invalid", they may have been deleted or the bot lacks permission to see them. Use `/announcement-setup` to reconfigure.',
         });
       } catch (error) {
         logger.error('Failed to get announcement relay status', { error });
-        
+
         if (interaction.deferred) {
           await interaction.editReply({
             content: '❌ Failed to get status. Check logs for details.',
@@ -527,7 +527,7 @@ function createAnnouncementStatusCommand(
  * /announcement-toggle command
  */
 function createAnnouncementToggleCommand(
-  announcementRelay: AnnouncementRelayManager | null
+  announcementRelay: AnnouncementRelayManager | null,
 ): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('announcement-toggle')
@@ -536,7 +536,7 @@ function createAnnouncementToggleCommand(
       option
         .setName('enabled')
         .setDescription('Enable or disable the relay')
-        .setRequired(true)
+        .setRequired(true),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .setDMPermission(false);
@@ -563,21 +563,21 @@ function createAnnouncementToggleCommand(
         if (enabled) {
           announcementRelay.enable();
           logger.info('Announcement relay enabled', { enabledBy: interaction.user.id });
-          
+
           await interaction.editReply({
             content: '✅ Announcement relay has been **enabled**.',
           });
         } else {
           announcementRelay.disable();
           logger.info('Announcement relay disabled', { disabledBy: interaction.user.id });
-          
+
           await interaction.editReply({
             content: '⚠️ Announcement relay has been **disabled**.',
           });
         }
       } catch (error) {
         logger.error('Failed to toggle announcement relay', { error });
-        
+
         if (interaction.deferred) {
           await interaction.editReply({
             content: '❌ Failed to toggle relay. Check logs for details.',

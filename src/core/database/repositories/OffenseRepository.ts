@@ -37,7 +37,7 @@ export class OffenseRepository {
    */
   async getOffenseRecord(userId: string): Promise<OffenseRecord | null> {
     const client = await this.pool.connect();
-    
+
     try {
       // Get offense record
       const recordQuery = `
@@ -46,15 +46,15 @@ export class OffenseRepository {
         FROM offense_records
         WHERE user_id = $1
       `;
-      
+
       const recordResult = await client.query(recordQuery, [userId]);
-      
+
       if (recordResult.rows.length === 0) {
         return null;
       }
-      
+
       const record = recordResult.rows[0];
-      
+
       // Get all offense entries for this user
       const entriesQuery = `
         SELECT id, timestamp, reason, punishment_applied, 
@@ -63,9 +63,9 @@ export class OffenseRepository {
         WHERE user_id = $1
         ORDER BY timestamp ASC
       `;
-      
+
       const entriesResult = await client.query(entriesQuery, [userId]);
-      
+
       return {
         user_id: record.user_id,
         total_offenses: record.total_offenses,
@@ -83,7 +83,7 @@ export class OffenseRepository {
       };
     } catch (error) {
       throw new Error(
-        `Failed to get offense record: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to get offense record: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     } finally {
       client.release();
@@ -120,7 +120,7 @@ export class OffenseRepository {
       ]);
     } catch (error) {
       throw new Error(
-        `Failed to save offense record: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to save offense record: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -149,7 +149,7 @@ export class OffenseRepository {
       ]);
     } catch (error) {
       throw new Error(
-        `Failed to add offense entry: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to add offense entry: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -160,7 +160,7 @@ export class OffenseRepository {
    */
   async getAllActiveOffenses(): Promise<OffenseRecord[]> {
     const client = await this.pool.connect();
-    
+
     try {
       // Get all offense records
       const recordsQuery = `
@@ -170,13 +170,13 @@ export class OffenseRepository {
         WHERE total_offenses > 0
         ORDER BY last_offense_timestamp DESC
       `;
-      
+
       const recordsResult = await client.query(recordsQuery);
-      
+
       if (recordsResult.rows.length === 0) {
         return [];
       }
-      
+
       // Get all entries for all users in one query
       const userIds = recordsResult.rows.map(row => row.user_id);
       const entriesQuery = `
@@ -186,9 +186,9 @@ export class OffenseRepository {
         WHERE user_id = ANY($1)
         ORDER BY user_id, timestamp ASC
       `;
-      
+
       const entriesResult = await client.query(entriesQuery, [userIds]);
-      
+
       // Group entries by user_id
       const entriesByUser = new Map<string, OffenseEntry[]>();
       for (const row of entriesResult.rows) {
@@ -204,7 +204,7 @@ export class OffenseRepository {
           timeout_duration: row.timeout_duration,
         });
       }
-      
+
       // Combine records with their entries
       return recordsResult.rows.map(record => ({
         user_id: record.user_id,
@@ -216,7 +216,7 @@ export class OffenseRepository {
       }));
     } catch (error) {
       throw new Error(
-        `Failed to get all active offenses: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to get all active offenses: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     } finally {
       client.release();
@@ -229,10 +229,10 @@ export class OffenseRepository {
    */
   async removeLastOffense(userId: string): Promise<void> {
     const client = await this.pool.connect();
-    
+
     try {
       await client.query('BEGIN');
-      
+
       // Delete the most recent offense entry
       const deleteQuery = `
         DELETE FROM offense_entries
@@ -243,9 +243,9 @@ export class OffenseRepository {
           LIMIT 1
         )
       `;
-      
+
       await client.query(deleteQuery, [userId]);
-      
+
       // Update the offense record to decrement total_offenses
       const updateQuery = `
         UPDATE offense_records
@@ -253,14 +253,14 @@ export class OffenseRepository {
             updated_at = CURRENT_TIMESTAMP
         WHERE user_id = $1
       `;
-      
+
       await client.query(updateQuery, [userId]);
-      
+
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
       throw new Error(
-        `Failed to remove last offense: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to remove last offense: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     } finally {
       client.release();
@@ -273,13 +273,13 @@ export class OffenseRepository {
    * Used by /resetoffenses command and 30-day auto-reset
    */
   async resetOffenses(userId: string): Promise<void> {
-    const query = `DELETE FROM offense_records WHERE user_id = $1`;
+    const query = 'DELETE FROM offense_records WHERE user_id = $1';
 
     try {
       await this.pool.query(query, [userId]);
     } catch (error) {
       throw new Error(
-        `Failed to reset offenses: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to reset offenses: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -289,10 +289,10 @@ export class OffenseRepository {
    * Provides transaction support for complex operations
    */
   async withTransaction<T>(
-    callback: (client: PoolClient) => Promise<T>
+    callback: (client: PoolClient) => Promise<T>,
   ): Promise<T> {
     const client = await this.pool.connect();
-    
+
     try {
       await client.query('BEGIN');
       const result = await callback(client);

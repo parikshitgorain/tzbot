@@ -32,7 +32,7 @@ export class PunishmentCalculator {
 
   /**
    * Calculate punishment based on offense count and previous timeout
-   * 
+   *
    * Punishment ladder:
    * - Offense 1-2: WARNING
    * - Offense 3: 1 hour timeout
@@ -41,7 +41,7 @@ export class PunishmentCalculator {
    * - Offense 6: 8 hour timeout
    * - Offense 7: 16 hour timeout
    * - Offense 8+: PERMANENT_BAN (would be 32h+)
-   * 
+   *
    * @param offenseCount - Current offense count (1-based)
    * @param previousTimeout - Previous timeout duration in hours
    * @returns Calculated punishment
@@ -58,7 +58,7 @@ export class PunishmentCalculator {
 
     // Calculate timeout duration
     let duration: number;
-    
+
     if (offenseCount === 3) {
       duration = 1; // 1 hour
     } else if (offenseCount === 4) {
@@ -93,21 +93,21 @@ export class PunishmentCalculator {
   /**
    * Check if offenses should be reset based on last offense timestamp
    * Offenses reset after 30 days of no violations
-   * 
+   *
    * @param lastOffenseTimestamp - Timestamp of last offense
    * @returns True if offenses should be reset
    */
   shouldResetOffenses(lastOffenseTimestamp: Date): boolean {
     const now = new Date();
-    const daysSinceLastOffense = 
+    const daysSinceLastOffense =
       (now.getTime() - lastOffenseTimestamp.getTime()) / (1000 * 60 * 60 * 24);
-    
+
     return daysSinceLastOffense >= PunishmentCalculator.RESET_PERIOD_DAYS;
   }
 
   /**
    * Get human-readable description of next punishment
-   * 
+   *
    * @param currentOffenseCount - Current offense count
    * @returns Description of what happens on next offense
    */

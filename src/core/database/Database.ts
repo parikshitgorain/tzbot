@@ -47,7 +47,7 @@ export class Database implements IDatabase {
     // Test connection with retry logic (for Neon cold starts)
     const maxRetries = 3;
     let lastError: Error | null = null;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const client = await this.pool.connect();
@@ -63,7 +63,7 @@ export class Database implements IDatabase {
         }
       }
     }
-    
+
     if (lastError) {
       throw new Error(`Failed to connect to database after ${maxRetries} attempts: ${lastError.message}`);
     }
@@ -173,9 +173,9 @@ export class Database implements IDatabase {
   // Data retention operations
   async deleteAllUserData(userId: string): Promise<void> {
     this.ensureConnected();
-    
+
     const client = await this.pool!.connect();
-    
+
     try {
       await client.query('BEGIN');
 
@@ -204,7 +204,7 @@ export class Database implements IDatabase {
     } catch (error) {
       await client.query('ROLLBACK');
       throw new Error(
-        `Failed to delete user data: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to delete user data: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     } finally {
       client.release();

@@ -2,13 +2,13 @@
  * @file role-sync.ts
  * @description Badge-based role synchronization system
  * @module services/kick
- * 
+ *
  * This system automatically synchronizes Discord roles based on Kick chat badges:
  * - Detects subscriber/VIP badges in Kick chat messages
  * - Looks up linked Discord users
  * - Assigns/removes roles based on badge presence
  * - Logs all role sync operations
- * 
+ *
  * Requirements: 2.1-2.4
  */
 
@@ -88,7 +88,7 @@ export class RoleSyncSystem implements IRoleSyncSystem {
   constructor(
     private config: RoleSyncConfig,
     private discordClient: IDiscordClient,
-    private linkingSystem: IUserLinkingSystem
+    private linkingSystem: IUserLinkingSystem,
   ) {
     this.enabled = config.enabled;
   }
@@ -130,7 +130,7 @@ export class RoleSyncSystem implements IRoleSyncSystem {
    * Process a Kick chat message and sync roles based on badges
    */
   async syncRolesFromMessage(
-    message: KickChatMessage
+    message: KickChatMessage,
   ): Promise<RoleSyncResult | null> {
     if (!this.enabled) {
       logger.debug('Role sync disabled, skipping', {
@@ -147,7 +147,7 @@ export class RoleSyncSystem implements IRoleSyncSystem {
    * Process badge information and sync roles
    */
   async syncRolesFromBadges(
-    badgeInfo: UserBadgeInfo
+    badgeInfo: UserBadgeInfo,
   ): Promise<RoleSyncResult | null> {
     if (!this.enabled) {
       logger.debug('Role sync disabled, skipping', {
@@ -170,7 +170,7 @@ export class RoleSyncSystem implements IRoleSyncSystem {
     return this.syncUserRoles(
       discordId,
       badgeInfo.isSubscriber,
-      badgeInfo.isVIP
+      badgeInfo.isVIP,
     );
   }
 
@@ -180,7 +180,7 @@ export class RoleSyncSystem implements IRoleSyncSystem {
   async syncUserRoles(
     discordId: string,
     hasSubscriberBadge: boolean,
-    hasVIPBadge: boolean
+    hasVIPBadge: boolean,
   ): Promise<RoleSyncResult> {
     const result: RoleSyncResult = {
       success: true,
@@ -198,7 +198,7 @@ export class RoleSyncSystem implements IRoleSyncSystem {
       // Check current roles
       const hasSubscriberRole = await this.hasRole(
         discordId,
-        this.config.subscriberRoleId
+        this.config.subscriberRoleId,
       );
       const hasVIPRole = await this.hasRole(discordId, this.config.vipRoleId);
 
@@ -207,7 +207,7 @@ export class RoleSyncSystem implements IRoleSyncSystem {
         await this.discordClient.addRole(
           this.config.guildId,
           discordId,
-          this.config.subscriberRoleId
+          this.config.subscriberRoleId,
         );
         result.rolesAdded.push('subscriber');
         logger.info('Added subscriber role', {
@@ -218,7 +218,7 @@ export class RoleSyncSystem implements IRoleSyncSystem {
         await this.discordClient.removeRole(
           this.config.guildId,
           discordId,
-          this.config.subscriberRoleId
+          this.config.subscriberRoleId,
         );
         result.rolesRemoved.push('subscriber');
         logger.info('Removed subscriber role', {
@@ -232,7 +232,7 @@ export class RoleSyncSystem implements IRoleSyncSystem {
         await this.discordClient.addRole(
           this.config.guildId,
           discordId,
-          this.config.vipRoleId
+          this.config.vipRoleId,
         );
         result.rolesAdded.push('vip');
         logger.info('Added VIP role', {
@@ -243,7 +243,7 @@ export class RoleSyncSystem implements IRoleSyncSystem {
         await this.discordClient.removeRole(
           this.config.guildId,
           discordId,
-          this.config.vipRoleId
+          this.config.vipRoleId,
         );
         result.rolesRemoved.push('vip');
         logger.info('Removed VIP role', {
@@ -285,7 +285,7 @@ export class RoleSyncSystem implements IRoleSyncSystem {
     try {
       const member = await this.discordClient.getMember(
         this.config.guildId,
-        discordId
+        discordId,
       );
 
       if (!member) {

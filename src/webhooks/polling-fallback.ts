@@ -2,7 +2,7 @@
  * @file polling-fallback.ts
  * @description Polling fallback system for Kick API when webhooks fail
  * @module webhooks
- * 
+ *
  * Requirements:
  * - 8.3: Activate polling if webhooks fail for 3 consecutive events or 60 seconds
  * - 8.4: Check Kick API every 10 seconds while polling is active
@@ -48,7 +48,7 @@ interface SystemTransition {
 
 /**
  * Polling fallback system
- * 
+ *
  * Monitors webhook health and automatically switches to polling when webhooks fail.
  * Automatically recovers to webhooks when they resume functioning.
  */
@@ -96,7 +96,7 @@ export class PollingFallbackSystem {
 
     // Check webhook health periodically
     this.checkWebhookHealth();
-    
+
     // Set up periodic health checks (every 5 seconds)
     setInterval(() => {
       this.checkWebhookHealth();
@@ -108,7 +108,7 @@ export class PollingFallbackSystem {
    */
   stop(): void {
     logger.info('Stopping polling fallback system');
-    
+
     if (this.pollingTimer) {
       clearInterval(this.pollingTimer);
       this.pollingTimer = null;
@@ -235,7 +235,7 @@ export class PollingFallbackSystem {
       // Fetch events since last poll
       const events = await this.kickAPIClient.getLiveEvents(
         this.channelId,
-        this.lastPolledEventTimestamp || new Date()
+        this.lastPolledEventTimestamp || new Date(),
       );
 
       if (events.length > 0) {
@@ -296,7 +296,7 @@ export class PollingFallbackSystem {
       // Send notification
       await this.notificationManager.sendNotification(
         notificationEvent,
-        embedData
+        embedData,
       );
 
       logger.info('Polled event processed successfully', {
@@ -408,7 +408,7 @@ export class PollingFallbackSystem {
   private recordTransition(
     from: MonitoringState,
     to: MonitoringState,
-    reason: string
+    reason: string,
   ): void {
     const transition: SystemTransition = {
       from,
@@ -455,7 +455,7 @@ export class PollingFallbackSystem {
     lastPolledAt: Date | null;
     webhookHealth: ReturnType<KickWebhookHandler['getHealthStatus']>;
     transitionCount: number;
-  } {
+    } {
     return {
       currentState: this.currentState,
       isPolling: this.isPolling,

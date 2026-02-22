@@ -193,7 +193,7 @@ export class DiscordClient implements IDiscordClient {
       }
 
       throw new Error(
-        `Failed to connect to Discord after ${this.maxReconnectAttempts} attempts`
+        `Failed to connect to Discord after ${this.maxReconnectAttempts} attempts`,
       );
     }
   }
@@ -398,7 +398,7 @@ export class DiscordClient implements IDiscordClient {
     guildId: string,
     userId: string,
     duration: number,
-    reason: string
+    reason: string,
   ): Promise<void> {
     try {
       const guild = await this.client.guilds.fetch(guildId);

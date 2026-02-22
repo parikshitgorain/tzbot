@@ -35,7 +35,7 @@ export interface NotificationResult {
 
 /**
  * OffenseManager orchestrates offense processing and punishment application
- * 
+ *
  * Responsibilities:
  * - Process new offenses with automatic 30-day reset
  * - Calculate and apply progressive punishments
@@ -48,14 +48,14 @@ export class OffenseManager {
     private pool: Pool,
     private offenseRepository: OffenseRepository,
     private punishmentCalculator: PunishmentCalculator,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
   ) {
     logger.info('OffenseManager initialized');
   }
 
   /**
    * Process a new offense for a user
-   * 
+   *
    * Flow:
    * 1. Check if 30-day reset is needed
    * 2. Get or create offense record
@@ -63,7 +63,7 @@ export class OffenseManager {
    * 4. Update offense record and add entry
    * 5. Send notifications
    * 6. Return punishment for caller to apply
-   * 
+   *
    * @param userId - Discord user ID
    * @param reason - Reason for the offense
    * @param moderatorId - Discord ID of moderator issuing the offense
@@ -74,7 +74,7 @@ export class OffenseManager {
     userId: string,
     reason: string,
     moderatorId: string,
-    channelId: string
+    channelId: string,
   ): Promise<Punishment> {
     const client = await this.pool.connect();
 
@@ -111,13 +111,13 @@ export class OffenseManager {
       // Calculate punishment
       const punishment = this.punishmentCalculator.calculatePunishment(
         newOffenseCount,
-        record.current_timeout_duration
+        record.current_timeout_duration,
       );
 
       // Update record
       record.total_offenses = newOffenseCount;
       record.last_offense_timestamp = new Date();
-      
+
       if (punishment.type === PunishmentType.TIMEOUT && punishment.duration) {
         record.current_timeout_duration = punishment.duration;
       } else if (punishment.type === PunishmentType.PERMANENT_BAN) {
@@ -155,7 +155,7 @@ export class OffenseManager {
           channelId,
           punishment,
           reason,
-          newOffenseCount
+          newOffenseCount,
         );
       } catch (error) {
         logError('Failed to send punishment notifications', error as Error, {
@@ -176,7 +176,7 @@ export class OffenseManager {
 
   /**
    * Get offense history for a user
-   * 
+   *
    * @param userId - Discord user ID
    * @returns OffenseRecord or null if no history
    */
@@ -192,7 +192,7 @@ export class OffenseManager {
   /**
    * Clear the last offense for a user
    * Recalculates current_timeout_duration based on remaining offenses
-   * 
+   *
    * @param userId - Discord user ID
    */
   async clearLastOffense(userId: string): Promise<void> {
@@ -211,7 +211,7 @@ export class OffenseManager {
         // Recalculate timeout duration based on new offense count
         const punishment = this.punishmentCalculator.calculatePunishment(
           record.total_offenses,
-          0 // Reset to recalculate from scratch
+          0, // Reset to recalculate from scratch
         );
 
         record.current_timeout_duration = punishment.duration || 0;
@@ -235,7 +235,7 @@ export class OffenseManager {
   /**
    * Reset all offenses for a user
    * Clears offense record and all entries
-   * 
+   *
    * @param userId - Discord user ID
    */
   async resetAllOffenses(userId: string): Promise<void> {

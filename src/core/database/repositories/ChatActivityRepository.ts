@@ -186,15 +186,15 @@ export class ChatActivityRepository {
       FROM chat_rain_winners
       WHERE user_id = $1
     `;
-    
+
     const params: (string | Date)[] = [userId];
-    
+
     if (since) {
-      query += ` AND timestamp >= $2`;
+      query += ' AND timestamp >= $2';
       params.push(since);
     }
-    
-    query += ` ORDER BY timestamp DESC`;
+
+    query += ' ORDER BY timestamp DESC';
 
     try {
       const result = await this.pool.query(query, params);
@@ -202,7 +202,7 @@ export class ChatActivityRepository {
         userId: row.user_id,
         timestamp: row.timestamp,
         rewardType: row.reward_type,
-        rewardValue: row.reward_value
+        rewardValue: row.reward_value,
       }));
     } catch (error) {
       throw new Error(`Failed to get reward history: ${error instanceof Error ? error.message : 'Unknown error'}`);
