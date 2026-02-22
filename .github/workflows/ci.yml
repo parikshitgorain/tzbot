@@ -200,56 +200,72 @@ jobs:
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          retries: 3
+          retry-exempt-status-codes: 400,401,403,404
           script: |
-            try {
-              console.log('🚀 Attempting to trigger promotion workflow...');
-              console.log(`Repository: ${context.repo.owner}/${context.repo.repo}`);
-              console.log(`Commit SHA: ${context.sha}`);
-              console.log(`Commit Author: ${context.actor}`);
-              
-              // Trigger the workflow directly without checking (GitHub API may be cached)
-              const response = await github.rest.actions.createWorkflowDispatch({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                workflow_id: 'promote.yml',
-                ref: 'Development',
-                inputs: {
-                  source_branch: 'Development',
-                  target_branch: 'release',
-                  commit_sha: context.sha,
-                  commit_author: context.actor
+            const maxRetries = 3;
+            const retryDelay = 30000; // 30 seconds
+            
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+              try {
+                console.log(`🚀 Attempt ${attempt}/${maxRetries}: Triggering promotion workflow...`);
+                console.log(`Repository: ${context.repo.owner}/${context.repo.repo}`);
+                console.log(`Commit SHA: ${context.sha}`);
+                console.log(`Commit Author: ${context.actor}`);
+                
+                await github.rest.actions.createWorkflowDispatch({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: 'promote.yml',
+                  ref: 'Development',
+                  inputs: {
+                    source_branch: 'Development',
+                    target_branch: 'release',
+                    commit_sha: context.sha,
+                    commit_author: context.actor
+                  }
+                });
+                
+                console.log('✅ Promotion workflow triggered successfully!');
+                console.log('📋 The Branch Promotion workflow will start shortly');
+                console.log('🔗 Check the Actions tab to monitor progress');
+                return; // Success, exit the loop
+                
+              } catch (error) {
+                console.error(`❌ Attempt ${attempt} failed: ${error.message}`);
+                
+                // If it's a workflow_dispatch cache issue and we have retries left, wait and retry
+                if (error.message.includes('workflow_dispatch') && attempt < maxRetries) {
+                  console.log(`⏳ GitHub API cache issue detected. Waiting ${retryDelay/1000}s before retry...`);
+                  await new Promise(resolve => setTimeout(resolve, retryDelay));
+                  continue;
                 }
-              });
-              
-              console.log('✅ Promotion workflow triggered successfully!');
-              console.log('📋 The Branch Promotion workflow will start shortly');
-              console.log('🔗 Check the Actions tab to monitor progress');
-              
-            } catch (error) {
-              console.error('❌ Failed to trigger promotion workflow');
-              console.error(`Error: ${error.message}`);
-              
-              // Check if it's a permissions issue
-              if (error.message.includes('Resource not accessible') || error.message.includes('Not Found')) {
-                console.log('');
-                console.log('⚠️ This appears to be a permissions issue.');
-                console.log('');
-                console.log('Possible solutions:');
-                console.log('1. Verify PAT_TOKEN secret is set with "repo" and "workflow" scopes');
-                console.log('2. Enable "Read and write permissions" in Settings → Actions → General');
-                console.log('3. Enable "Allow GitHub Actions to create and approve pull requests"');
-              } else if (error.message.includes('workflow_dispatch')) {
-                console.log('');
-                console.log('⚠️ GitHub API may be cached. The workflow file has workflow_dispatch trigger.');
-                console.log('Wait a few minutes and try pushing another commit, or manually trigger the workflow.');
+                
+                // Last attempt or non-retryable error
+                if (attempt === maxRetries) {
+                  console.log('');
+                  console.log('⚠️ All retry attempts exhausted');
+                  
+                  if (error.message.includes('Resource not accessible') || error.message.includes('Not Found')) {
+                    console.log('');
+                    console.log('⚠️ This appears to be a permissions issue.');
+                    console.log('Possible solutions:');
+                    console.log('1. Verify PAT_TOKEN secret is set with "repo" and "workflow" scopes');
+                    console.log('2. Enable "Read and write permissions" in Settings → Actions → General');
+                  } else if (error.message.includes('workflow_dispatch')) {
+                    console.log('');
+                    console.log('⚠️ GitHub API cache issue persists.');
+                    console.log('The workflow file has workflow_dispatch trigger but API hasn\'t refreshed.');
+                    console.log('This usually resolves within 5-10 minutes.');
+                  }
+                  
+                  console.log('');
+                  console.log('✅ CI Pipeline completed successfully - all tests passed!');
+                  console.log('📝 You can manually trigger promotion from: Actions → Branch Promotion → Run workflow');
+                  
+                  throw error; // Don't fail the CI pipeline due to continue-on-error
+                }
               }
-              
-              console.log('');
-              console.log('✅ CI Pipeline completed successfully - all tests passed!');
-              console.log('📝 You can manually trigger promotion from: Actions → Branch Promotion → Run workflow');
-              
-              // Don't fail the CI pipeline
-              throw error;
             }
       
       - name: Promotion summary
