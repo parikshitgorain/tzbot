@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * @file command.example.ts
  * @description Example usage of CommandManager
@@ -192,7 +191,7 @@ async function multipleCommandsExample() {
         // Send warning DM to user
         try {
           await user.send(`⚠️ You have been warned: ${reason}`);
-        } catch (error) {
+        } catch {
           logger.warn('Could not DM user', { userId: user.id });
         }
 

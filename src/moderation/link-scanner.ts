@@ -24,6 +24,7 @@ const ZERO_WIDTH_CHARS = [
  * Matches http://, https://, and common domain patterns
  * Includes zero-width characters to catch obfuscated URLs
  */
+// eslint-disable-next-line no-misleading-character-class, no-useless-escape
 const URL_REGEX = /(?:https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=\u200B\u200C\u200D\uFEFF]{1,256}\.[a-zA-Z0-9()\u200B\u200C\u200D\uFEFF]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=\u200B\u200C\u200D\uFEFF]*)/gi;
 
 /**

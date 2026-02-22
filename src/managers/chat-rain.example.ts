@@ -1,4 +1,4 @@
-// @ts-nocheck
+/* eslint-disable no-console */
 /**
  * @file chat-rain.example.ts
  * @description Example usage of ChatRainManager
@@ -75,26 +75,6 @@ async function exampleChatRainUsage() {
       // Distribute rewards and announce
     }
   }, 15 * 60 * 1000); // Check every 15 minutes
-
-  // Example 4: Manual trigger with eligibility check
-  async function triggerChatRain() {
-    const timeUntilNext = chatRainManager.getTimeUntilNextChatRain();
-    
-    if (timeUntilNext > 0) {
-      console.log('Chat rain is on cooldown');
-      return;
-    }
-
-    const winners = await chatRainManager.executeChatRain();
-    
-    if (!winners || winners.length === 0) {
-      console.log('No eligible users for chat rain');
-      return;
-    }
-
-    console.log('Chat rain executed successfully!');
-    // Announce and distribute rewards
-  }
 
   // Clean up
   await pool.end();

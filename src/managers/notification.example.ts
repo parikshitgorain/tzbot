@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * @file notification.example.ts
  * @description Example usage of NotificationManager
@@ -150,15 +151,17 @@ async function handleKickWebhook(webhookPayload: any) {
   const eventType = webhookPayload.event_type;
   
   switch (eventType) {
-    case 'livestream.started':
+    case 'livestream.started': {
       await sendStreamLiveNotification();
       break;
+    }
       
-    case 'subscription.created':
+    case 'subscription.created': {
       await sendNewSubscriberNotification(webhookPayload.data.username);
       break;
+    }
       
-    case 'channel.raid':
+    case 'channel.raid': {
       const raidEvent: NotificationEvent = {
         id: `raid-${Date.now()}`,
         type: EventType.RAID,
@@ -180,6 +183,7 @@ async function handleKickWebhook(webhookPayload: any) {
       
       await notificationManager.sendNotification(raidEvent, raidEmbed);
       break;
+    }
   }
 }
 

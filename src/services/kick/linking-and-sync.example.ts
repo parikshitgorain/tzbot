@@ -1,4 +1,4 @@
-// @ts-nocheck
+/* eslint-disable no-console */
 /**
  * @file linking-and-sync.example.ts
  * @description Example usage of user linking and role synchronization systems
@@ -8,8 +8,9 @@
 import { UserLinkingSystem } from './user-linking.js';
 import { RoleSyncSystem } from './role-sync.js';
 import { kickChatClient } from './chat-client.js';
-import { discordClient } from '../../core/discord/client.js';
+import { DiscordClient } from '../../core/discord/client.js';
 import { Database } from '../../core/database/Database.js';
+import { UserRepository } from '../../core/database/repositories/UserRepository.js';
 import { config } from '../../config/index.js';
 
 /**
@@ -17,11 +18,18 @@ import { config } from '../../config/index.js';
  */
 async function setupLinkingAndRoleSync() {
   // Initialize database
-  const database = new Database(config.databaseUrl);
+  const database = new Database();
   await database.connect();
 
+  // Create Discord client
+  const discordClient = new DiscordClient();
+  await discordClient.connect(config.discordToken);
+
+  // Create user repository
+  const userRepository = new UserRepository(database);
+
   // Create user linking system
-  const linkingSystem = new UserLinkingSystem(database.users);
+  const linkingSystem = new UserLinkingSystem(userRepository);
 
   // Create role sync system
   const roleSyncSystem = new RoleSyncSystem(

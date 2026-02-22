@@ -994,7 +994,7 @@ class TZBotApplication {
                         userId: message.author.id,
                         messageId: cooldownData.reminderMessageId,
                       });
-                    } catch (fetchError) {
+                    } catch {
                       // Message doesn't exist anymore, create a new one
                       cooldownReminder = await message.channel.send(reminderText);
                       

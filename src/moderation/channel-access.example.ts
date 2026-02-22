@@ -1,4 +1,4 @@
-// @ts-nocheck
+/* eslint-disable no-console */
 /**
  * @file channel-access.example.ts
  * @description Example usage of the channel access enforcement system

@@ -1,4 +1,4 @@
-// @ts-nocheck
+/* eslint-disable no-console, @typescript-eslint/no-unused-vars */
 /**
  * @file example.ts
  * @description Example usage of Kick API client

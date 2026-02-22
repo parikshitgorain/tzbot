@@ -1,4 +1,4 @@
-// @ts-nocheck
+/* eslint-disable no-console */
 /**
  * Health Check System Example
  * 

@@ -1,4 +1,4 @@
-// @ts-nocheck
+/* eslint-disable no-console */
 /**
  * @file state-persistence.example.ts
  * @description Example usage of the state persistence service
@@ -34,7 +34,7 @@ async function example1_InitializeStatePersistence() {
  */
 function example2_UpdateState(
   statePersistence: StatePersistenceService,
-  chatRainManager: ChatRainManager
+  _chatRainManager: ChatRainManager
 ) {
   // After executing a chat rain event
   statePersistence.updateState({
@@ -51,11 +51,8 @@ function example2_UpdateState(
  */
 function example3_UpdateNotificationQueue(
   statePersistence: StatePersistenceService,
-  notificationManager: NotificationManager
+  _notificationManager: NotificationManager
 ) {
-  // Get current queue stats
-  const queueStats = notificationManager.getQueueStats();
-
   // Update state with queued notifications
   // Note: In real implementation, you'd get the actual queue data
   statePersistence.updateState({
@@ -83,7 +80,7 @@ function example3_UpdateNotificationQueue(
  */
 async function example4_UpdateActiveGiveaways(
   statePersistence: StatePersistenceService,
-  giveawayManager: GiveawayManager
+  _giveawayManager: GiveawayManager
 ) {
   // After creating a giveaway, update state
   // Note: In real implementation, you'd track active giveaways

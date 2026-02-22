@@ -1,4 +1,4 @@
-// @ts-nocheck
+/* eslint-disable no-console */
 /**
  * @file example.ts
  * @description Example usage of the Discord client wrapper
@@ -208,13 +208,14 @@ async function completeBotExample() {
       const command = message.content.slice(1).split(' ')[0];
 
       switch (command) {
-        case 'ping':
+        case 'ping': {
           await client.sendMessage(message.channelId, {
             content: 'Pong!',
           });
           break;
+        }
 
-        case 'help':
+        case 'help': {
           const helpEmbed = new EmbedBuilder()
             .setTitle('TZBOT Commands')
             .setDescription('Available commands:')
@@ -228,6 +229,7 @@ async function completeBotExample() {
             embeds: [helpEmbed],
           });
           break;
+        }
       }
     }
   });

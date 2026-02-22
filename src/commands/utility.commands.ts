@@ -185,8 +185,8 @@ function createSetupCommand(database: Database, config: BotConfig): CommandDefin
           });
         }
       }
-    } catch (error) {
-      logError('Failed to execute setup command', error as Error);
+    } catch (_error) {
+      logError('Failed to execute setup command', _error as Error);
 
       const errorMessage = '❌ Failed to update configuration. Please try again.';
       if (interaction.deferred) {
