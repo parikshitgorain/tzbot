@@ -155,6 +155,27 @@ jobs:
           echo "✅ SSH key validated successfully"
           ssh-keyscan -H ${{ steps.dns.outputs.vps_ip }} >> ~/.ssh/known_hosts
       
+      - name: Initialize VPS deployment directory
+        run: |
+          echo "🔧 Initializing VPS deployment directory..."
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
+            "mkdir -p /var/www/tzbot && \
+             cd /var/www/tzbot && \
+             if [ ! -d .git ]; then \
+               echo '📦 Cloning repository for first time...'; \
+               git clone --branch release ${{ github.server_url }}/${{ github.repository }}.git .; \
+             else \
+               echo '✅ Repository already exists'; \
+             fi"
+            echo ""
+            echo "Please update the VPS_SSH_KEY secret with the complete private key"
+            exit 1
+          fi
+          echo "✅ SSH key validated successfully"
+          ssh-keyscan -H ${{ steps.dns.outputs.vps_ip }} >> ~/.ssh/known_hosts
+      
       - name: Send deployment start notification
         run: |
           bash deployment/scripts/notify.sh start \
