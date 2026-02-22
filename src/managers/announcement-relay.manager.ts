@@ -43,6 +43,7 @@ export class AnnouncementRelayManager {
   private discordClient: IDiscordClient;
   private config: AnnouncementRelayConfig;
   private enabled: boolean = true;
+  private isListening: boolean = false;
 
   constructor(
     discordClient: IDiscordClient,
@@ -59,13 +60,28 @@ export class AnnouncementRelayManager {
   }
 
   /**
+   * Message handler bound to this instance
+   */
+  private boundMessageHandler?: (message: Message) => Promise<void>;
+
+  /**
    * Start monitoring the private channel for announcements
    */
   start(): void {
-    this.discordClient.on('messageCreate', async (message: Message) => {
-      await this.handleMessage(message);
-    });
+    // Prevent duplicate listener registration
+    if (this.isListening) {
+      logger.debug('AnnouncementRelayManager already listening, skipping start');
+      return;
+    }
 
+    // Create bound handler for this instance
+    this.boundMessageHandler = async (message: Message) => {
+      await this.handleMessage(message);
+    };
+
+    this.discordClient.on('messageCreate', this.boundMessageHandler);
+
+    this.isListening = true;
     logger.info('AnnouncementRelayManager started');
   }
 
@@ -304,6 +320,25 @@ export class AnnouncementRelayManager {
   disable(): void {
     this.enabled = false;
     logger.info('AnnouncementRelayManager disabled');
+  }
+
+  /**
+   * Stop monitoring (remove event listener)
+   */
+  stop(): void {
+    if (!this.isListening) {
+      logger.debug('AnnouncementRelayManager not listening, skipping stop');
+      return;
+    }
+
+    // Remove the specific event listener for this instance
+    if (this.boundMessageHandler) {
+      this.discordClient.off('messageCreate', this.boundMessageHandler);
+      this.boundMessageHandler = undefined;
+    }
+
+    this.isListening = false;
+    logger.info('AnnouncementRelayManager stopped');
   }
 
   /**

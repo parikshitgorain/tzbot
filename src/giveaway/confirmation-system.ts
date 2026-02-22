@@ -1,12 +1,12 @@
 import { Client, EmbedBuilder, User } from 'discord.js';
-import { WinnerStateRepository } from '../core/database/repositories/WinnerStateRepository';
-import { GiveawayRepository } from '../core/database/repositories/GiveawayRepository';
-import { TimerManager } from './timer-manager';
-import { RerollHandler } from './reroll-handler';
-import { ConfigManager } from './config-manager';
-import { MessageListener } from './message-listener';
-import { WinnerStatus } from '../types/models';
-import { logger } from '../core/logger/logger';
+import { WinnerStateRepository } from '../core/database/repositories/WinnerStateRepository.js';
+import { GiveawayRepository } from '../core/database/repositories/GiveawayRepository.js';
+import { TimerManager } from './timer-manager.js';
+import { RerollHandler } from './reroll-handler.js';
+import { ConfigManager } from './config-manager.js';
+import { MessageListener } from './message-listener.js';
+import { WinnerStatus } from '../types/models.js';
+import { logger } from '../core/logger/logger.js';
 
 /**
  * ConfirmationSystem orchestrates the winner confirmation workflow

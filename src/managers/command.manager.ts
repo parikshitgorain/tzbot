@@ -291,17 +291,37 @@ export class CommandManager implements ICommandManager {
         },
       });
 
-      // Send error message to user
-      const errorMessage = 'An error occurred while executing this command.';
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({
-          content: errorMessage,
-          ephemeral: true,
-        });
-      } else {
-        await interaction.reply({
-          content: errorMessage,
-          ephemeral: true,
+      // Send error message to user with proper error handling
+      try {
+        const errorMessage = 'An error occurred while executing this command.';
+        
+        if (interaction.replied) {
+          // Already replied, try followUp
+          await interaction.followUp({
+            content: errorMessage,
+            ephemeral: true,
+          });
+        } else if (interaction.deferred) {
+          // Deferred but not replied, use editReply
+          await interaction.editReply({
+            content: errorMessage,
+          });
+        } else {
+          // Not replied or deferred, use reply
+          await interaction.reply({
+            content: errorMessage,
+            ephemeral: true,
+          });
+        }
+      } catch (replyError) {
+        // If we can't respond (token expired, already acknowledged, etc.), just log it
+        logger.error('Failed to send error response to user', {
+          error: replyError,
+          originalError: error,
+          interactionState: {
+            replied: interaction.replied,
+            deferred: interaction.deferred,
+          },
         });
       }
     }

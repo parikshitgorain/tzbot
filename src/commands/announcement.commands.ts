@@ -95,7 +95,20 @@ function createAnnouncementSetupCommand(
     builder: builder as SlashCommandBuilder,
     handler: async (interaction: ChatInputCommandInteraction) => {
       try {
-        await interaction.deferReply({ ephemeral: true });
+        // Defer reply immediately to prevent token expiration
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferReply({ ephemeral: true });
+          logger.debug('Interaction deferred', {
+            interactionId: interaction.id,
+            commandName: 'announcement-setup',
+          });
+        } else {
+          logger.warn('Interaction already acknowledged before defer', {
+            interactionId: interaction.id,
+            deferred: interaction.deferred,
+            replied: interaction.replied,
+          });
+        }
 
         const privateChannel = interaction.options.getChannel('private_channel', true);
         
@@ -154,37 +167,50 @@ function createAnnouncementSetupCommand(
         });
 
         // Initialize or update announcement relay manager
-        if (!announcementRelay) {
-          // Create new instance if it doesn't exist
-          const { AnnouncementRelayManager } = await import('@/managers/announcement-relay.manager.js');
-          const { config } = await import('@/config/index.js');
-          
-          announcementRelay = new AnnouncementRelayManager(discordClient, {
-            privateChannelId: privateChannel.id,
-            publicChannelIds: publicChannelIds,
-            guildId: interaction.guildId!,
-            moderatorRoleId: config.moderatorRoleId,
-          });
-          
-          announcementRelay.start();
-          
-          logger.info('Announcement relay initialized and started', {
-            privateChannel: privateChannel.id,
-            publicChannels: publicChannelIds,
-            createdBy: interaction.user.id,
-          });
-        } else {
-          // Update existing instance
-          announcementRelay.updateConfig({
-            privateChannelId: privateChannel.id,
-            publicChannelIds: publicChannelIds,
-          });
+        try {
+          if (!announcementRelay) {
+            // Create new instance if it doesn't exist
+            const { AnnouncementRelayManager } = await import('@/managers/announcement-relay.manager.js');
+            const { config } = await import('@/config/index.js');
+            
+            announcementRelay = new AnnouncementRelayManager(discordClient, {
+              privateChannelId: privateChannel.id,
+              publicChannelIds: publicChannelIds,
+              guildId: interaction.guildId!,
+              moderatorRoleId: config.moderatorRoleId,
+            });
+            
+            announcementRelay.start();
+            
+            logger.info('Announcement relay initialized and started', {
+              privateChannel: privateChannel.id,
+              publicChannels: publicChannelIds,
+              createdBy: interaction.user.id,
+            });
+          } else {
+            // Stop old instance before updating to prevent duplicate listeners
+            announcementRelay.stop();
+            
+            // Update existing instance
+            announcementRelay.updateConfig({
+              privateChannelId: privateChannel.id,
+              publicChannelIds: publicChannelIds,
+            });
+            
+            // Restart with new config
+            announcementRelay.start();
 
-          logger.info('Announcement relay configuration updated', {
-            privateChannel: privateChannel.id,
-            publicChannels: publicChannelIds,
-            updatedBy: interaction.user.id,
+            logger.info('Announcement relay configuration updated and restarted', {
+              privateChannel: privateChannel.id,
+              publicChannels: publicChannelIds,
+              updatedBy: interaction.user.id,
+            });
+          }
+        } catch (relayError) {
+          logger.error('Failed to initialize/update announcement relay manager', { 
+            error: relayError 
           });
+          // Continue anyway - config is saved, relay can be restarted later
         }
 
         // Build response
@@ -200,14 +226,30 @@ function createAnnouncementSetupCommand(
       } catch (error) {
         logger.error('Failed to configure announcement relay', { error });
         
-        if (interaction.deferred) {
-          await interaction.editReply({
-            content: '❌ Failed to configure announcement relay. Check logs for details.',
-          });
-        } else {
-          await interaction.reply({
-            content: '❌ Failed to configure announcement relay. Check logs for details.',
-            ephemeral: true,
+        try {
+          // Check if we can still respond to the interaction
+          if (interaction.deferred && !interaction.replied) {
+            await interaction.editReply({
+              content: '❌ Failed to configure announcement relay. Check logs for details.',
+            });
+          } else if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({
+              content: '❌ Failed to configure announcement relay. Check logs for details.',
+              ephemeral: true,
+            });
+          }
+          // If interaction already replied or token expired, log it
+          else {
+            logger.warn('Cannot respond to interaction - already replied or token expired', {
+              replied: interaction.replied,
+              deferred: interaction.deferred,
+            });
+          }
+        } catch (replyError) {
+          // If we can't respond at all (token expired), just log it
+          logger.error('Failed to send error response to user', { 
+            error: replyError,
+            originalError: error,
           });
         }
       }

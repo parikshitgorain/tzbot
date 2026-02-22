@@ -1,6 +1,6 @@
 import { Client, Message } from 'discord.js';
-import { WinnerStateRepository } from '../core/database/repositories/WinnerStateRepository';
-import { logger } from '../core/logger/logger';
+import { WinnerStateRepository } from '../core/database/repositories/WinnerStateRepository.js';
+import { logger } from '../core/logger/logger.js';
 
 /**
  * Message Listener for Giveaway Winner Confirmation
