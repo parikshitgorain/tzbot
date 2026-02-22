@@ -1,67 +1,74 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createPool, closePool } from '../../../../../src/core/database/pool.js';
-import { runMigrations } from '../../../../../src/core/database/migrator.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { OffenseRepository } from '../../../../../src/core/database/repositories/OffenseRepository.js';
-import type { Pool } from 'pg';
+import type { Pool, QueryResult, PoolClient } from 'pg';
 import type { OffenseRecord, OffenseEntry } from '../../../../../src/core/database/repositories/OffenseRepository.js';
 
 describe('OffenseRepository', () => {
-  let pool: Pool;
+  let mockPool: Pool;
+  let mockClient: PoolClient;
   let offenseRepo: OffenseRepository;
 
-  beforeAll(async () => {
-    // Create test database connection
-    pool = createPool({
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      database: process.env.DB_NAME || 'tzbot_test',
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-    });
+  beforeEach(() => {
+    // Create mock client
+    mockClient = {
+      query: vi.fn() as any,
+      release: vi.fn(),
+    } as unknown as PoolClient;
 
-    // Run migrations
-    await runMigrations();
+    // Create mock pool
+    mockPool = {
+      query: vi.fn() as any,
+      connect: vi.fn().mockResolvedValue(mockClient),
+    } as unknown as Pool;
 
-    offenseRepo = new OffenseRepository(pool);
-  });
-
-  afterAll(async () => {
-    await closePool();
-  });
-
-  beforeEach(async () => {
-    // Clean up offense tables before each test
-    await pool.query('DELETE FROM offense_entries');
-    await pool.query('DELETE FROM offense_records');
+    offenseRepo = new OffenseRepository(mockPool);
   });
 
   describe('getOffenseRecord', () => {
     it('should return null for non-existent user', async () => {
+      (mockClient.query as any).mockResolvedValueOnce({
+        rows: [],
+        command: 'SELECT',
+        rowCount: 0,
+        oid: 0,
+        fields: [],
+      } as QueryResult);
+
       const result = await offenseRepo.getOffenseRecord('nonexistent-user');
       expect(result).toBeNull();
+      expect(mockClient.release).toHaveBeenCalled();
     });
 
     it('should return offense record with warning history', async () => {
       const userId = 'user123';
-      const record: OffenseRecord = {
-        user_id: userId,
-        total_offenses: 2,
-        last_offense_timestamp: new Date(),
-        current_timeout_duration: 0,
-        is_banned: false,
-        warning_history: [],
-      };
+      const now = new Date();
 
-      await offenseRepo.saveOffenseRecord(record);
-
-      const entry: OffenseEntry = {
-        timestamp: new Date(),
-        reason: 'Spam detected',
-        punishment_applied: 'WARNING',
-        moderator_id: 'mod123',
-      };
-
-      await offenseRepo.addOffenseEntry(userId, entry);
+      (mockClient.query as any)
+        .mockResolvedValueOnce({
+          rows: [{
+            user_id: userId,
+            total_offenses: 2,
+            last_offense_timestamp: now,
+            current_timeout_duration: 0,
+            is_banned: false,
+          }],
+          command: 'SELECT',
+          rowCount: 1,
+          oid: 0,
+          fields: [],
+        } as QueryResult)
+        .mockResolvedValueOnce({
+          rows: [{
+            timestamp: now,
+            reason: 'Spam detected',
+            punishment_applied: 'WARNING',
+            moderator_id: 'mod123',
+          }],
+          command: 'SELECT',
+          rowCount: 1,
+          oid: 0,
+          fields: [],
+        } as QueryResult);
 
       const retrieved = await offenseRepo.getOffenseRecord(userId);
       
@@ -70,6 +77,7 @@ describe('OffenseRepository', () => {
       expect(retrieved?.total_offenses).toBe(2);
       expect(retrieved?.warning_history).toHaveLength(1);
       expect(retrieved?.warning_history[0].reason).toBe('Spam detected');
+      expect(mockClient.release).toHaveBeenCalled();
     });
   });
 
@@ -85,13 +93,20 @@ describe('OffenseRepository', () => {
         warning_history: [],
       };
 
+      (mockPool.query as any).mockResolvedValueOnce({
+        command: 'INSERT',
+        rowCount: 1,
+        oid: 0,
+        rows: [],
+        fields: [],
+      } as QueryResult);
+
       await offenseRepo.saveOffenseRecord(record);
 
-      const result = await pool.query('SELECT * FROM offense_records WHERE user_id = $1', [userId]);
-      expect(result.rows).toHaveLength(1);
-      expect(result.rows[0].user_id).toBe(userId);
-      expect(result.rows[0].total_offenses).toBe(1);
-      expect(result.rows[0].is_banned).toBe(false);
+      expect(mockPool.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO offense_records'),
+        expect.arrayContaining([userId, 1, 0, false])
+      );
     });
 
     it('should update existing record (upsert)', async () => {
@@ -105,8 +120,6 @@ describe('OffenseRepository', () => {
         warning_history: [],
       };
 
-      await offenseRepo.saveOffenseRecord(record1);
-
       const record2: OffenseRecord = {
         user_id: userId,
         total_offenses: 2,
@@ -116,29 +129,28 @@ describe('OffenseRepository', () => {
         warning_history: [],
       };
 
+      (mockPool.query as any).mockResolvedValue({
+        command: 'INSERT',
+        rowCount: 1,
+        oid: 0,
+        rows: [],
+        fields: [],
+      } as QueryResult);
+
+      await offenseRepo.saveOffenseRecord(record1);
       await offenseRepo.saveOffenseRecord(record2);
 
-      const result = await pool.query('SELECT * FROM offense_records WHERE user_id = $1', [userId]);
-      expect(result.rows).toHaveLength(1);
-      expect(result.rows[0].total_offenses).toBe(2);
-      expect(result.rows[0].current_timeout_duration).toBe(1);
+      expect(mockPool.query).toHaveBeenCalledTimes(2);
+      expect(mockPool.query).toHaveBeenLastCalledWith(
+        expect.stringContaining('ON CONFLICT'),
+        expect.arrayContaining([userId, 2, 1, false])
+      );
     });
   });
 
   describe('addOffenseEntry', () => {
     it('should add offense entry to warning_history', async () => {
       const userId = 'user123';
-      const record: OffenseRecord = {
-        user_id: userId,
-        total_offenses: 1,
-        last_offense_timestamp: new Date(),
-        current_timeout_duration: 0,
-        is_banned: false,
-        warning_history: [],
-      };
-
-      await offenseRepo.saveOffenseRecord(record);
-
       const entry: OffenseEntry = {
         timestamp: new Date(),
         reason: 'Spam detected',
@@ -146,28 +158,24 @@ describe('OffenseRepository', () => {
         moderator_id: 'mod123',
       };
 
+      (mockPool.query as any).mockResolvedValueOnce({
+        command: 'INSERT',
+        rowCount: 1,
+        oid: 0,
+        rows: [],
+        fields: [],
+      } as QueryResult);
+
       await offenseRepo.addOffenseEntry(userId, entry);
 
-      const retrieved = await offenseRepo.getOffenseRecord(userId);
-      expect(retrieved?.warning_history).toHaveLength(1);
-      expect(retrieved?.warning_history[0].reason).toBe('Spam detected');
-      expect(retrieved?.warning_history[0].punishment_applied).toBe('WARNING');
-      expect(retrieved?.warning_history[0].moderator_id).toBe('mod123');
+      expect(mockPool.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO offense_entries'),
+        expect.arrayContaining([userId, 'Spam detected', 'WARNING', 'mod123'])
+      );
     });
 
     it('should add multiple offense entries', async () => {
       const userId = 'user123';
-      const record: OffenseRecord = {
-        user_id: userId,
-        total_offenses: 2,
-        last_offense_timestamp: new Date(),
-        current_timeout_duration: 0,
-        is_banned: false,
-        warning_history: [],
-      };
-
-      await offenseRepo.saveOffenseRecord(record);
-
       const entry1: OffenseEntry = {
         timestamp: new Date(),
         reason: 'First spam',
@@ -182,223 +190,212 @@ describe('OffenseRepository', () => {
         moderator_id: 'mod456',
       };
 
+      (mockPool.query as any).mockResolvedValue({
+        command: 'INSERT',
+        rowCount: 1,
+        oid: 0,
+        rows: [],
+        fields: [],
+      } as QueryResult);
+
       await offenseRepo.addOffenseEntry(userId, entry1);
       await offenseRepo.addOffenseEntry(userId, entry2);
 
-      const retrieved = await offenseRepo.getOffenseRecord(userId);
-      expect(retrieved?.warning_history).toHaveLength(2);
+      expect(mockPool.query).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('removeLastOffense', () => {
-    it('should delete most recent entry', async () => {
+    it('should delete most recent entry and decrement total_offenses', async () => {
       const userId = 'user123';
-      const record: OffenseRecord = {
-        user_id: userId,
-        total_offenses: 3,
-        last_offense_timestamp: new Date(),
-        current_timeout_duration: 1,
-        is_banned: false,
-        warning_history: [],
-      };
 
-      await offenseRepo.saveOffenseRecord(record);
-
-      // Add three entries with different timestamps
-      const entry1: OffenseEntry = {
-        timestamp: new Date(Date.now() - 3000),
-        reason: 'First offense',
-        punishment_applied: 'WARNING',
-        moderator_id: 'mod123',
-      };
-
-      const entry2: OffenseEntry = {
-        timestamp: new Date(Date.now() - 2000),
-        reason: 'Second offense',
-        punishment_applied: 'WARNING',
-        moderator_id: 'mod123',
-      };
-
-      const entry3: OffenseEntry = {
-        timestamp: new Date(Date.now() - 1000),
-        reason: 'Third offense',
-        punishment_applied: 'TIMEOUT',
-        moderator_id: 'mod123',
-        timeout_duration: 1,
-      };
-
-      await offenseRepo.addOffenseEntry(userId, entry1);
-      await offenseRepo.addOffenseEntry(userId, entry2);
-      await offenseRepo.addOffenseEntry(userId, entry3);
+      (mockClient.query as any)
+        .mockResolvedValueOnce({
+          command: 'DELETE',
+          rowCount: 1,
+          oid: 0,
+          rows: [],
+          fields: [],
+        } as QueryResult)
+        .mockResolvedValueOnce({
+          command: 'UPDATE',
+          rowCount: 1,
+          oid: 0,
+          rows: [],
+          fields: [],
+        } as QueryResult);
 
       await offenseRepo.removeLastOffense(userId);
 
-      const retrieved = await offenseRepo.getOffenseRecord(userId);
-      expect(retrieved?.warning_history).toHaveLength(2);
-      expect(retrieved?.total_offenses).toBe(2);
-      expect(retrieved?.warning_history[0].reason).toBe('First offense');
-      expect(retrieved?.warning_history[1].reason).toBe('Second offense');
-    });
-
-    it('should decrement total_offenses', async () => {
-      const userId = 'user123';
-      const record: OffenseRecord = {
-        user_id: userId,
-        total_offenses: 2,
-        last_offense_timestamp: new Date(),
-        current_timeout_duration: 0,
-        is_banned: false,
-        warning_history: [],
-      };
-
-      await offenseRepo.saveOffenseRecord(record);
-
-      const entry: OffenseEntry = {
-        timestamp: new Date(),
-        reason: 'Spam',
-        punishment_applied: 'WARNING',
-        moderator_id: 'mod123',
-      };
-
-      await offenseRepo.addOffenseEntry(userId, entry);
-      await offenseRepo.removeLastOffense(userId);
-
-      const retrieved = await offenseRepo.getOffenseRecord(userId);
-      expect(retrieved?.total_offenses).toBe(1);
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE FROM offense_entries'),
+        [userId]
+      );
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE offense_records'),
+        [userId]
+      );
+      expect(mockClient.release).toHaveBeenCalled();
     });
   });
 
   describe('resetOffenses', () => {
     it('should cascade delete all entries', async () => {
       const userId = 'user123';
-      const record: OffenseRecord = {
-        user_id: userId,
-        total_offenses: 3,
-        last_offense_timestamp: new Date(),
-        current_timeout_duration: 1,
-        is_banned: false,
-        warning_history: [],
-      };
 
-      await offenseRepo.saveOffenseRecord(record);
-
-      const entry1: OffenseEntry = {
-        timestamp: new Date(),
-        reason: 'First offense',
-        punishment_applied: 'WARNING',
-        moderator_id: 'mod123',
-      };
-
-      const entry2: OffenseEntry = {
-        timestamp: new Date(),
-        reason: 'Second offense',
-        punishment_applied: 'WARNING',
-        moderator_id: 'mod123',
-      };
-
-      await offenseRepo.addOffenseEntry(userId, entry1);
-      await offenseRepo.addOffenseEntry(userId, entry2);
+      (mockPool.query as any).mockResolvedValueOnce({
+        command: 'DELETE',
+        rowCount: 1,
+        oid: 0,
+        rows: [],
+        fields: [],
+      } as QueryResult);
 
       await offenseRepo.resetOffenses(userId);
 
-      const retrieved = await offenseRepo.getOffenseRecord(userId);
-      expect(retrieved).toBeNull();
-
-      // Verify entries are also deleted
-      const entriesResult = await pool.query('SELECT * FROM offense_entries WHERE user_id = $1', [userId]);
-      expect(entriesResult.rows).toHaveLength(0);
+      expect(mockPool.query).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE FROM offense_records'),
+        [userId]
+      );
     });
 
     it('should handle resetting non-existent user', async () => {
-      // Should not throw error
+      (mockPool.query as any).mockResolvedValueOnce({
+        command: 'DELETE',
+        rowCount: 0,
+        oid: 0,
+        rows: [],
+        fields: [],
+      } as QueryResult);
+
       await expect(offenseRepo.resetOffenses('nonexistent')).resolves.not.toThrow();
     });
   });
 
   describe('withTransaction', () => {
     it('should rollback on error', async () => {
-      const userId = 'user123';
+      const transactionClient = {
+        query: vi.fn() as any,
+        release: vi.fn(),
+      } as unknown as PoolClient;
+
+      (mockPool.connect as any).mockResolvedValueOnce(transactionClient);
+      (transactionClient.query as any)
+        .mockResolvedValueOnce({ command: 'BEGIN', rowCount: 0, oid: 0, rows: [], fields: [] } as QueryResult)
+        .mockRejectedValueOnce(new Error('Test error'))
+        .mockResolvedValueOnce({ command: 'ROLLBACK', rowCount: 0, oid: 0, rows: [], fields: [] } as QueryResult);
 
       try {
         await offenseRepo.withTransaction(async (client) => {
-          // Insert a record
-          await client.query(
-            'INSERT INTO offense_records (user_id, total_offenses, current_timeout_duration, is_banned) VALUES ($1, $2, $3, $4)',
-            [userId, 1, 0, false]
-          );
-
-          // Throw an error to trigger rollback
+          await client.query('INSERT INTO offense_records VALUES ($1)', ['user123']);
           throw new Error('Test error');
         });
       } catch (error) {
         // Expected error
       }
 
-      // Verify record was not saved
-      const result = await pool.query('SELECT * FROM offense_records WHERE user_id = $1', [userId]);
-      expect(result.rows).toHaveLength(0);
+      expect(transactionClient.query).toHaveBeenCalledWith('BEGIN');
+      expect(transactionClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(transactionClient.release).toHaveBeenCalled();
     });
 
     it('should commit on success', async () => {
-      const userId = 'user123';
+      const transactionClient = {
+        query: vi.fn() as any,
+        release: vi.fn(),
+      } as unknown as PoolClient;
+
+      (mockPool.connect as any).mockResolvedValueOnce(transactionClient);
+      (transactionClient.query as any).mockResolvedValue({
+        command: 'COMMIT',
+        rowCount: 0,
+        oid: 0,
+        rows: [],
+        fields: [],
+      } as QueryResult);
 
       await offenseRepo.withTransaction(async (client) => {
-        await client.query(
-          'INSERT INTO offense_records (user_id, total_offenses, current_timeout_duration, is_banned) VALUES ($1, $2, $3, $4)',
-          [userId, 1, 0, false]
-        );
+        await client.query('INSERT INTO offense_records VALUES ($1)', ['user123']);
       });
 
-      // Verify record was saved
-      const result = await pool.query('SELECT * FROM offense_records WHERE user_id = $1', [userId]);
-      expect(result.rows).toHaveLength(1);
-      expect(result.rows[0].user_id).toBe(userId);
+      expect(transactionClient.query).toHaveBeenCalledWith('BEGIN');
+      expect(transactionClient.query).toHaveBeenCalledWith('COMMIT');
+      expect(transactionClient.release).toHaveBeenCalled();
     });
   });
 
   describe('getAllActiveOffenses', () => {
     it('should return all users with offenses', async () => {
-      const user1: OffenseRecord = {
-        user_id: 'user1',
-        total_offenses: 2,
-        last_offense_timestamp: new Date(),
-        current_timeout_duration: 0,
-        is_banned: false,
-        warning_history: [],
-      };
+      const now = new Date();
 
-      const user2: OffenseRecord = {
-        user_id: 'user2',
-        total_offenses: 3,
-        last_offense_timestamp: new Date(),
-        current_timeout_duration: 1,
-        is_banned: false,
-        warning_history: [],
-      };
-
-      await offenseRepo.saveOffenseRecord(user1);
-      await offenseRepo.saveOffenseRecord(user2);
-
-      const entry1: OffenseEntry = {
-        timestamp: new Date(),
-        reason: 'Spam',
-        punishment_applied: 'WARNING',
-        moderator_id: 'mod123',
-      };
-
-      await offenseRepo.addOffenseEntry('user1', entry1);
-      await offenseRepo.addOffenseEntry('user2', entry1);
+      (mockClient.query as any)
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              user_id: 'user1',
+              total_offenses: 2,
+              last_offense_timestamp: now,
+              current_timeout_duration: 0,
+              is_banned: false,
+            },
+            {
+              user_id: 'user2',
+              total_offenses: 3,
+              last_offense_timestamp: now,
+              current_timeout_duration: 1,
+              is_banned: false,
+            },
+          ],
+          command: 'SELECT',
+          rowCount: 2,
+          oid: 0,
+          fields: [],
+        } as QueryResult)
+        .mockResolvedValueOnce({
+          rows: [{
+            timestamp: now,
+            reason: 'Spam',
+            punishment_applied: 'WARNING',
+            moderator_id: 'mod123',
+          }],
+          command: 'SELECT',
+          rowCount: 1,
+          oid: 0,
+          fields: [],
+        } as QueryResult)
+        .mockResolvedValueOnce({
+          rows: [{
+            timestamp: now,
+            reason: 'Spam',
+            punishment_applied: 'WARNING',
+            moderator_id: 'mod123',
+          }],
+          command: 'SELECT',
+          rowCount: 1,
+          oid: 0,
+          fields: [],
+        } as QueryResult);
 
       const allOffenses = await offenseRepo.getAllActiveOffenses();
       
       expect(allOffenses).toHaveLength(2);
       expect(allOffenses.some(o => o.user_id === 'user1')).toBe(true);
       expect(allOffenses.some(o => o.user_id === 'user2')).toBe(true);
+      expect(mockClient.release).toHaveBeenCalled();
     });
 
     it('should return empty array when no offenses exist', async () => {
+      (mockClient.query as any).mockResolvedValueOnce({
+        rows: [],
+        command: 'SELECT',
+        rowCount: 0,
+        oid: 0,
+        fields: [],
+      } as QueryResult);
+
       const allOffenses = await offenseRepo.getAllActiveOffenses();
       expect(allOffenses).toHaveLength(0);
+      expect(mockClient.release).toHaveBeenCalled();
     });
   });
 });

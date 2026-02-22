@@ -23,38 +23,45 @@ vi.mock('@/core/discord/permissions.js', () => ({
   verifyPermissionsOnStartup: vi.fn(),
 }));
 
-// Mock Discord.js
-vi.mock('discord.js', () => ({
-  Client: vi.fn().mockImplementation(() => ({
-    login: vi.fn().mockResolvedValue('token'),
-    destroy: vi.fn().mockResolvedValue(undefined),
-    on: vi.fn(),
-    once: vi.fn(),
-    off: vi.fn(),
-    isReady: vi.fn().mockReturnValue(true),
-    user: { id: 'bot-123', username: 'TestBot' },
-    guilds: {
+// Mock Discord.js - override the global mock for this test
+vi.mock('discord.js', async () => {
+  const actual = await vi.importActual('discord.js');
+  
+  class MockClient {
+    login = vi.fn().mockResolvedValue('token');
+    destroy = vi.fn().mockResolvedValue(undefined);
+    on = vi.fn();
+    once = vi.fn();
+    off = vi.fn();
+    isReady = vi.fn().mockReturnValue(true);
+    user = { id: 'bot-123', username: 'TestBot' };
+    guilds = {
       cache: new Map(),
       fetch: vi.fn(),
-    },
-    channels: {
+    };
+    channels = {
       fetch: vi.fn(),
+    };
+  }
+  
+  return {
+    ...actual,
+    Client: MockClient,
+    GatewayIntentBits: {
+      Guilds: 1,
+      GuildMessages: 2,
+      GuildMembers: 4,
+      GuildModeration: 8,
+      MessageContent: 16,
+      DirectMessages: 32,
     },
-  })),
-  GatewayIntentBits: {
-    Guilds: 1,
-    GuildMessages: 2,
-    GuildMembers: 4,
-    GuildModeration: 8,
-    MessageContent: 16,
-    DirectMessages: 32,
-  },
-  Partials: {
-    Channel: 1,
-    Message: 2,
-  },
-  EmbedBuilder: vi.fn(),
-}));
+    Partials: {
+      Channel: 1,
+      Message: 2,
+    },
+    EmbedBuilder: vi.fn(),
+  };
+});
 
 describe('DiscordClient', () => {
   let client: DiscordClient;

@@ -18,7 +18,10 @@ build/
 out/
 
 # Deployment
-deployment/
+deployment/vps-config.json
+!deployment/vps-config.example.json
+!deployment/README.md
+!deployment/*.sh
 deployment.tar.gz
 *.zip
 

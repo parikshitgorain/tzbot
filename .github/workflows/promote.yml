@@ -1,0 +1,201 @@
+name: Branch Promotion
+
+# Triggered by CI workflow success on Development branch
+# Requirements: 2.1, 2.2, 2.3
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: 'Source branch to promote from'
+        required: true
+        default: 'Development'
+        type: string
+      target_branch:
+        description: 'Target branch to promote to'
+        required: true
+        default: 'release'
+        type: string
+      commit_sha:
+        description: 'Commit SHA to promote'
+        required: true
+        type: string
+      commit_author:
+        description: 'Commit author'
+        required: true
+        type: string
+
+jobs:
+  promote:
+    name: Promote to Release Branch
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for merge
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Configure Git
+        run: |
+          # Configure git with GitHub Actions bot credentials
+          # Requirement 2.2: Preserve commit authorship
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Verify source commit
+        run: |
+          echo "Verifying commit ${{ inputs.commit_sha }} exists on ${{ inputs.source_branch }}"
+          git checkout ${{ inputs.source_branch }}
+          if ! git cat-file -e ${{ inputs.commit_sha }}^{commit}; then
+            echo "❌ Commit ${{ inputs.commit_sha }} not found"
+            exit 1
+          fi
+          echo "✅ Commit verified"
+      
+      - name: Checkout target branch
+        run: |
+          git checkout ${{ inputs.target_branch }}
+          git pull origin ${{ inputs.target_branch }}
+      
+      - name: Attempt merge
+        id: merge
+        run: |
+          echo "Attempting to merge ${{ inputs.source_branch }} into ${{ inputs.target_branch }}"
+          echo "Commit SHA: ${{ inputs.commit_sha }}"
+          echo "Commit Author: ${{ inputs.commit_author }}"
+          
+          # Requirement 2.1: Merge changes to Release_Branch
+          # Requirement 2.2: Use --no-ff to preserve commit history
+          if git merge --no-ff ${{ inputs.source_branch }} -m "Merge ${{ inputs.source_branch }} into ${{ inputs.target_branch }} - Auto-promotion after successful CI
+
+Promoted commit: ${{ inputs.commit_sha }}
+Original author: ${{ inputs.commit_author }}"; then
+            echo "✅ Merge successful"
+            echo "merge_status=success" >> $GITHUB_OUTPUT
+          else
+            # Requirement 2.3: Halt promotion on merge conflict
+            echo "❌ Merge conflict detected"
+            echo "merge_status=conflict" >> $GITHUB_OUTPUT
+            git merge --abort
+            exit 1
+          fi
+      
+      - name: Preserve commit history
+        if: steps.merge.outputs.merge_status == 'success'
+        run: |
+          # Requirement 2.2: Verify commit history and authorship preservation
+          echo "Verifying commit history preservation..."
+          
+          # Check that the source commit is in the history
+          if git log --oneline | grep -q "${{ inputs.commit_sha }}"; then
+            echo "✅ Commit ${{ inputs.commit_sha }} found in history"
+          else
+            echo "⚠️ Warning: Commit ${{ inputs.commit_sha }} not found in history"
+            exit 1
+          fi
+          
+          # Verify authorship is preserved
+          COMMIT_AUTHOR=$(git log --format='%an' ${{ inputs.commit_sha }} -1)
+          echo "✅ Original commit author preserved: $COMMIT_AUTHOR"
+          
+          # Show merge commit details
+          echo "Merge commit details:"
+          git log -1 --pretty=format:"Commit: %H%nAuthor: %an <%ae>%nDate: %ad%nMessage: %s%n"
+      
+      - name: Push to target branch
+        if: steps.merge.outputs.merge_status == 'success'
+        run: |
+          git push origin ${{ inputs.target_branch }}
+          echo "✅ Successfully pushed to ${{ inputs.target_branch }}"
+      
+      - name: Notify merge conflict
+        if: failure() && steps.merge.outputs.merge_status == 'conflict'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Requirement 2.3: Notify developer of merge conflict
+            const issue_body = `## ⚠️ Automatic Branch Promotion Failed
+            
+            **Reason:** Merge conflict detected
+            
+            **Details:**
+            - Source Branch: \`${{ inputs.source_branch }}\`
+            - Target Branch: \`${{ inputs.target_branch }}\`
+            - Commit SHA: \`${{ inputs.commit_sha }}\`
+            - Commit Author: @${{ inputs.commit_author }}
+            
+            **Action Required:**
+            Please manually resolve the merge conflicts and merge \`${{ inputs.source_branch }}\` into \`${{ inputs.target_branch }}\`.
+            
+            **Steps to resolve:**
+            1. \`git checkout ${{ inputs.target_branch }}\`
+            2. \`git pull origin ${{ inputs.target_branch }}\`
+            3. \`git merge ${{ inputs.source_branch }}\`
+            4. Resolve conflicts in the affected files
+            5. \`git add <resolved-files>\`
+            6. \`git commit\`
+            7. \`git push origin ${{ inputs.target_branch }}\`
+            
+            Once resolved, the deployment workflow will automatically trigger.
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '⚠️ Branch Promotion Failed - Merge Conflict',
+              body: issue_body,
+              labels: ['merge-conflict', 'ci/cd', 'needs-attention']
+            });
+            
+            console.log('✅ Issue created to notify about merge conflict');
+      
+      - name: Trigger deployment workflow
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Requirement 2.4: Trigger deployment workflow on successful merge
+            // Pass commit information to deployment workflow
+            
+            const commitInfo = {
+              commit_sha: '${{ inputs.commit_sha }}',
+              commit_author: '${{ inputs.commit_author }}',
+              source_branch: '${{ inputs.source_branch }}',
+              target_branch: '${{ inputs.target_branch }}',
+              promoted_at: new Date().toISOString()
+            };
+            
+            console.log('Triggering deployment workflow with commit information:');
+            console.log(JSON.stringify(commitInfo, null, 2));
+            
+            // Trigger the deployment workflow
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'cd-release.yml',
+              ref: '${{ inputs.target_branch }}',
+              inputs: {
+                environment: 'production',
+                commit_sha: commitInfo.commit_sha,
+                commit_author: commitInfo.commit_author,
+                source_branch: commitInfo.source_branch,
+                promoted_at: commitInfo.promoted_at
+              }
+            });
+            
+            console.log('✅ Deployment workflow triggered successfully');
+      
+      - name: Promotion summary
+        if: success()
+        run: |
+          echo "## 🚀 Branch Promotion Successful"
+          echo ""
+          echo "**Source Branch:** ${{ inputs.source_branch }}"
+          echo "**Target Branch:** ${{ inputs.target_branch }}"
+          echo "**Commit SHA:** ${{ inputs.commit_sha }}"
+          echo "**Commit Author:** ${{ inputs.commit_author }}"
+          echo ""
+          echo "The ${{ inputs.target_branch }} branch has been updated and deployment workflow has been triggered."

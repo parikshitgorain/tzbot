@@ -223,6 +223,23 @@ describe('ConfirmationSystem', () => {
       winners: [],
     };
 
+    const mockGuild = {
+      id: 'guild-1',
+      members: {
+        fetch: vi.fn().mockResolvedValue({
+          id: 'mod-1',
+          user: { id: 'mod-1', username: 'Moderator' },
+        }),
+      },
+    };
+
+    beforeEach(() => {
+      // Mock guild fetch for manualReroll tests
+      mockClient.guilds = {
+        fetch: vi.fn().mockResolvedValue(mockGuild),
+      };
+    });
+
     it('should validate moderator permissions', async () => {
       mockGiveawayRepo.get.mockResolvedValue(mockGiveaway);
       mockWinnerStateRepo.getWinner.mockResolvedValue({
@@ -243,7 +260,8 @@ describe('ConfirmationSystem', () => {
         confirmationSystem.manualReroll('giveaway-1', 'user-1', 'mod-1')
       ).rejects.toThrow('Insufficient permissions');
 
-      expect(mockConfigManager.canUseGiveawayCommands).toHaveBeenCalledWith('guild-1', 'mod-1');
+      expect(mockClient.guilds.fetch).toHaveBeenCalledWith('guild-1');
+      expect(mockGuild.members.fetch).toHaveBeenCalledWith('mod-1');
     });
 
     it('should throw error if winner not found', async () => {

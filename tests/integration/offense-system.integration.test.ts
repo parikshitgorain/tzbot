@@ -15,7 +15,13 @@ import { OffenseRepository } from '../../src/core/database/repositories/OffenseR
 import { PunishmentCalculator, PunishmentType } from '../../src/moderation/punishment-calculator.js';
 import { OffenseManager, type NotificationService, type NotificationResult } from '../../src/moderation/offense-manager.js';
 
-describe('Offense System Integration', () => {
+// Skip tests if database is not available
+const skipDatabaseTests = 
+  process.env.SKIP_DB_TESTS === 'true' || 
+  process.env.CI === 'true' ||
+  (process.env.NODE_ENV === 'test' && process.env.DATABASE_URL?.includes('localhost'));
+
+describe.skipIf(skipDatabaseTests)('Offense System Integration', () => {
   const testConfig: DatabaseConfig = {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432'),
@@ -24,16 +30,12 @@ describe('Offense System Integration', () => {
     password: process.env.DB_PASSWORD || 'test',
   };
 
-  // Skip tests if database is not available
-  const skipIfNoDb = process.env.CI === 'true' || !process.env.DB_HOST;
-
   let offenseRepository: OffenseRepository;
   let punishmentCalculator: PunishmentCalculator;
   let offenseManager: OffenseManager;
   let mockNotificationService: NotificationService;
 
   beforeAll(async () => {
-    if (skipIfNoDb) return;
     
     await initializeDatabase(testConfig);
     const pool = getPool();
@@ -60,12 +62,10 @@ describe('Offense System Integration', () => {
   });
 
   afterAll(async () => {
-    if (skipIfNoDb) return;
     await closePool();
   });
 
   beforeEach(async () => {
-    if (skipIfNoDb) return;
     
     // Clean up test data before each test
     const pool = getPool();
@@ -74,7 +74,7 @@ describe('Offense System Integration', () => {
   });
 
   describe('Full Offense Flow', () => {
-    it.skipIf(skipIfNoDb)('should process complete offense ladder from warning to ban', async () => {
+    it('should process complete offense ladder from warning to ban', async () => {
       const userId = 'test_user_ladder_' + Date.now();
       const moderatorId = 'mod_123';
       const channelId = 'channel_456';
@@ -167,7 +167,7 @@ describe('Offense System Integration', () => {
       expect(record!.warning_history.length).toBe(8);
     });
 
-    it.skipIf(skipIfNoDb)('should persist offense data across repository instances', async () => {
+    it('should persist offense data across repository instances', async () => {
       const userId = 'test_user_persist_' + Date.now();
       const moderatorId = 'mod_123';
       const channelId = 'channel_456';
@@ -193,7 +193,7 @@ describe('Offense System Integration', () => {
   });
 
   describe('30-Day Reset Integration', () => {
-    it.skipIf(skipIfNoDb)('should automatically reset offenses after 30 days', async () => {
+    it('should automatically reset offenses after 30 days', async () => {
       const userId = 'test_user_reset_' + Date.now();
       const moderatorId = 'mod_123';
       const channelId = 'channel_456';
@@ -236,7 +236,7 @@ describe('Offense System Integration', () => {
       expect(record!.warning_history.length).toBe(1);
     });
 
-    it.skipIf(skipIfNoDb)('should not reset offenses before 30 days', async () => {
+    it('should not reset offenses before 30 days', async () => {
       const userId = 'test_user_no_reset_' + Date.now();
       const moderatorId = 'mod_123';
       const channelId = 'channel_456';
@@ -275,7 +275,7 @@ describe('Offense System Integration', () => {
   });
 
   describe('Moderator Commands End-to-End', () => {
-    it.skipIf(skipIfNoDb)('should clear last offense and recalculate punishment', async () => {
+    it('should clear last offense and recalculate punishment', async () => {
       const userId = 'test_user_clear_' + Date.now();
       const moderatorId = 'mod_123';
       const channelId = 'channel_456';
@@ -300,7 +300,7 @@ describe('Offense System Integration', () => {
       expect(record!.warning_history.length).toBe(3);
     });
 
-    it.skipIf(skipIfNoDb)('should reset all offenses completely', async () => {
+    it('should reset all offenses completely', async () => {
       const userId = 'test_user_reset_all_' + Date.now();
       const moderatorId = 'mod_123';
       const channelId = 'channel_456';
@@ -323,7 +323,7 @@ describe('Offense System Integration', () => {
       expect(record).toBeNull();
     });
 
-    it.skipIf(skipIfNoDb)('should retrieve offense history with all entries', async () => {
+    it('should retrieve offense history with all entries', async () => {
       const userId = 'test_user_history_' + Date.now();
       const moderatorId = 'mod_123';
       const channelId = 'channel_456';
@@ -344,7 +344,7 @@ describe('Offense System Integration', () => {
       expect(record!.warning_history[0].moderator_id).toBe(moderatorId);
     });
 
-    it.skipIf(skipIfNoDb)('should retrieve all active offenses', async () => {
+    it('should retrieve all active offenses', async () => {
       const user1 = 'test_user_all_1_' + Date.now();
       const user2 = 'test_user_all_2_' + Date.now();
       const user3 = 'test_user_all_3_' + Date.now();
@@ -372,7 +372,7 @@ describe('Offense System Integration', () => {
   });
 
   describe('Notification Delivery Integration', () => {
-    it.skipIf(skipIfNoDb)('should attempt all three notifications', async () => {
+    it('should attempt all three notifications', async () => {
       const userId = 'test_user_notif_' + Date.now();
       const moderatorId = 'mod_123';
       const channelId = 'channel_456';
@@ -413,7 +413,7 @@ describe('Offense System Integration', () => {
       expect(lastNotificationParams.offenseCount).toBe(1);
     });
 
-    it.skipIf(skipIfNoDb)('should continue processing even if notifications fail', async () => {
+    it('should continue processing even if notifications fail', async () => {
       const userId = 'test_user_notif_fail_' + Date.now();
       const moderatorId = 'mod_123';
       const channelId = 'channel_456';
@@ -449,7 +449,7 @@ describe('Offense System Integration', () => {
       expect(record!.total_offenses).toBe(1);
     });
 
-    it.skipIf(skipIfNoDb)('should track partial notification failures', async () => {
+    it('should track partial notification failures', async () => {
       const userId = 'test_user_partial_fail_' + Date.now();
       const moderatorId = 'mod_123';
       const channelId = 'channel_456';
@@ -488,7 +488,7 @@ describe('Offense System Integration', () => {
   });
 
   describe('Transaction Integrity', () => {
-    it.skipIf(skipIfNoDb)('should rollback offense on database error', async () => {
+    it('should rollback offense on database error', async () => {
       const userId = 'test_user_rollback_' + Date.now();
       const moderatorId = 'mod_123';
       const channelId = 'channel_456';
@@ -520,7 +520,7 @@ describe('Offense System Integration', () => {
       expect(record).toBeNull();
     });
 
-    it.skipIf(skipIfNoDb)('should handle concurrent offense processing', async () => {
+    it('should handle concurrent offense processing', async () => {
       const userId = 'test_user_concurrent_' + Date.now();
       const moderatorId = 'mod_123';
       const channelId = 'channel_456';

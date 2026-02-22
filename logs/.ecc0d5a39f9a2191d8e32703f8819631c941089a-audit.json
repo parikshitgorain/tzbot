@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 30
+    },
+    "auditLog": "/www/tzbot/logs/.ecc0d5a39f9a2191d8e32703f8819631c941089a-audit.json",
+    "files": [
+        {
+            "date": 1771728972289,
+            "name": "/www/tzbot/logs/error-2026-02-22.log",
+            "hash": "8faf01c24ef039658302c8968a89d895a52e1611fa93cbe1d49273d50ea4c6a0"
+        }
+    ],
+    "hashType": "sha256"
+}

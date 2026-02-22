@@ -166,8 +166,6 @@ describe('Discord Permissions Verification', () => {
   describe('verifyPermissionsOnStartup', () => {
     beforeEach(() => {
       vi.clearAllMocks();
-      // Mock console.warn
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
     });
 
     it('should log info when bot has all permissions', () => {
@@ -213,17 +211,25 @@ describe('Discord Permissions Verification', () => {
         })
       );
 
-      expect(console.warn).toHaveBeenCalled();
+      // Verify the detailed error message is logged
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('TZBOT is missing required permissions')
+      );
     });
 
-    it('should log detailed error message to console when permissions are missing', () => {
+    it('should log detailed error message when permissions are missing', () => {
       const mockGuild = createMockGuild([]);
-      const consoleWarnSpy = vi.spyOn(console, 'warn');
 
       verifyPermissionsOnStartup(mockGuild);
 
-      expect(consoleWarnSpy).toHaveBeenCalled();
-      const warningMessage = consoleWarnSpy.mock.calls[0][0];
+      // Find the logger.warn call with the detailed error message
+      const warnCalls = (logger.warn as any).mock.calls;
+      const detailedErrorCall = warnCalls.find((call: any[]) => 
+        typeof call[0] === 'string' && call[0].includes('TZBOT is missing required permissions')
+      );
+
+      expect(detailedErrorCall).toBeDefined();
+      const warningMessage = detailedErrorCall[0];
       expect(warningMessage).toContain('TZBOT is missing required permissions');
       expect(warningMessage).toContain('MANAGE_ROLES');
       expect(warningMessage).toContain('MANAGE_MESSAGES');
