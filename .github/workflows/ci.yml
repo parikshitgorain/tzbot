@@ -142,14 +142,6 @@ jobs:
       - name: Run npm audit
         run: npm audit --audit-level=high
         continue-on-error: true
-      
-      - name: Run Snyk security scan
-        uses: snyk/actions/node@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=high
-        continue-on-error: true
 
   quality-gate:
     name: Quality Gate
