@@ -37,6 +37,30 @@ else
     echo -e "${GREEN}✅ PM2 already installed ($(pm2 --version))${NC}"
 fi
 
+# 1.5. Install Redis if not installed
+echo -e "\n${GREEN}📦 Checking Redis installation...${NC}"
+if ! command -v redis-server &> /dev/null; then
+    echo "Installing Redis..."
+    sudo apt-get update
+    sudo apt-get install -y redis-server
+    
+    # Enable and start Redis
+    sudo systemctl enable redis-server
+    sudo systemctl start redis-server
+    
+    echo -e "${GREEN}✅ Redis installed and started${NC}"
+else
+    echo -e "${GREEN}✅ Redis already installed${NC}"
+    
+    # Make sure Redis is running
+    if ! sudo systemctl is-active --quiet redis-server; then
+        echo "Starting Redis..."
+        sudo systemctl start redis-server
+    fi
+    
+    echo -e "${GREEN}✅ Redis is running${NC}"
+fi
+
 # 2. Create directory structure
 echo -e "\n${GREEN}📁 Creating directory structure...${NC}"
 
