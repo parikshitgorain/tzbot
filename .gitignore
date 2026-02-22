@@ -60,3 +60,6 @@ secrets/
 *.pem
 *.key
 *.cert
+
+# Release configuration (reference only)
+.releaserc
