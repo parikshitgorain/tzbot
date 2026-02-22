@@ -89,8 +89,8 @@ jobs:
           # Requirement 2.2: Verify commit history and authorship preservation
           echo "Verifying commit history preservation..."
           
-          # Check that the source commit is in the history
-          if git log --oneline | grep -q "${{ inputs.commit_sha }}"; then
+          # Check that the source commit is in the history (use git rev-list instead of grep)
+          if git rev-list --all | grep -q "${{ inputs.commit_sha }}"; then
             echo "✅ Commit ${{ inputs.commit_sha }} found in history"
           else
             echo "⚠️ Warning: Commit ${{ inputs.commit_sha }} not found in history"

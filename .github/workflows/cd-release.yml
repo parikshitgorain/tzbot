@@ -35,9 +35,61 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    name: Validate Deployment Request
+    runs-on: ubuntu-latest
+    outputs:
+      is_valid: ${{ steps.validate.outputs.is_valid }}
+    
+    steps:
+      - name: Validate branch
+        id: validate
+        run: |
+          echo "Validating deployment request..."
+          echo "Event: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Source Branch: ${{ inputs.source_branch || 'N/A' }}"
+          
+          # Requirement 10.4: Verify branch matches Release_Branch
+          if [ "${{ github.ref_name }}" != "release" ]; then
+            echo "❌ Deployment rejected: Not from release branch"
+            echo "is_valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # For workflow_dispatch, verify source branch if provided
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.source_branch }}" ]; then
+            if [ "${{ inputs.source_branch }}" != "Development" ]; then
+              echo "⚠️ Warning: Source branch is not Development"
+            fi
+          fi
+          
+          echo "✅ Deployment validation passed"
+          echo "is_valid=true" >> $GITHUB_OUTPUT
+      
+      - name: Log deployment request
+        run: |
+          # Requirement 10.5: Log all deployment requests
+          echo "## Deployment Request Log"
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Event Type: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Repository: ${{ github.repository }}"
+          
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "Manual Trigger: Yes"
+            echo "Environment: ${{ inputs.environment }}"
+          else
+            echo "Automatic Trigger: Yes (push to release)"
+          fi
+
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
+    needs: validate
+    if: needs.validate.outputs.is_valid == 'true'
     environment: production
     
     steps:
