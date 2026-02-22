@@ -1,10 +1,10 @@
 import { Client, EmbedBuilder, User } from 'discord.js';
 import { WinnerStateRepository } from '../core/database/repositories/WinnerStateRepository';
 import { GiveawayRepository } from '../core/database/repositories/GiveawayRepository';
-import { TimerManager } from './timer-manager';
-import { RerollHandler } from './reroll-handler';
-import { ConfigManager } from './config-manager';
-import { MessageListener } from './message-listener';
+import { TimerManager } from './timer-manager.js';
+import { RerollHandler } from './reroll-handler.js';
+import { ConfigManager } from './config-manager.js';
+import { MessageListener } from './message-listener.js';
 import { WinnerStatus } from '../types/models';
 import { logger } from '../core/logger/logger';
 
