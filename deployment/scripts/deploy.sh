@@ -118,6 +118,23 @@ fi
 log_step "Removing dev dependencies..."
 npm prune --production || log_warn "Failed to prune dev dependencies"
 
+# Handle .env file
+log_step "Setting up environment file..."
+SHARED_ENV="$DEPLOY_BASE/shared/.env"
+if [ -f "$SHARED_ENV" ]; then
+    log_info "Copying .env from shared location"
+    cp "$SHARED_ENV" "$RELEASE_DIR/.env"
+elif [ -f "$DEPLOY_BASE/.env" ]; then
+    log_info "Copying .env from deploy base"
+    cp "$DEPLOY_BASE/.env" "$RELEASE_DIR/.env"
+    # Also save to shared for future deployments
+    mkdir -p "$DEPLOY_BASE/shared"
+    cp "$DEPLOY_BASE/.env" "$SHARED_ENV"
+else
+    log_warn "No .env file found! Bot may not start correctly."
+    log_warn "Please create .env file at: $DEPLOY_BASE/shared/.env"
+fi
+
 # Create/update symlink to new release
 log_step "Updating current symlink..."
 if [ -L "$CURRENT_LINK" ]; then
