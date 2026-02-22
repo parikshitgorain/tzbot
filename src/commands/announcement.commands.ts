@@ -176,13 +176,19 @@ function createAnnouncementSetupCommand(
               createdBy: interaction.user.id,
             });
           } else {
+            // Stop old instance before updating to prevent duplicate listeners
+            announcementRelay.stop();
+            
             // Update existing instance
             announcementRelay.updateConfig({
               privateChannelId: privateChannel.id,
               publicChannelIds: publicChannelIds,
             });
+            
+            // Restart with new config
+            announcementRelay.start();
 
-            logger.info('Announcement relay configuration updated', {
+            logger.info('Announcement relay configuration updated and restarted', {
               privateChannel: privateChannel.id,
               publicChannels: publicChannelIds,
               updatedBy: interaction.user.id,

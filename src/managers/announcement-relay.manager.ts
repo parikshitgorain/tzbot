@@ -60,6 +60,11 @@ export class AnnouncementRelayManager {
   }
 
   /**
+   * Message handler bound to this instance
+   */
+  private boundMessageHandler?: (message: Message) => Promise<void>;
+
+  /**
    * Start monitoring the private channel for announcements
    */
   start(): void {
@@ -69,9 +74,12 @@ export class AnnouncementRelayManager {
       return;
     }
 
-    this.discordClient.on('messageCreate', async (message: Message) => {
+    // Create bound handler for this instance
+    this.boundMessageHandler = async (message: Message) => {
       await this.handleMessage(message);
-    });
+    };
+
+    this.discordClient.on('messageCreate', this.boundMessageHandler);
 
     this.isListening = true;
     logger.info('AnnouncementRelayManager started');
@@ -323,8 +331,12 @@ export class AnnouncementRelayManager {
       return;
     }
 
-    // Note: Discord.js doesn't provide a way to remove specific listeners easily
-    // The isListening flag prevents duplicate registrations
+    // Remove the specific event listener for this instance
+    if (this.boundMessageHandler) {
+      this.discordClient.off('messageCreate', this.boundMessageHandler);
+      this.boundMessageHandler = undefined;
+    }
+
     this.isListening = false;
     logger.info('AnnouncementRelayManager stopped');
   }
