@@ -117,10 +117,22 @@ if ! retry_command "Build TypeScript" "npm run build"; then
     exit 1
 fi
 
-# Resolve path aliases
+# Resolve path aliases using tsc-alias with proper configuration
 log_step "Resolving TypeScript path aliases..."
-if ! retry_command "Resolve path aliases" "npx tsc-alias --project tsconfig.json"; then
-    log_warn "Failed to resolve path aliases after retries, continuing anyway..."
+if ! retry_command "Resolve path aliases" "npx tsc-alias -p tsconfig.json --verbose"; then
+    log_warn "tsc-alias failed, trying alternative method..."
+    # Fallback: manually fix imports if tsc-alias fails
+    if [ -d "$RELEASE_DIR/dist" ]; then
+        log_info "Attempting manual path resolution..."
+        find "$RELEASE_DIR/dist" -name "*.js" -type f -exec sed -i "s|from '@/|from '../|g" {} \; || true
+        find "$RELEASE_DIR/dist" -name "*.js" -type f -exec sed -i "s|from '@config/|from '../config/|g" {} \; || true
+        find "$RELEASE_DIR/dist" -name "*.js" -type f -exec sed -i "s|from '@core/|from '../core/|g" {} \; || true
+        find "$RELEASE_DIR/dist" -name "*.js" -type f -exec sed -i "s|from '@managers/|from '../managers/|g" {} \; || true
+        find "$RELEASE_DIR/dist" -name "*.js" -type f -exec sed -i "s|from '@services/|from '../services/|g" {} \; || true
+        find "$RELEASE_DIR/dist" -name "*.js" -type f -exec sed -i "s|from '@utils/|from '../utils/|g" {} \; || true
+        find "$RELEASE_DIR/dist" -name "*.js" -type f -exec sed -i "s|from '@types/|from '../types/|g" {} \; || true
+        log_info "Manual path resolution completed"
+    fi
 fi
 
 # Remove dev dependencies after build
