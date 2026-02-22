@@ -114,6 +114,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+      - name: Get version from package.json
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $VERSION"
+      
       - name: Setup deployment scripts
         run: |
           chmod +x deployment/scripts/*.sh
@@ -138,8 +145,8 @@ jobs:
       - name: Send deployment start notification
         run: |
           bash deployment/scripts/notify.sh start \
-            "🚀 New Release Received - Deployment Starting" \
-            "**Commit:** \`${GITHUB_SHA:0:7}\`\n**Branch:** \`${{ github.ref_name }}\`\n**Author:** ${{ github.actor }}\n**Estimated Time:** ~2-3 minutes\n\n⏳ Installing dependencies and building..."
+            "🚀 New Release v${{ steps.version.outputs.version }} - Deployment Starting" \
+            "**Version:** \`v${{ steps.version.outputs.version }}\`\n**Commit:** \`${GITHUB_SHA:0:7}\`\n**Branch:** \`${{ github.ref_name }}\`\n**Author:** ${{ github.actor }}\n**Estimated Time:** ~2-3 minutes\n\n⏳ Installing dependencies and building..."
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GITHUB_SHA: ${{ github.sha }}
@@ -221,8 +228,8 @@ jobs:
         if: success()
         run: |
           bash deployment/scripts/notify.sh success \
-            "✅ Deployment Successful - Bot is Online" \
-            "**Commit:** \`${GITHUB_SHA:0:7}\`\n**Branch:** \`${{ github.ref_name }}\`\n**Deployed by:** ${{ github.actor }}\n**Status:** 🟢 Working Normally\n\n✨ All systems operational!"
+            "✅ v${{ steps.version.outputs.version }} Deployed Successfully" \
+            "**Version:** \`v${{ steps.version.outputs.version }}\`\n**Commit:** \`${GITHUB_SHA:0:7}\`\n**Branch:** \`${{ github.ref_name }}\`\n**Deployed by:** ${{ github.actor }}\n**Status:** 🟢 Working Normally\n\n✨ All systems operational!"
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GITHUB_SHA: ${{ github.sha }}

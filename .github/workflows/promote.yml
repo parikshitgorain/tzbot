@@ -111,6 +111,15 @@ jobs:
           git push origin ${{ inputs.target_branch }}
           echo "✅ Successfully pushed to ${{ inputs.target_branch }}"
       
+      - name: Run semantic versioning
+        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔢 Running semantic-release to auto-bump version..."
+          npx semantic-release
+          echo "✅ Version updated automatically"
+      
       - name: Clean release branch (remove dev-only files)
         if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
         run: |
