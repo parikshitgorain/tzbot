@@ -1,6 +1,27 @@
-# GitHub Actions Workflow Issues - FIXED
+# GitHub Actions CI/CD Issues - FIXED
 
-## Issue: Workflow dispatch trigger error
+## Issue 1: Missing coverage dependency
+
+### Error Message:
+```
+MISSING DEPENDENCY  Cannot find dependency '@vitest/coverage-v8'
+Error: Process completed with exit code 1.
+```
+
+### Root Cause:
+The `@vitest/coverage-v8` package was not installed in devDependencies, but the CI workflow was trying to run coverage tests.
+
+### Fix Applied:
+✅ Added `@vitest/coverage-v8` to package.json devDependencies
+✅ Updated CI workflow to only upload coverage if generation succeeds
+
+### Changes Made:
+- Added `"@vitest/coverage-v8": "^4.0.18"` to devDependencies in package.json
+- Changed codecov upload condition from `if: always()` to `if: success()` in ci.yml
+
+---
+
+## Issue 2: Workflow dispatch trigger error
 
 ### Error Message:
 ```
@@ -27,13 +48,35 @@ The CI workflow was trying to trigger the promote.yml workflow using the filenam
 - Changed from using `workflow_id: 'promote.yml'` to `workflow_id: promoteWorkflow.id`
 - Enhanced error messages for better debugging
 
-### Verification:
-The promote.yml workflow already has the correct `workflow_dispatch` trigger configured with all required inputs:
-- source_branch
-- target_branch  
-- commit_sha
-- commit_author
+---
 
-### Status: ✅ RESOLVED
+## Issue 3: Missing test mock
 
-The workflow should now trigger correctly when CI passes on the Development branch.
+### Error Message:
+```
+TypeError: this.giveawayRepository.updateWinners is not a function
+```
+
+### Root Cause:
+The GiveawayRepository mock in the test file was missing the `updateWinners` method.
+
+### Fix Applied:
+✅ Added `updateWinners: vi.fn().mockResolvedValue(undefined)` to the mock repository
+
+### Changes Made:
+- Updated `tests/unit/managers/giveaway.manager.test.ts` to include the missing mock method
+
+---
+
+## Status: ✅ ALL ISSUES RESOLVED
+
+### Next Steps:
+1. Run `npm install` to install the new coverage dependency
+2. Commit and push changes
+3. CI pipeline should now run successfully
+
+### Files Modified:
+- `package.json` - Added @vitest/coverage-v8 dependency
+- `.github/workflows/ci.yml` - Fixed workflow dispatch and coverage upload
+- `tests/unit/managers/giveaway.manager.test.ts` - Added missing mock
+- `error.md` - This documentation
