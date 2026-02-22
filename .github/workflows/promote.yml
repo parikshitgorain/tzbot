@@ -132,6 +132,41 @@ jobs:
           git push origin ${{ inputs.target_branch }}
           echo "✅ Successfully pushed to ${{ inputs.target_branch }}"
       
+      - name: Verify release branch is clean
+        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        run: |
+          echo "🔍 Verifying release branch contains no dev-only files..."
+          
+          # Check for test files
+          if find . -path ./node_modules -prune -o -name "*.test.ts" -o -name "*.test.js" | grep -v node_modules | grep -q .; then
+            echo "❌ ERROR: Test files found in release branch!"
+            find . -path ./node_modules -prune -o -name "*.test.ts" -o -name "*.test.js" | grep -v node_modules
+            exit 1
+          fi
+          
+          # Check for dev directories
+          if [ -d "tests" ] || [ -d ".kiro/specs" ] || [ -d ".agents" ]; then
+            echo "❌ ERROR: Dev directories found in release branch!"
+            ls -la tests/ .kiro/specs/ .agents/ 2>/dev/null || true
+            exit 1
+          fi
+          
+          # Check for dev config files
+          if ls vitest.config.* tsconfig.test.* .eslintrc.* .prettierrc eslint.config.js 2>/dev/null | grep -q .; then
+            echo "❌ ERROR: Dev config files found in release branch!"
+            ls -la vitest.config.* tsconfig.test.* .eslintrc.* .prettierrc eslint.config.js 2>/dev/null || true
+            exit 1
+          fi
+          
+          # Check for example files
+          if find . -path ./node_modules -prune -o -name "*.example.ts" -o -name "*.example.js" | grep -v node_modules | grep -q .; then
+            echo "❌ ERROR: Example files found in release branch!"
+            find . -path ./node_modules -prune -o -name "*.example.ts" -o -name "*.example.js" | grep -v node_modules
+            exit 1
+          fi
+          
+          echo "✅ Release branch is clean - no dev-only files found"
+      
       - name: Run semantic versioning
         if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
         env:
