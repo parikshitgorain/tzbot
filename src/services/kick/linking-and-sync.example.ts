@@ -1,4 +1,5 @@
 /* eslint-disable no-console */
+// @ts-nocheck - Example file for documentation purposes
 /**
  * @file linking-and-sync.example.ts
  * @description Example usage of user linking and role synchronization systems

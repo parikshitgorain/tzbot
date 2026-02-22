@@ -258,10 +258,10 @@ export class WinnerStateRepository {
       selectedAt: row.selected_at as Date,
       confirmedAt: (row.confirmed_at as Date | null) || undefined,
       rerolledAt: (row.rerolled_at as Date | null) || undefined,
-      timerStartTime: row.timer_start_time,
-      timerActive: row.timer_active,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      timerStartTime: row.timer_start_time as Date | null,
+      timerActive: row.timer_active as boolean,
+      createdAt: row.created_at as Date,
+      updatedAt: row.updated_at as Date,
     };
   }
 }

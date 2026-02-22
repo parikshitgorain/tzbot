@@ -117,6 +117,7 @@ async function reconnectExample() {
   }
 
   // Monitor connection status
+  // @ts-expect-error - Example code for documentation
   client.on('disconnect', () => {
     console.log('Disconnected from Discord');
   });

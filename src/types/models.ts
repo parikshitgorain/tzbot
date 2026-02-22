@@ -142,7 +142,7 @@ export interface WinnerRecord {
   selectedAt: Date;
   confirmedAt?: Date;
   rerolledAt?: Date;
-  timerStartTime: Date;
+  timerStartTime: Date | null;
   timerActive: boolean;
   createdAt: Date;
   updatedAt: Date;

@@ -205,7 +205,7 @@ export class NotificationManager {
           fallbackChannelId,
         });
         return;
-      } catch {
+      } catch (fallbackError) {
         logError(
           'Failed to deliver notification to fallback channel',
           fallbackError as Error,

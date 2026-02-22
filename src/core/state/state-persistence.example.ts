@@ -1,4 +1,5 @@
 /* eslint-disable no-console */
+// @ts-nocheck - Example file for documentation purposes
 /**
  * @file state-persistence.example.ts
  * @description Example usage of the state persistence service

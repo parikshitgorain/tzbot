@@ -45,4 +45,11 @@ export default [
       'no-console': 'warn',
     },
   },
+  // Allow @ts-nocheck in example files
+  {
+    files: ['**/*.example.ts', '**/example.ts'],
+    rules: {
+      '@typescript-eslint/ban-ts-comment': 'off',
+    },
+  },
 ];

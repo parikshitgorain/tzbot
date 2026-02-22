@@ -1,3 +1,4 @@
+// @ts-nocheck - Example file for documentation purposes
 /**
  * @file command.example.ts
  * @description Example usage of CommandManager
