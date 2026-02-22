@@ -1,0 +1,161 @@
+#!/bin/bash
+#
+# Service Management Script
+# Manages application service (PM2 or systemd)
+#
+# Usage: ./service-manager.sh <action> [service_name]
+# Actions: stop, start, restart, status
+#
+# Requirements: 5.4, 5.5
+
+set -e
+
+# Configuration
+SERVICE_NAME="${SERVICE_NAME:-tzbot}"
+SERVICE_TYPE="${SERVICE_TYPE:-pm2}" # pm2 or systemd
+STARTUP_DELAY="${STARTUP_DELAY:-5}"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Validate inputs
+if [ $# -lt 1 ]; then
+    log_error "Usage: $0 <action> [service_name]"
+    log_error "Actions: stop, start, restart, status"
+    exit 1
+fi
+
+ACTION="$1"
+if [ $# -ge 2 ]; then
+    SERVICE_NAME="$2"
+fi
+
+# PM2 service management
+pm2_stop() {
+    log_info "Stopping PM2 service: $SERVICE_NAME"
+    if pm2 describe "$SERVICE_NAME" > /dev/null 2>&1; then
+        pm2 stop "$SERVICE_NAME"
+        log_info "Service stopped"
+    else
+        log_warn "Service not found in PM2"
+    fi
+}
+
+pm2_start() {
+    log_info "Starting PM2 service: $SERVICE_NAME"
+    if pm2 describe "$SERVICE_NAME" > /dev/null 2>&1; then
+        pm2 start "$SERVICE_NAME"
+    else
+        log_warn "Service not found, starting from ecosystem file"
+        pm2 start ecosystem.config.js
+    fi
+    log_info "Waiting ${STARTUP_DELAY}s for service initialization..."
+    sleep "$STARTUP_DELAY"
+    log_info "Service started"
+}
+
+pm2_restart() {
+    log_info "Restarting PM2 service: $SERVICE_NAME"
+    pm2 restart "$SERVICE_NAME"
+    log_info "Waiting ${STARTUP_DELAY}s for service initialization..."
+    sleep "$STARTUP_DELAY"
+    log_info "Service restarted"
+}
+
+pm2_status() {
+    pm2 describe "$SERVICE_NAME"
+}
+
+# Systemd service management
+systemd_stop() {
+    log_info "Stopping systemd service: $SERVICE_NAME"
+    sudo systemctl stop "$SERVICE_NAME"
+    log_info "Service stopped"
+}
+
+systemd_start() {
+    log_info "Starting systemd service: $SERVICE_NAME"
+    sudo systemctl start "$SERVICE_NAME"
+    log_info "Waiting ${STARTUP_DELAY}s for service initialization..."
+    sleep "$STARTUP_DELAY"
+    log_info "Service started"
+}
+
+systemd_restart() {
+    log_info "Restarting systemd service: $SERVICE_NAME"
+    sudo systemctl restart "$SERVICE_NAME"
+    log_info "Waiting ${STARTUP_DELAY}s for service initialization..."
+    sleep "$STARTUP_DELAY"
+    log_info "Service restarted"
+}
+
+systemd_status() {
+    sudo systemctl status "$SERVICE_NAME"
+}
+
+# Execute action based on service type
+case "$SERVICE_TYPE" in
+    pm2)
+        case "$ACTION" in
+            stop)
+                pm2_stop
+                ;;
+            start)
+                pm2_start
+                ;;
+            restart)
+                pm2_restart
+                ;;
+            status)
+                pm2_status
+                ;;
+            *)
+                log_error "Unknown action: $ACTION"
+                exit 1
+                ;;
+        esac
+        ;;
+    systemd)
+        case "$ACTION" in
+            stop)
+                systemd_stop
+                ;;
+            start)
+                systemd_start
+                ;;
+            restart)
+                systemd_restart
+                ;;
+            status)
+                systemd_status
+                ;;
+            *)
+                log_error "Unknown action: $ACTION"
+                exit 1
+                ;;
+        esac
+        ;;
+    *)
+        log_error "Unknown service type: $SERVICE_TYPE"
+        log_error "Supported types: pm2, systemd"
+        exit 1
+        ;;
+esac
+
+exit 0
