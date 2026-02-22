@@ -161,14 +161,40 @@ jobs:
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
-            "mkdir -p /var/www/tzbot && \
-             cd /var/www/tzbot && \
-             if [ ! -d .git ]; then \
-               echo '📦 Cloning repository for first time...'; \
-               git clone --branch release ${{ github.server_url }}/${{ github.repository }}.git .; \
-             else \
-               echo '✅ Repository already exists'; \
-             fi"
+            'bash -s' << 'ENDSSH'
+          set -e
+          
+          DEPLOY_DIR="/var/www/tzbot"
+          
+          echo "� Checking deployment directory..."
+          mkdir -p "$DEPLOY_DIR"
+          cd "$DEPLOY_DIR"
+          
+          # Check if it's a git repository
+          if [ -d .git ]; then
+            echo "✅ Git repository exists, updating..."
+            git fetch origin release
+            git reset --hard origin/release
+          else
+            # Directory exists but no git - backup and reinitialize
+            if [ "$(ls -A 2>/dev/null)" ]; then
+              echo "⚠️  Non-git files found, backing up..."
+              BACKUP_DIR="/tmp/tzbot_backup_$(date +%Y%m%d_%H%M%S)"
+              mkdir -p "$BACKUP_DIR"
+              cp -r . "$BACKUP_DIR/" 2>/dev/null || true
+              rm -rf * .* 2>/dev/null || true
+              echo "✅ Backup at: $BACKUP_DIR"
+            fi
+            
+            echo "📦 Cloning repository..."
+            git clone --branch release https://github.com/${{ github.repository }}.git .
+            echo "✅ Repository cloned"
+          fi
+          
+          # Make scripts executable
+          [ -d deployment/scripts ] && chmod +x deployment/scripts/*.sh
+          echo "✅ VPS ready"
+          ENDSSH
             echo ""
             echo "Please update the VPS_SSH_KEY secret with the complete private key"
             exit 1
