@@ -9,6 +9,10 @@
 
 set -e
 
+# Load retry wrapper
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/retry-wrapper.sh"
+
 # Configuration
 APP_NAME="${APP_NAME:-tzbot}"
 DEPLOY_BASE="${DEPLOY_BASE:-/var/www/tzbot}"
@@ -16,6 +20,11 @@ RELEASES_DIR="$DEPLOY_BASE/releases"
 CURRENT_LINK="$DEPLOY_BASE/current"
 REPO_URL="${REPO_URL:-https://github.com/parikshitgorain/tzbot.git}"
 BRANCH="${BRANCH:-release}"
+
+# Retry configuration
+export MAX_RETRIES=3
+export INITIAL_DELAY=3
+export MAX_DELAY=30
 
 # Colors for output
 RED='\033[0;31m'
@@ -73,8 +82,8 @@ mkdir -p "$RELEASE_DIR"
 
 # Clone repository
 log_step "Cloning repository from $BRANCH branch..."
-if ! git clone --branch "$BRANCH" --depth 1 "$REPO_URL" "$RELEASE_DIR"; then
-    log_error "Failed to clone repository"
+if ! retry_command "Clone repository" "git clone --branch '$BRANCH' --depth 1 '$REPO_URL' '$RELEASE_DIR'"; then
+    log_error "Failed to clone repository after retries"
     rm -rf "$RELEASE_DIR"
     exit 1
 fi
@@ -96,27 +105,27 @@ log_info "✓ Dev files cleaned"
 
 # Install dependencies (with all devDependencies for build)
 log_step "Installing dependencies..."
-if ! npm install; then
-    log_error "Failed to install dependencies"
+if ! retry_command "Install npm dependencies" "npm install"; then
+    log_error "Failed to install dependencies after retries"
     exit 1
 fi
 
 # Build application
 log_step "Building TypeScript application..."
-if ! npm run build; then
-    log_error "Failed to build application"
+if ! retry_command "Build TypeScript" "npm run build"; then
+    log_error "Failed to build application after retries"
     exit 1
 fi
 
 # Resolve path aliases
 log_step "Resolving TypeScript path aliases..."
-if ! npx tsc-alias --project tsconfig.json; then
-    log_warn "Failed to resolve path aliases, continuing anyway..."
+if ! retry_command "Resolve path aliases" "npx tsc-alias --project tsconfig.json"; then
+    log_warn "Failed to resolve path aliases after retries, continuing anyway..."
 fi
 
 # Remove dev dependencies after build
 log_step "Removing dev dependencies..."
-npm prune --production || log_warn "Failed to prune dev dependencies"
+retry_command "Prune dev dependencies" "npm prune --production" || log_warn "Failed to prune dev dependencies"
 
 # Handle .env file
 log_step "Setting up environment file..."
