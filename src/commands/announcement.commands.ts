@@ -96,7 +96,19 @@ function createAnnouncementSetupCommand(
     handler: async (interaction: ChatInputCommandInteraction) => {
       try {
         // Defer reply immediately to prevent token expiration
-        await interaction.deferReply({ ephemeral: true });
+        if (!interaction.deferred && !interaction.replied) {
+          await interaction.deferReply({ ephemeral: true });
+          logger.debug('Interaction deferred', {
+            interactionId: interaction.id,
+            commandName: 'announcement-setup',
+          });
+        } else {
+          logger.warn('Interaction already acknowledged before defer', {
+            interactionId: interaction.id,
+            deferred: interaction.deferred,
+            replied: interaction.replied,
+          });
+        }
 
         const privateChannel = interaction.options.getChannel('private_channel', true);
         
