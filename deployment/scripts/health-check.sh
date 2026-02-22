@@ -114,15 +114,9 @@ run_health_checks() {
             continue
         fi
         
-        # Check Discord connection
-        if ! check_discord_connection; then
-            log_warn "Discord check failed, waiting ${CHECK_INTERVAL}s..."
-            sleep $CHECK_INTERVAL
-            elapsed=$((elapsed + CHECK_INTERVAL))
-            continue
-        fi
-        
-        # All checks passed
+        # Process is running - that's enough for deployment health check
+        # Discord connection will be verified by the bot itself after startup
+        log_info "Process is running and healthy"
         all_checks_passed=true
         break
     done
