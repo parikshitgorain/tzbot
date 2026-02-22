@@ -3,7 +3,7 @@ name: CD - Deploy to Production
 on:
   push:
     branches:
-      - Release_Branch
+      - release
   workflow_dispatch:
     inputs:
       environment:
@@ -114,7 +114,7 @@ jobs:
             "export APP_NAME=tzbot && \
              export DEPLOY_BASE=/var/www/tzbot && \
              export REPO_URL=${{ github.server_url }}/${{ github.repository }}.git && \
-             export BRANCH=Release_Branch && \
+             export BRANCH=release && \
              bash /var/www/tzbot/deployment/scripts/deploy.sh ${{ github.sha }} ${{ env.DEPLOY_TIMESTAMP }}"
       
       - name: Restart application service

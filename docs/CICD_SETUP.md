@@ -16,8 +16,8 @@ This guide walks you through setting up the complete CI/CD auto-deployment syste
 The CI/CD system consists of three main workflows:
 
 - **CI Pipeline** (`ci.yml`): Runs tests on every push to `development` branch
-- **Branch Promoter** (`promote.yml`): Auto-merges `development` to `Release_Branch` on CI success
-- **CD Release** (`cd-release.yml`): Deploys to VPS when `Release_Branch` is updated
+- **Branch Promoter** (`promote.yml`): Auto-merges `development` to `release` on CI success
+- **CD Release** (`cd-release.yml`): Deploys to VPS when `release` is updated
 
 ## VPS Setup
 
@@ -157,14 +157,14 @@ Copy the entire output including `-----BEGIN OPENSSH PRIVATE KEY-----` and `----
 
 ### 2. Branch Protection Rules
 
-Configure branch protection for `development` and `Release_Branch`:
+Configure branch protection for `development` and `release`:
 
 1. Go to Settings → Branches → Add branch protection rule
 2. For `development` branch:
    - Require pull request reviews before merging
    - Require status checks to pass (CI tests)
    - Require branches to be up to date
-3. For `Release_Branch` branch:
+3. For `release` branch:
    - Require pull request reviews before merging
    - Do not allow force pushes
    - Do not allow deletions
@@ -249,7 +249,7 @@ Check GitHub Actions tab to see if CI runs successfully.
 ### 2. Test Branch Promotion
 
 If CI passes, the promotion workflow should automatically:
-- Merge `development` into `Release_Branch`
+- Merge `development` into `release`
 - Trigger the deployment workflow
 
 ### 3. Test Deployment
@@ -416,7 +416,7 @@ pm2 stop tzbot
 
 # Clone fresh copy
 cd /var/www/tzbot/releases
-git clone -b Release_Branch https://github.com/parikshitgorain/tzbot.git emergency_$(date +%Y%m%d_%H%M%S)
+git clone -b release https://github.com/parikshitgorain/tzbot.git emergency_$(date +%Y%m%d_%H%M%S)
 cd emergency_*
 
 # Install and build

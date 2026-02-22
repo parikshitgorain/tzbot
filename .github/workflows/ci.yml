@@ -199,7 +199,7 @@ jobs:
         uses: actions/github-script@v7
         continue-on-error: true
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             try {
               // First, verify the workflow exists
@@ -233,7 +233,7 @@ jobs:
                 ref: 'Development',
                 inputs: {
                   source_branch: 'Development',
-                  target_branch: 'Release_Branch',
+                  target_branch: 'release',
                   commit_sha: context.sha,
                   commit_author: context.actor
                 }
@@ -258,5 +258,5 @@ jobs:
           echo "- ✅ Build"
           echo "- ✅ Security Scan"
           echo ""
-          echo "Note: Automatic promotion to Release_Branch may require manual trigger"
+          echo "Note: Automatic promotion to release may require manual trigger"
           echo "You can manually promote this commit from the GitHub Actions UI"
