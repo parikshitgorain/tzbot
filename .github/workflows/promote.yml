@@ -131,6 +131,38 @@ jobs:
           echo "Merge commit details:"
           git log -1 --pretty=format:"Commit: %H%nAuthor: %an <%ae>%nDate: %ad%nMessage: %s%n"
       
+      - name: Clean dev-only files from release branch
+        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        run: |
+          echo "🧹 Cleaning dev-only files from release branch..."
+          
+          # Remove test files and directories
+          git rm -rf tests/ 2>/dev/null || true
+          git rm -rf .kiro/specs/ .agents/ 2>/dev/null || true
+          
+          # Remove dev config files
+          git rm -f vitest.config.ts vitest.config.js 2>/dev/null || true
+          git rm -f tsconfig.test.json 2>/dev/null || true
+          git rm -f .eslintrc.json .eslintrc.js .eslintrc.cjs 2>/dev/null || true
+          git rm -f .prettierrc .prettierrc.json .prettierrc.js 2>/dev/null || true
+          git rm -f eslint.config.js eslint.config.mjs eslint.config.cjs 2>/dev/null || true
+          git rm -f skills-lock.json 2>/dev/null || true
+          
+          # Remove dev scripts
+          git rm -f scripts/clear-commands.ts scripts/register-commands-to-guild.ts scripts/setup-test-db.ts 2>/dev/null || true
+          
+          # Remove example files
+          find . -path ./node_modules -prune -o \( -name "*.example.ts" -o -name "*.example.js" \) -print0 2>/dev/null | xargs -0 git rm -f 2>/dev/null || true
+          
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "✅ No dev files to remove - branch already clean"
+          else
+            echo "📝 Committing cleanup changes..."
+            git commit -m "chore: remove dev-only files from release branch [skip ci]"
+            echo "✅ Dev files removed and committed"
+          fi
+      
       - name: Push to target branch
         if: steps.merge.outputs.merge_status == 'success'
         run: |
