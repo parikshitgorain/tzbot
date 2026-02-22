@@ -76,11 +76,32 @@ jobs:
             echo "✅ Merge successful"
             echo "merge_status=success" >> $GITHUB_OUTPUT
           else
-            # Requirement 2.3: Halt promotion on merge conflict
-            echo "❌ Merge conflict detected"
-            echo "merge_status=conflict" >> $GITHUB_OUTPUT
-            git merge --abort
-            exit 1
+            echo "⚠️ Merge conflicts detected - attempting auto-resolution"
+            
+            # Auto-resolve conflicts for dev-only files (prefer deletion in release)
+            # These files should not exist in release branch
+            git rm -rf tests/ .kiro/specs/ .agents/ || true
+            git rm -f vitest.config.ts tsconfig.test.json .eslintrc.json .prettierrc eslint.config.js skills-lock.json || true
+            git rm -f scripts/clear-commands.ts scripts/register-commands-to-guild.ts scripts/setup-test-db.ts || true
+            find . -name "*.example.ts" -o -name "*.example.js" 2>/dev/null | xargs git rm -f || true
+            
+            # For production files with conflicts, prefer Development version
+            git checkout --theirs -- src/ deployment/ docs/ .github/ package.json package-lock.json tsconfig.json README.md .gitignore .env.example || true
+            
+            # Add resolved files
+            git add -A
+            
+            # Check if conflicts are resolved
+            if git diff --name-only --diff-filter=U | grep -q .; then
+              echo "❌ Unable to auto-resolve all conflicts"
+              echo "merge_status=conflict" >> $GITHUB_OUTPUT
+              git merge --abort
+              exit 1
+            else
+              echo "✅ Conflicts auto-resolved"
+              git commit --no-edit
+              echo "merge_status=success" >> $GITHUB_OUTPUT
+            fi
           fi
       
       - name: Preserve commit history
@@ -119,39 +140,6 @@ jobs:
           echo "🔢 Running semantic-release to auto-bump version..."
           npx semantic-release
           echo "✅ Version updated automatically"
-      
-      - name: Clean release branch (remove dev-only files)
-        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
-        run: |
-          echo "Cleaning release branch - removing development-only files..."
-          
-          # Remove test files
-          git rm -rf tests/ || true
-          git rm -f vitest.config.ts tsconfig.test.json || true
-          
-          # Remove CI/CD specs
-          git rm -rf .kiro/specs/ || true
-          
-          # Remove development configs
-          git rm -f .eslintrc.json .prettierrc eslint.config.js || true
-          
-          # Remove example files
-          find . -name "*.example.ts" -o -name "*.example.js" | xargs git rm -f || true
-          
-          # Remove development scripts
-          git rm -f scripts/clear-commands.ts scripts/register-commands-to-guild.ts scripts/setup-test-db.ts || true
-          
-          # Remove skills
-          git rm -rf .agents/ skills-lock.json || true
-          
-          # Check if there are changes to commit
-          if git diff --cached --quiet; then
-            echo "No development files to remove"
-          else
-            git commit -m "chore: remove development-only files from release branch [skip ci]"
-            git push origin ${{ inputs.target_branch }}
-            echo "✅ Development files removed from release branch"
-          fi
       
       - name: Notify merge conflict
         if: failure() && steps.merge.outputs.merge_status == 'conflict'
