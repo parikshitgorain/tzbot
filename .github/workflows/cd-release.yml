@@ -138,10 +138,11 @@ jobs:
       - name: Send deployment start notification
         run: |
           bash deployment/scripts/notify.sh start \
-            "Deploying commit ${{ github.sha }} to production" \
-            "Branch: ${{ github.ref_name }}\nTriggered by: ${{ github.actor }}"
+            "🚀 New Release Received - Deployment Starting" \
+            "**Commit:** \`${GITHUB_SHA:0:7}\`\n**Branch:** \`${{ github.ref_name }}\`\n**Author:** ${{ github.actor }}\n**Estimated Time:** ~2-3 minutes\n\n⏳ Installing dependencies and building..."
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GITHUB_SHA: ${{ github.sha }}
         continue-on-error: true
       
       - name: Record deployment start
@@ -160,6 +161,11 @@ jobs:
       - name: Execute deployment on VPS
         id: deploy
         run: |
+          # Send progress update
+          bash deployment/scripts/notify.sh info \
+            "⚙️ Deployment In Progress" \
+            "**Step:** Installing dependencies & building\n**Progress:** 🔵🔵⚪⚪⚪ 40%\n\n⏳ Please wait..."
+          
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
@@ -168,9 +174,16 @@ jobs:
              export REPO_URL=${{ github.server_url }}/${{ github.repository }}.git && \
              export BRANCH=release && \
              bash /var/www/tzbot/deployment/scripts/deploy.sh ${{ github.sha }} ${{ env.DEPLOY_TIMESTAMP }}"
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       
       - name: Restart application service
         run: |
+          # Send progress update
+          bash deployment/scripts/notify.sh info \
+            "🔄 Restarting Bot Service" \
+            "**Step:** Restarting PM2 service\n**Progress:** 🔵🔵🔵🔵⚪ 80%\n\n⏳ Almost done..."
+          
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
@@ -178,6 +191,8 @@ jobs:
              export SERVICE_TYPE=pm2 && \
              export DEPLOY_BASE=/var/www/tzbot && \
              bash /var/www/tzbot/deployment/scripts/service-manager.sh restart"
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       
       - name: Run health checks
         id: health
@@ -206,10 +221,11 @@ jobs:
         if: success()
         run: |
           bash deployment/scripts/notify.sh success \
-            "Deployment successful!" \
-            "Commit: ${{ github.sha }}\nBranch: ${{ github.ref_name }}\nDeployed by: ${{ github.actor }}"
+            "✅ Deployment Successful - Bot is Online" \
+            "**Commit:** \`${GITHUB_SHA:0:7}\`\n**Branch:** \`${{ github.ref_name }}\`\n**Deployed by:** ${{ github.actor }}\n**Status:** 🟢 Working Normally\n\n✨ All systems operational!"
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GITHUB_SHA: ${{ github.sha }}
         continue-on-error: true
       
       - name: Rollback on failure
@@ -241,10 +257,11 @@ jobs:
         if: failure()
         run: |
           bash deployment/scripts/notify.sh failure \
-            "Deployment failed!" \
-            "Commit: ${{ github.sha }}\nBranch: ${{ github.ref_name }}\nCheck logs for details"
+            "❌ Deployment Failed - Auto-Rollback Initiated" \
+            "**Commit:** \`${GITHUB_SHA:0:7}\`\n**Branch:** \`${{ github.ref_name }}\`\n**Status:** 🔴 Rolling back to previous version\n\n🔄 Previous stable version restored"
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GITHUB_SHA: ${{ github.sha }}
         continue-on-error: true
       
       - name: Cleanup SSH key
