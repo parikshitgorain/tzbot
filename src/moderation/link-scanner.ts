@@ -24,7 +24,8 @@ const ZERO_WIDTH_CHARS = [
  * Matches http://, https://, and common domain patterns
  * Includes zero-width characters to catch obfuscated URLs
  */
-const URL_REGEX = /(?:https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=\u200B\u200C\u200D\uFEFF]{1,256}\.[a-zA-Z0-9()\u200B\u200C\u200D\uFEFF]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=\u200B\u200C\u200D\uFEFF]*)/gi;
+// eslint-disable-next-line no-misleading-character-class
+const URL_REGEX = /(?:https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._+~#=\u200B\u200C\u200D\uFEFF]{1,256}\.[a-zA-Z0-9()\u200B\u200C\u200D\uFEFF]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=\u200B\u200C\u200D\uFEFF]*)/gi;
 
 /**
  * Phishing blocklist - domains known to be malicious
@@ -51,7 +52,7 @@ export class LinkScanner {
 
   constructor(
     customBlocklist?: Set<string>,
-    enableGoogleSafeBrowsing: boolean = true
+    enableGoogleSafeBrowsing: boolean = true,
   ) {
     this.blocklist = customBlocklist || DEFAULT_BLOCKLIST;
     this.enableGoogleSafeBrowsing = enableGoogleSafeBrowsing;
@@ -67,7 +68,7 @@ export class LinkScanner {
   async scanMessage(
     messageContent: string,
     userId: string,
-    isModerator: boolean = false
+    isModerator: boolean = false,
   ): Promise<LinkScanResult> {
     // Requirements 7.7: Moderators are exempt from link scanning
     if (isModerator) {
@@ -184,7 +185,7 @@ export class LinkScanner {
   checkBlocklist(normalizedUrl: string): LinkScanResult {
     // Normalize the URL for comparison (already lowercase from normalizeUrl)
     const urlToCheck = normalizedUrl.toLowerCase();
-    
+
     // Check exact match
     if (this.blocklist.has(urlToCheck)) {
       return {
@@ -217,7 +218,7 @@ export class LinkScanner {
    */
   private async checkGoogleSafeBrowsingApi(
     normalizedUrl: string,
-    userId: string
+    userId: string,
   ): Promise<LinkScanResult> {
     try {
       // Add protocol back for Google Safe Browsing API

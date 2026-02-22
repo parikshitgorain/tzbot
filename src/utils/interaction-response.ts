@@ -4,12 +4,12 @@
  * @module utils
  */
 
-import type { 
-  ChatInputCommandInteraction, 
+import type {
+  ChatInputCommandInteraction,
   ButtonInteraction,
   InteractionReplyOptions,
   InteractionEditReplyOptions,
-  InteractionUpdateOptions 
+  InteractionUpdateOptions,
 } from 'discord.js';
 import { logger } from '@/core/logger/logger.js';
 
@@ -19,7 +19,7 @@ import { logger } from '@/core/logger/logger.js';
  */
 export async function safeReply(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
-  options: InteractionReplyOptions
+  options: InteractionReplyOptions,
 ): Promise<boolean> {
   try {
     if (interaction.replied) {
@@ -43,21 +43,22 @@ export async function safeReply(
       await interaction.reply(options);
       return true;
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Log specific Discord API errors
-    if (error.code === 10062) {
+    const err = error as { code?: number; message?: string };
+    if (err.code === 10062) {
       logger.warn('Interaction token expired (Unknown interaction)', {
         interactionId: interaction.id,
         commandName: interaction.isCommand() ? interaction.commandName : 'button',
       });
-    } else if (error.code === 40060) {
+    } else if (err.code === 40060) {
       logger.warn('Interaction already acknowledged', {
         interactionId: interaction.id,
         commandName: interaction.isCommand() ? interaction.commandName : 'button',
       });
     } else {
       logger.error('Failed to respond to interaction', {
-        error,
+        error: err,
         interactionId: interaction.id,
         interactionState: {
           replied: interaction.replied,
@@ -74,7 +75,7 @@ export async function safeReply(
  */
 export async function safeEditReply(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
-  options: InteractionEditReplyOptions
+  options: InteractionEditReplyOptions,
 ): Promise<boolean> {
   try {
     if (!interaction.deferred && !interaction.replied) {
@@ -86,14 +87,15 @@ export async function safeEditReply(
 
     await interaction.editReply(options);
     return true;
-  } catch (error: any) {
-    if (error.code === 10062) {
+  } catch (error: unknown) {
+    const err = error as { code?: number; message?: string };
+    if (err.code === 10062) {
       logger.warn('Interaction token expired (Unknown interaction)', {
         interactionId: interaction.id,
       });
     } else {
       logger.error('Failed to edit interaction reply', {
-        error,
+        error: err,
         interactionId: interaction.id,
       });
     }
@@ -106,7 +108,7 @@ export async function safeEditReply(
  */
 export async function safeDeferReply(
   interaction: ChatInputCommandInteraction | ButtonInteraction,
-  options?: { ephemeral?: boolean }
+  options?: { ephemeral?: boolean },
 ): Promise<boolean> {
   try {
     if (interaction.deferred || interaction.replied) {
@@ -120,18 +122,19 @@ export async function safeDeferReply(
 
     await interaction.deferReply(options);
     return true;
-  } catch (error: any) {
-    if (error.code === 10062) {
+  } catch (error: unknown) {
+    const err = error as { code?: number; message?: string };
+    if (err.code === 10062) {
       logger.warn('Interaction token expired before defer (Unknown interaction)', {
         interactionId: interaction.id,
       });
-    } else if (error.code === 40060) {
+    } else if (err.code === 40060) {
       logger.warn('Interaction already acknowledged before defer', {
         interactionId: interaction.id,
       });
     } else {
       logger.error('Failed to defer interaction reply', {
-        error,
+        error: err,
         interactionId: interaction.id,
       });
     }
@@ -144,23 +147,24 @@ export async function safeDeferReply(
  */
 export async function safeUpdate(
   interaction: ButtonInteraction,
-  options: InteractionUpdateOptions
+  options: InteractionUpdateOptions,
 ): Promise<boolean> {
   try {
     await interaction.update(options);
     return true;
-  } catch (error: any) {
-    if (error.code === 10062) {
+  } catch (error: unknown) {
+    const err = error as { code?: number; message?: string };
+    if (err.code === 10062) {
       logger.warn('Interaction token expired (Unknown interaction)', {
         interactionId: interaction.id,
       });
-    } else if (error.code === 40060) {
+    } else if (err.code === 40060) {
       logger.warn('Interaction already acknowledged', {
         interactionId: interaction.id,
       });
     } else {
       logger.error('Failed to update interaction', {
-        error,
+        error: err,
         interactionId: interaction.id,
       });
     }
