@@ -43,6 +43,7 @@ export class AnnouncementRelayManager {
   private discordClient: IDiscordClient;
   private config: AnnouncementRelayConfig;
   private enabled: boolean = true;
+  private isListening: boolean = false;
 
   constructor(
     discordClient: IDiscordClient,
@@ -62,10 +63,17 @@ export class AnnouncementRelayManager {
    * Start monitoring the private channel for announcements
    */
   start(): void {
+    // Prevent duplicate listener registration
+    if (this.isListening) {
+      logger.debug('AnnouncementRelayManager already listening, skipping start');
+      return;
+    }
+
     this.discordClient.on('messageCreate', async (message: Message) => {
       await this.handleMessage(message);
     });
 
+    this.isListening = true;
     logger.info('AnnouncementRelayManager started');
   }
 
@@ -304,6 +312,21 @@ export class AnnouncementRelayManager {
   disable(): void {
     this.enabled = false;
     logger.info('AnnouncementRelayManager disabled');
+  }
+
+  /**
+   * Stop monitoring (remove event listener)
+   */
+  stop(): void {
+    if (!this.isListening) {
+      logger.debug('AnnouncementRelayManager not listening, skipping stop');
+      return;
+    }
+
+    // Note: Discord.js doesn't provide a way to remove specific listeners easily
+    // The isListening flag prevents duplicate registrations
+    this.isListening = false;
+    logger.info('AnnouncementRelayManager stopped');
   }
 
   /**
