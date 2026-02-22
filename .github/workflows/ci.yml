@@ -140,8 +140,11 @@ jobs:
         run: npm install
       
       - name: Run npm audit
-        run: npm audit --audit-level=high
-        continue-on-error: true
+        run: |
+          echo "Checking production dependencies for vulnerabilities..."
+          npm audit --production --audit-level=high
+          echo "✓ Production dependencies are secure"
+        continue-on-error: false
 
   quality-gate:
     name: Quality Gate
