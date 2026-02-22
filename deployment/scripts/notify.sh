@@ -20,6 +20,7 @@ COLOR_START=3447003    # Blue
 COLOR_SUCCESS=3066993  # Green
 COLOR_FAILURE=15158332 # Red
 COLOR_ROLLBACK=16776960 # Yellow
+COLOR_INFO=9807270     # Gray
 
 # Logging functions
 log_info() {
@@ -67,6 +68,10 @@ case "$TYPE" in
     rollback)
         COLOR=$COLOR_ROLLBACK
         TITLE="⚠️ Rollback Executed"
+        ;;
+    info)
+        COLOR=$COLOR_INFO
+        TITLE="ℹ️ Deployment Update"
         ;;
     *)
         log_error "Unknown notification type: $TYPE"

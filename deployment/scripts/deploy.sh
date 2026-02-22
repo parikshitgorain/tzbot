@@ -11,11 +11,11 @@ set -e
 
 # Configuration
 APP_NAME="${APP_NAME:-tzbot}"
-DEPLOY_BASE="${DEPLOY_BASE:-/var/www/$APP_NAME}"
+DEPLOY_BASE="${DEPLOY_BASE:-/var/www/tzbot}"
 RELEASES_DIR="$DEPLOY_BASE/releases"
 CURRENT_LINK="$DEPLOY_BASE/current"
 REPO_URL="${REPO_URL:-https://github.com/parikshitgorain/tzbot.git}"
-BRANCH="${BRANCH:-Release_Branch}"
+BRANCH="${BRANCH:-release}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -87,9 +87,9 @@ if [ "$ACTUAL_COMMIT" != "$COMMIT_HASH" ]; then
     log_warn "Commit hash mismatch: expected $COMMIT_HASH, got $ACTUAL_COMMIT"
 fi
 
-# Install dependencies
+# Install dependencies (with all devDependencies for build)
 log_step "Installing dependencies..."
-if ! npm ci --production; then
+if ! npm install; then
     log_error "Failed to install dependencies"
     exit 1
 fi
@@ -100,6 +100,16 @@ if ! npm run build; then
     log_error "Failed to build application"
     exit 1
 fi
+
+# Resolve path aliases
+log_step "Resolving TypeScript path aliases..."
+if ! npx tsc-alias --project tsconfig.json; then
+    log_warn "Failed to resolve path aliases, continuing anyway..."
+fi
+
+# Remove dev dependencies after build
+log_step "Removing dev dependencies..."
+npm prune --production || log_warn "Failed to prune dev dependencies"
 
 # Create/update symlink to new release
 log_step "Updating current symlink..."

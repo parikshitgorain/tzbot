@@ -12,9 +12,10 @@ set -e
 # Configuration
 SERVICE_NAME="${SERVICE_NAME:-tzbot}"
 SERVICE_TYPE="${SERVICE_TYPE:-pm2}"
+DEPLOY_BASE="${DEPLOY_BASE:-/var/www/tzbot}"
 MAX_WAIT_TIME=60
 CHECK_INTERVAL=5
-CURRENT_DIR="/var/www/tzbot/current"
+CURRENT_DIR="$DEPLOY_BASE/current"
 
 # Colors for output
 RED='\033[0;31m'
