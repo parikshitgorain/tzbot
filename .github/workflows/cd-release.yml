@@ -192,15 +192,6 @@ jobs:
           fi
           
           # Make scripts executable
-          [ -d deployment/scripts ] && chmod +x deployment/scripts/*.sh
-          echo "✅ VPS ready"
-          ENDSSH
-            echo ""
-            echo "Please update the VPS_SSH_KEY secret with the complete private key"
-            exit 1
-          fi
-          echo "✅ SSH key validated successfully"
-          ssh-keyscan -H ${{ steps.dns.outputs.vps_ip }} >> ~/.ssh/known_hosts
       
       - name: Send deployment start notification
         run: |
