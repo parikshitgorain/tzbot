@@ -17,9 +17,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Logging function
+# Logging function - all logs go to stderr to avoid interfering with stdout
 log() {
-    echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
+    echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >&2
 }
 
 log_error() {
@@ -27,11 +27,11 @@ log_error() {
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo -e "${GREEN}[SUCCESS]${NC} $1" >&2
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    echo -e "${YELLOW}[WARNING]${NC} $1" >&2
 }
 
 # Usage information
