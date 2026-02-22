@@ -24,6 +24,11 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
 jobs:
   promote:
     name: Promote to Release Branch
