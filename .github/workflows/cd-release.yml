@@ -222,48 +222,34 @@ jobs:
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
-            'bash -s' << 'ENDSSH'
-          set -e
-          
-          DEPLOY_DIR="/var/www/tzbot"
-          SHARED_DIR="$DEPLOY_DIR/shared"
-          ENV_FILE="$SHARED_DIR/.env"
-          
-          # Create shared directory if it doesn't exist
-          mkdir -p "$SHARED_DIR"
-          
-          # Create .env file with environment variables
-          cat > "$ENV_FILE" << 'EOF'
-          # Discord Configuration
-          DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
-          DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
-          DISCORD_GUILD_ID=${{ secrets.DISCORD_GUILD_ID }}
-          
-          # Database Configuration
-          DATABASE_URL=${{ secrets.DATABASE_URL }}
-          
-          # Redis Configuration (optional)
-          REDIS_URL=${{ secrets.REDIS_URL }}
-          
-          # Notification Channels
-          NOTIFICATION_CHANNEL_ID=${{ secrets.NOTIFICATION_CHANNEL_ID }}
-          FALLBACK_CHANNEL_ID=${{ secrets.FALLBACK_CHANNEL_ID }}
-          
-          # Moderator Role
-          MODERATOR_ROLE_ID=${{ secrets.MODERATOR_ROLE_ID }}
-          
-          # Kick Integration (optional)
-          KICK_CHANNEL_ID=${{ secrets.KICK_CHANNEL_ID }}
-          KICK_WEBHOOK_SECRET=${{ secrets.KICK_WEBHOOK_SECRET }}
-          
-          # Environment
-          NODE_ENV=production
-          LOG_LEVEL=info
-          EOF
-          
-          chmod 600 "$ENV_FILE"
-          echo "✅ Environment file created at: $ENV_FILE"
-          ENDSSH
+            "bash -c 'mkdir -p /var/www/tzbot/shared && cat > /var/www/tzbot/shared/.env << \"EOF\"
+# Discord Configuration
+DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
+DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
+DISCORD_GUILD_ID=${{ secrets.DISCORD_GUILD_ID }}
+
+# Database Configuration
+DATABASE_URL=${{ secrets.DATABASE_URL }}
+
+# Redis Configuration (optional)
+REDIS_URL=${{ secrets.REDIS_URL }}
+
+# Notification Channels
+NOTIFICATION_CHANNEL_ID=${{ secrets.NOTIFICATION_CHANNEL_ID }}
+FALLBACK_CHANNEL_ID=${{ secrets.FALLBACK_CHANNEL_ID }}
+
+# Moderator Role
+MODERATOR_ROLE_ID=${{ secrets.MODERATOR_ROLE_ID }}
+
+# Kick Integration (optional)
+KICK_CHANNEL_ID=${{ secrets.KICK_CHANNEL_ID }}
+KICK_WEBHOOK_SECRET=${{ secrets.KICK_WEBHOOK_SECRET }}
+
+# Environment
+NODE_ENV=production
+LOG_LEVEL=info
+EOF
+chmod 600 /var/www/tzbot/shared/.env && echo \"✅ Environment file created\"'"
       
       - name: Execute deployment on VPS
         id: deploy
