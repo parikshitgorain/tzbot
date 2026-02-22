@@ -87,6 +87,13 @@ if [ "$ACTUAL_COMMIT" != "$COMMIT_HASH" ]; then
     log_warn "Commit hash mismatch: expected $COMMIT_HASH, got $ACTUAL_COMMIT"
 fi
 
+# Remove any dev-only files that might have slipped through
+log_step "Cleaning dev-only files from deployment..."
+rm -rf tests/ .kiro/specs/ .agents/ || true
+rm -f vitest.config.* tsconfig.test.* .eslintrc.* .prettierrc eslint.config.js skills-lock.json || true
+find . -name "*.test.ts" -o -name "*.test.js" -o -name "*.example.ts" -o -name "*.example.js" | grep -v node_modules | xargs rm -f || true
+log_info "✓ Dev files cleaned"
+
 # Install dependencies (with all devDependencies for build)
 log_step "Installing dependencies..."
 if ! npm install; then
@@ -110,6 +117,23 @@ fi
 # Remove dev dependencies after build
 log_step "Removing dev dependencies..."
 npm prune --production || log_warn "Failed to prune dev dependencies"
+
+# Handle .env file
+log_step "Setting up environment file..."
+SHARED_ENV="$DEPLOY_BASE/shared/.env"
+if [ -f "$SHARED_ENV" ]; then
+    log_info "Copying .env from shared location"
+    cp "$SHARED_ENV" "$RELEASE_DIR/.env"
+elif [ -f "$DEPLOY_BASE/.env" ]; then
+    log_info "Copying .env from deploy base"
+    cp "$DEPLOY_BASE/.env" "$RELEASE_DIR/.env"
+    # Also save to shared for future deployments
+    mkdir -p "$DEPLOY_BASE/shared"
+    cp "$DEPLOY_BASE/.env" "$SHARED_ENV"
+else
+    log_warn "No .env file found! Bot may not start correctly."
+    log_warn "Please create .env file at: $DEPLOY_BASE/shared/.env"
+fi
 
 # Create/update symlink to new release
 log_step "Updating current symlink..."

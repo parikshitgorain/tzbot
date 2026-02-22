@@ -33,6 +33,12 @@ logs/*.log.*
 logs/.*.json
 !logs/.gitkeep
 
+# Runtime state files
+data/
+backups/
+releases/
+deployment-history.json
+
 # Database
 *.db
 *.sqlite

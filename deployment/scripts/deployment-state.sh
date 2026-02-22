@@ -35,6 +35,19 @@ log_error() {
 init_history() {
     if [ ! -f "$HISTORY_FILE" ]; then
         echo "[]" > "$HISTORY_FILE"
+    else
+        # Validate JSON format
+        if ! jq empty "$HISTORY_FILE" 2>/dev/null; then
+            log_error "Corrupted history file detected, resetting..."
+            echo "[]" > "$HISTORY_FILE"
+        fi
+        
+        # Ensure it's an array
+        local content=$(cat "$HISTORY_FILE")
+        if ! echo "$content" | jq -e 'type == "array"' >/dev/null 2>&1; then
+            log_error "History file is not an array, resetting..."
+            echo "[]" > "$HISTORY_FILE"
+        fi
     fi
 }
 
@@ -57,9 +70,13 @@ record_start() {
 EOF
 )
     
-    # Append to history
+    # Append to history safely
     local history=$(cat "$HISTORY_FILE")
-    echo "$history" | jq ". += [$record]" > "$HISTORY_FILE"
+    if [ "$history" = "[]" ] || [ -z "$history" ]; then
+        echo "[$record]" > "$HISTORY_FILE"
+    else
+        echo "$history" | jq --argjson new "$record" '. += [$new]' > "$HISTORY_FILE.tmp" && mv "$HISTORY_FILE.tmp" "$HISTORY_FILE"
+    fi
     
     log_info "Deployment start recorded"
 }
@@ -74,7 +91,9 @@ record_complete() {
     
     # Update the last record with matching commit hash
     local history=$(cat "$HISTORY_FILE")
-    echo "$history" | jq "map(if .commit_hash == \"$commit_hash\" and .status == \"in_progress\" then . + {\"status\": \"$status\", \"completed_at\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\", \"message\": \"$message\"} else . end)" > "$HISTORY_FILE"
+    echo "$history" | jq --arg hash "$commit_hash" --arg status "$status" --arg msg "$message" --arg completed "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        'map(if .commit_hash == $hash and .status == "in_progress" then . + {"status": $status, "completed_at": $completed, "message": $msg} else . end)' \
+        > "$HISTORY_FILE.tmp" && mv "$HISTORY_FILE.tmp" "$HISTORY_FILE"
     
     # Prune old deployments
     prune_history

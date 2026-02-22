@@ -138,9 +138,60 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          # Write SSH key preserving newlines (use printf instead of echo)
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          # Validate the key format
+          if ! ssh-keygen -l -f ~/.ssh/deploy_key &>/dev/null; then
+            echo "❌ Error: Invalid SSH key format in VPS_SSH_KEY secret"
+            echo "The key must include:"
+            echo "  - BEGIN PRIVATE KEY header"
+            echo "  - Key data"
+            echo "  - END PRIVATE KEY footer"
+            echo ""
+            echo "Please update the VPS_SSH_KEY secret with the complete private key"
+            exit 1
+          fi
+          echo "✅ SSH key validated successfully"
           ssh-keyscan -H ${{ steps.dns.outputs.vps_ip }} >> ~/.ssh/known_hosts
+      
+      - name: Initialize VPS deployment directory
+        run: |
+          echo "🔧 Initializing VPS deployment directory..."
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
+            'bash -s' << 'ENDSSH'
+          set -e
+          
+          DEPLOY_DIR="/var/www/tzbot"
+          
+          echo "� Checking deployment directory..."
+          mkdir -p "$DEPLOY_DIR"
+          cd "$DEPLOY_DIR"
+          
+          # Check if it's a git repository
+          if [ -d .git ]; then
+            echo "✅ Git repository exists, updating..."
+            git fetch origin release
+            git reset --hard origin/release
+          else
+            # Directory exists but no git - backup and reinitialize
+            if [ "$(ls -A 2>/dev/null)" ]; then
+              echo "⚠️  Non-git files found, backing up..."
+              BACKUP_DIR="/tmp/tzbot_backup_$(date +%Y%m%d_%H%M%S)"
+              mkdir -p "$BACKUP_DIR"
+              cp -r . "$BACKUP_DIR/" 2>/dev/null || true
+              rm -rf * .* 2>/dev/null || true
+              echo "✅ Backup at: $BACKUP_DIR"
+            fi
+            
+            echo "📦 Cloning repository..."
+            git clone --branch release https://github.com/${{ github.repository }}.git .
+            echo "✅ Repository cloned"
+          fi
+          
+          # Make scripts executable
       
       - name: Send deployment start notification
         run: |
@@ -164,6 +215,41 @@ jobs:
         env:
           APP_NAME: tzbot
           DEPLOY_BASE: /var/www/tzbot
+      
+      - name: Setup environment variables on VPS
+        run: |
+          echo "🔧 Setting up environment variables..."
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
+            "bash -c 'mkdir -p /var/www/tzbot/shared && cat > /var/www/tzbot/shared/.env << \"EOF\"
+# Discord Configuration
+DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
+DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
+DISCORD_GUILD_ID=${{ secrets.DISCORD_GUILD_ID }}
+
+# Database Configuration
+DATABASE_URL=${{ secrets.DATABASE_URL }}
+
+# Redis Configuration (optional)
+REDIS_URL=${{ secrets.REDIS_URL }}
+
+# Notification Channels
+NOTIFICATION_CHANNEL_ID=${{ secrets.NOTIFICATION_CHANNEL_ID }}
+FALLBACK_CHANNEL_ID=${{ secrets.FALLBACK_CHANNEL_ID }}
+
+# Moderator Role
+MODERATOR_ROLE_ID=${{ secrets.MODERATOR_ROLE_ID }}
+
+# Kick Integration (optional)
+KICK_CHANNEL_ID=${{ secrets.KICK_CHANNEL_ID }}
+KICK_WEBHOOK_SECRET=${{ secrets.KICK_WEBHOOK_SECRET }}
+
+# Environment
+NODE_ENV=production
+LOG_LEVEL=info
+EOF
+chmod 600 /var/www/tzbot/shared/.env && echo \"✅ Environment file created\"'"
       
       - name: Execute deployment on VPS
         id: deploy

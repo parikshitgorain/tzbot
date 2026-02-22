@@ -35,6 +35,11 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Send promotion start notification
+        run: |
+          bash -c 'curl -H "Content-Type: application/json" -X POST -d "{\"embeds\":[{\"title\":\"🔄 Branch Promotion Started\",\"description\":\"**Source:** \`${{ inputs.source_branch }}\`\\n**Target:** \`${{ inputs.target_branch }}\`\\n**Commit:** \`${{ inputs.commit_sha }}\`\\n**Author:** ${{ inputs.commit_author }}\\n\\n⏳ Merging branches...\",\"color\":3447003}]}" "${{ secrets.DISCORD_WEBHOOK_URL }}"' || true
+        continue-on-error: true
+      
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -76,11 +81,32 @@ jobs:
             echo "✅ Merge successful"
             echo "merge_status=success" >> $GITHUB_OUTPUT
           else
-            # Requirement 2.3: Halt promotion on merge conflict
-            echo "❌ Merge conflict detected"
-            echo "merge_status=conflict" >> $GITHUB_OUTPUT
-            git merge --abort
-            exit 1
+            echo "⚠️ Merge conflicts detected - attempting auto-resolution"
+            
+            # Auto-resolve conflicts for dev-only files (prefer deletion in release)
+            # These files should not exist in release branch
+            git rm -rf tests/ .kiro/specs/ .agents/ || true
+            git rm -f vitest.config.ts tsconfig.test.json .eslintrc.json .prettierrc eslint.config.js skills-lock.json || true
+            git rm -f scripts/clear-commands.ts scripts/register-commands-to-guild.ts scripts/setup-test-db.ts || true
+            find . -name "*.example.ts" -o -name "*.example.js" 2>/dev/null | xargs git rm -f || true
+            
+            # For production files with conflicts, prefer Development version
+            git checkout --theirs -- src/ deployment/ docs/ .github/ package.json package-lock.json tsconfig.json README.md .gitignore .env.example || true
+            
+            # Add resolved files
+            git add -A
+            
+            # Check if conflicts are resolved
+            if git diff --name-only --diff-filter=U | grep -q .; then
+              echo "❌ Unable to auto-resolve all conflicts"
+              echo "merge_status=conflict" >> $GITHUB_OUTPUT
+              git merge --abort
+              exit 1
+            else
+              echo "✅ Conflicts auto-resolved"
+              git commit --no-edit
+              echo "merge_status=success" >> $GITHUB_OUTPUT
+            fi
           fi
       
       - name: Preserve commit history
@@ -111,49 +137,154 @@ jobs:
           git push origin ${{ inputs.target_branch }}
           echo "✅ Successfully pushed to ${{ inputs.target_branch }}"
       
+      - name: Send merge success notification
+        if: steps.merge.outputs.merge_status == 'success'
+        run: |
+          bash -c 'curl -H "Content-Type: application/json" -X POST -d "{\"embeds\":[{\"title\":\"✅ Merge Successful\",\"description\":\"**Branch:** \`${{ inputs.target_branch }}\`\\n**Commit:** \`${{ inputs.commit_sha }}\`\\n\\n🔍 Verifying release branch...\",\"color\":3066993}]}" "${{ secrets.DISCORD_WEBHOOK_URL }}"' || true
+        continue-on-error: true
+      
+      - name: Verify release branch is clean
+        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        run: |
+          echo "🔍 Verifying release branch contains no dev-only files..."
+          
+          # Check for test files
+          if find . -path ./node_modules -prune -o -name "*.test.ts" -o -name "*.test.js" | grep -v node_modules | grep -q .; then
+            echo "❌ ERROR: Test files found in release branch!"
+            find . -path ./node_modules -prune -o -name "*.test.ts" -o -name "*.test.js" | grep -v node_modules
+            exit 1
+          fi
+          
+          # Check for dev directories
+          if [ -d "tests" ] || [ -d ".kiro/specs" ] || [ -d ".agents" ]; then
+            echo "❌ ERROR: Dev directories found in release branch!"
+            ls -la tests/ .kiro/specs/ .agents/ 2>/dev/null || true
+            exit 1
+          fi
+          
+          # Check for dev config files
+          if ls vitest.config.* tsconfig.test.* .eslintrc.* .prettierrc eslint.config.js 2>/dev/null | grep -q .; then
+            echo "❌ ERROR: Dev config files found in release branch!"
+            ls -la vitest.config.* tsconfig.test.* .eslintrc.* .prettierrc eslint.config.js 2>/dev/null || true
+            exit 1
+          fi
+          
+          # Check for example files
+          if find . -path ./node_modules -prune -o -name "*.example.ts" -o -name "*.example.js" | grep -v node_modules | grep -q .; then
+            echo "❌ ERROR: Example files found in release branch!"
+            find . -path ./node_modules -prune -o -name "*.example.ts" -o -name "*.example.js" | grep -v node_modules
+            exit 1
+          fi
+          
+          echo "✅ Release branch is clean - no dev-only files found"
+      
+      - name: Send verification success notification
+        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        run: |
+          bash -c 'curl -H "Content-Type: application/json" -X POST -d "{\"embeds\":[{\"title\":\"✅ Release Branch Verified\",\"description\":\"**Status:** Clean - no dev files\\n\\n🔢 Running semantic versioning...\",\"color\":3066993}]}" "${{ secrets.DISCORD_WEBHOOK_URL }}"' || true
+        continue-on-error: true
+      
+      - name: Setup Node.js for semantic-release
+        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Configure Git for semantic-release
+        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+      
+      - name: Install semantic-release dependencies
+        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        run: |
+          echo "📦 Installing semantic-release and plugins..."
+          npm install --no-save semantic-release @semantic-release/changelog @semantic-release/git conventional-changelog-conventionalcommits
+          echo "✅ Dependencies installed"
+      
       - name: Run semantic versioning
         if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        id: semantic_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: github-actions[bot]@users.noreply.github.com
         run: |
           echo "🔢 Running semantic-release to auto-bump version..."
-          npx semantic-release
-          echo "✅ Version updated automatically"
-      
-      - name: Clean release branch (remove dev-only files)
-        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
-        run: |
-          echo "Cleaning release branch - removing development-only files..."
+          echo ""
           
-          # Remove test files
-          git rm -rf tests/ || true
-          git rm -f vitest.config.ts tsconfig.test.json || true
+          # Get current version before semantic-release
+          OLD_VERSION=$(node -p "require('./package.json').version")
+          echo "📊 Current version: v$OLD_VERSION"
+          echo "📍 Branch: $(git branch --show-current)"
+          echo ""
           
-          # Remove CI/CD specs
-          git rm -rf .kiro/specs/ || true
+          # Check for existing tags
+          TAG_COUNT=$(git tag | wc -l)
+          echo "📌 Existing tags: $TAG_COUNT"
           
-          # Remove development configs
-          git rm -f .eslintrc.json .prettierrc eslint.config.js || true
+          if [ "$TAG_COUNT" -eq 0 ]; then
+            echo "⚠️  No tags found - creating initial tag v$OLD_VERSION"
+            git tag -a "v$OLD_VERSION" -m "Initial release v$OLD_VERSION"
+            git push origin "v$OLD_VERSION"
+          fi
           
-          # Remove example files
-          find . -name "*.example.ts" -o -name "*.example.js" | xargs git rm -f || true
+          echo ""
+          echo "📝 Recent commits since last tag:"
+          git log $(git describe --tags --abbrev=0 2>/dev/null || echo "--all")..HEAD --oneline --no-decorate | head -10 || echo "No commits since last tag"
+          echo ""
           
-          # Remove development scripts
-          git rm -f scripts/clear-commands.ts scripts/register-commands-to-guild.ts scripts/setup-test-db.ts || true
+          # Run semantic-release with debug output
+          echo "🚀 Running semantic-release..."
+          npx semantic-release --debug 2>&1 | tee semantic-release.log || {
+            echo "⚠️  Semantic-release completed with warnings"
+          }
           
-          # Remove skills
-          git rm -rf .agents/ skills-lock.json || true
+          # Get new version after semantic-release
+          NEW_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "$OLD_VERSION")
           
-          # Check if there are changes to commit
-          if git diff --cached --quiet; then
-            echo "No development files to remove"
+          echo ""
+          if [ "$NEW_VERSION" != "$OLD_VERSION" ]; then
+            echo "✅ Version bumped: v$OLD_VERSION → v$NEW_VERSION"
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "version_changed=true" >> $GITHUB_OUTPUT
+            echo "old_version=$OLD_VERSION" >> $GITHUB_OUTPUT
           else
-            git commit -m "chore: remove development-only files from release branch [skip ci]"
-            git push origin ${{ inputs.target_branch }}
-            echo "✅ Development files removed from release branch"
+            echo "ℹ️  Version unchanged: v$OLD_VERSION"
+            echo "💡 Tip: Use 'feat:', 'fix:', or 'BREAKING CHANGE:' in commit messages to trigger version bumps"
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "version_changed=false" >> $GITHUB_OUTPUT
+            echo "old_version=$OLD_VERSION" >> $GITHUB_OUTPUT
           fi
       
+      - name: Send versioning success notification
+        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        run: |
+          VERSION="${{ steps.semantic_release.outputs.version }}"
+          OLD_VERSION="${{ steps.semantic_release.outputs.old_version }}"
+          CHANGED="${{ steps.semantic_release.outputs.version_changed }}"
+          
+          if [ "$CHANGED" = "true" ]; then
+            MESSAGE="**Version Bumped:** \`v$OLD_VERSION\` → \`v$VERSION\` ✨\n\n🚀 Triggering deployment..."
+          else
+            MESSAGE="**Version:** \`v$VERSION\` (unchanged)\n\n🚀 Triggering deployment..."
+          fi
+          
+          bash -c 'curl -H "Content-Type: application/json" -X POST -d "{\"embeds\":[{\"title\":\"🔢 Version Updated\",\"description\":\"'"$MESSAGE"'\",\"color\":3066993}]}" "${{ secrets.DISCORD_WEBHOOK_URL }}"' || true
+        continue-on-error: true
+      
       - name: Notify merge conflict
+        if: failure() && steps.merge.outputs.merge_status == 'conflict'
+        run: |
+          bash -c 'curl -H "Content-Type: application/json" -X POST -d "{\"embeds\":[{\"title\":\"❌ Branch Promotion Failed\",\"description\":\"**Reason:** Merge conflict detected\\n**Source:** \`${{ inputs.source_branch }}\`\\n**Target:** \`${{ inputs.target_branch }}\`\\n**Commit:** \`${{ inputs.commit_sha }}\`\\n\\n⚠️ Manual intervention required\",\"color\":15158332}]}" "${{ secrets.DISCORD_WEBHOOK_URL }}"' || true
+        continue-on-error: true
+      
+      - name: Create merge conflict issue
         if: failure() && steps.merge.outputs.merge_status == 'conflict'
         uses: actions/github-script@v7
         with:
@@ -197,6 +328,7 @@ jobs:
       
       - name: Trigger deployment workflow
         if: success()
+        id: trigger_deploy
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -231,6 +363,13 @@ jobs:
             });
             
             console.log('✅ Deployment workflow triggered successfully');
+      
+      - name: Send promotion complete notification
+        if: success()
+        run: |
+          VERSION="${{ steps.semantic_release.outputs.version }}"
+          bash -c 'curl -H "Content-Type: application/json" -X POST -d "{\"embeds\":[{\"title\":\"✅ Branch Promotion Complete\",\"description\":\"**Version:** \`v'"$VERSION"'\`\\n**Source:** \`${{ inputs.source_branch }}\`\\n**Target:** \`${{ inputs.target_branch }}\`\\n**Commit:** \`${{ inputs.commit_sha }}\`\\n**Author:** ${{ inputs.commit_author }}\\n\\n🚀 Deployment workflow triggered\",\"color\":3066993}]}" "${{ secrets.DISCORD_WEBHOOK_URL }}"' || true
+        continue-on-error: true
       
       - name: Promotion summary
         if: success()

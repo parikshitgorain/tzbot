@@ -79,10 +79,28 @@ pm2_start() {
 
 pm2_restart() {
     log_info "Restarting PM2 service: $SERVICE_NAME"
-    pm2 restart "$SERVICE_NAME"
+    cd "$DEPLOY_BASE/current" || cd "$DEPLOY_BASE"
+    
+    # Check if process exists
+    if pm2 describe "$SERVICE_NAME" > /dev/null 2>&1; then
+        log_info "Process exists, restarting..."
+        pm2 restart "$SERVICE_NAME"
+    else
+        log_warn "Process not found, starting fresh..."
+        if [ -f "$DEPLOY_BASE/ecosystem.config.js" ]; then
+            pm2 start "$DEPLOY_BASE/ecosystem.config.js"
+        elif [ -f "ecosystem.config.js" ]; then
+            pm2 start ecosystem.config.js
+        else
+            log_info "Starting from dist/index.js..."
+            pm2 start dist/index.js --name "$SERVICE_NAME"
+        fi
+        pm2 save
+    fi
+    
     log_info "Waiting ${STARTUP_DELAY}s for service initialization..."
     sleep "$STARTUP_DELAY"
-    log_info "Service restarted"
+    log_info "Service ready"
 }
 
 pm2_status() {
