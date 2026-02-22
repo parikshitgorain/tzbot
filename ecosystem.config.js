@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   apps: [{
     name: 'tzbot',
     script: './dist/index.js',
