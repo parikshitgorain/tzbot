@@ -176,6 +176,7 @@ jobs:
             ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
             "export SERVICE_NAME=tzbot && \
              export SERVICE_TYPE=pm2 && \
+             export DEPLOY_BASE=/var/www/tzbot && \
              bash /var/www/tzbot/deployment/scripts/service-manager.sh restart"
       
       - name: Run health checks
@@ -186,6 +187,7 @@ jobs:
             ${{ secrets.VPS_USER }}@${{ steps.dns.outputs.vps_ip }} \
             "export SERVICE_NAME=tzbot && \
              export SERVICE_TYPE=pm2 && \
+             export DEPLOY_BASE=/var/www/tzbot && \
              bash /var/www/tzbot/deployment/scripts/health-check.sh"
       
       - name: Record deployment success

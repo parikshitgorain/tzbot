@@ -13,6 +13,7 @@ set -e
 # Configuration
 SERVICE_NAME="${SERVICE_NAME:-tzbot}"
 SERVICE_TYPE="${SERVICE_TYPE:-pm2}" # pm2 or systemd
+DEPLOY_BASE="${DEPLOY_BASE:-/var/www/tzbot}"
 STARTUP_DELAY="${STARTUP_DELAY:-5}"
 
 # Colors for output
@@ -59,12 +60,18 @@ pm2_stop() {
 
 pm2_start() {
     log_info "Starting PM2 service: $SERVICE_NAME"
+    cd "$DEPLOY_BASE/current" || cd "$DEPLOY_BASE"
     if pm2 describe "$SERVICE_NAME" > /dev/null 2>&1; then
         pm2 start "$SERVICE_NAME"
     else
         log_warn "Service not found, starting from ecosystem file"
-        pm2 start ecosystem.config.js
+        if [ -f "$DEPLOY_BASE/ecosystem.config.js" ]; then
+            pm2 start "$DEPLOY_BASE/ecosystem.config.js"
+        else
+            pm2 start dist/index.js --name "$SERVICE_NAME"
+        fi
     fi
+    pm2 save
     log_info "Waiting ${STARTUP_DELAY}s for service initialization..."
     sleep "$STARTUP_DELAY"
     log_info "Service started"

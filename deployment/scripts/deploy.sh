@@ -11,11 +11,11 @@ set -e
 
 # Configuration
 APP_NAME="${APP_NAME:-tzbot}"
-DEPLOY_BASE="${DEPLOY_BASE:-/var/www/$APP_NAME}"
+DEPLOY_BASE="${DEPLOY_BASE:-/var/www/tzbot}"
 RELEASES_DIR="$DEPLOY_BASE/releases"
 CURRENT_LINK="$DEPLOY_BASE/current"
 REPO_URL="${REPO_URL:-https://github.com/parikshitgorain/tzbot.git}"
-BRANCH="${BRANCH:-Release_Branch}"
+BRANCH="${BRANCH:-release}"
 
 # Colors for output
 RED='\033[0;31m'
