@@ -138,8 +138,21 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          # Write SSH key preserving newlines (use printf instead of echo)
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          # Validate the key format
+          if ! ssh-keygen -l -f ~/.ssh/deploy_key &>/dev/null; then
+            echo "❌ Error: Invalid SSH key format in VPS_SSH_KEY secret"
+            echo "The key must include:"
+            echo "  - BEGIN PRIVATE KEY header"
+            echo "  - Key data"
+            echo "  - END PRIVATE KEY footer"
+            echo ""
+            echo "Please update the VPS_SSH_KEY secret with the complete private key"
+            exit 1
+          fi
+          echo "✅ SSH key validated successfully"
           ssh-keyscan -H ${{ steps.dns.outputs.vps_ip }} >> ~/.ssh/known_hosts
       
       - name: Send deployment start notification
