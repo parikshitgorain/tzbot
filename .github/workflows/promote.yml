@@ -167,6 +167,20 @@ jobs:
           
           echo "✅ Release branch is clean - no dev-only files found"
       
+      - name: Setup Node.js for semantic-release
+        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install semantic-release dependencies
+        if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
+        run: |
+          echo "📦 Installing semantic-release and plugins..."
+          npm install --no-save semantic-release @semantic-release/changelog @semantic-release/git conventional-changelog-conventionalcommits
+          echo "✅ Dependencies installed"
+      
       - name: Run semantic versioning
         if: steps.merge.outputs.merge_status == 'success' && inputs.target_branch == 'release'
         env:
