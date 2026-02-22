@@ -3,6 +3,7 @@ import type { Database as IDatabase } from '../../types/interfaces.js';
 import type { User, Violation, Giveaway } from '../../types/models.js';
 import { getPool, createPool, closePool, type DatabaseConfig } from './pool.js';
 import { runMigrations } from './migrator.js';
+import { logger } from '../logger/logger.js';
 import {
   UserRepository,
   ViolationRepository,
@@ -57,7 +58,7 @@ export class Database implements IDatabase {
         lastError = error as Error;
         if (attempt < maxRetries) {
           const delay = attempt * 2000; // 2s, 4s
-          console.log(`Database connection attempt ${attempt} failed, retrying in ${delay}ms...`);
+          logger.info(`Database connection attempt ${attempt} failed, retrying in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }

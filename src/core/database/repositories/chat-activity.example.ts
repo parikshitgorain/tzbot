@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Example usage of ChatActivityRepository
  * Demonstrates active chatter tracking for chat rain system

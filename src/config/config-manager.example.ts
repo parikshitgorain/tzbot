@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * @file config-manager.example.ts
  * @description Examples of using the ConfigManager for hot-reload

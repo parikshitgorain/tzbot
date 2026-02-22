@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   createPool,
   getPool,
@@ -106,6 +106,11 @@ describe('Database Pool', () => {
       createPool(badConfig);
       const result = await testConnection();
       
+      expect(result).toBe(false);
+    });
+
+    it('should return false if pool is not initialized', async () => {
+      const result = await testConnection();
       expect(result).toBe(false);
     });
   });

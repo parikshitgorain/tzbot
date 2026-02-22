@@ -1,0 +1,18 @@
+{
+  "dynamicDnsHostname": "your-bot.ddns.net",
+  "sshUser": "deploy",
+  "sshPort": 22,
+  "deploymentPath": "/opt/discord-bot",
+  "serviceName": "discord-bot",
+  "healthCheckEndpoint": null,
+  "releasesPath": "/opt/discord-bot/releases",
+  "currentSymlink": "/opt/discord-bot/current",
+  "sharedPath": "/opt/discord-bot/shared",
+  "deploymentHistoryFile": "/opt/discord-bot/deployment-history.json",
+  "maxDeploymentHistory": 10,
+  "healthCheckTimeout": 60,
+  "sshConnectionTimeout": 30,
+  "sshRetryAttempts": 3,
+  "dnsRetryAttempts": 5,
+  "dnsRetryDelays": [1, 2, 4, 8, 16]
+}

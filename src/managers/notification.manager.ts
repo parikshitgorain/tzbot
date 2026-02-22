@@ -359,7 +359,7 @@ export class NotificationManager {
             });
 
             this.notificationQueue.delete(notification.id);
-          } catch (fallbackError) {
+          } catch {
             // Keep in queue for next retry
             logger.warn('Fallback also failed, will retry', {
               queueId: notification.id,

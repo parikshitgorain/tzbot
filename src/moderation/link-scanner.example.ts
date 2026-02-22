@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * @file link-scanner.example.ts
  * @description Example usage of LinkScanner

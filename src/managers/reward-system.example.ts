@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Example usage of the RewardSystem
  * 

@@ -11,14 +11,16 @@ coverage/
 *.swp
 *.swo
 .vitest/
-
 # Build artifacts
 *.tsbuildinfo
 build/
 out/
 
 # Deployment
-deployment/
+deployment/vps-config.json
+!deployment/vps-config.example.json
+!deployment/README.md
+!deployment/*.sh
 deployment.tar.gz
 *.zip
 
@@ -27,6 +29,8 @@ deployment.tar.gz
 
 # Logs
 logs/*.log
+logs/*.log.*
+logs/.*.json
 !logs/.gitkeep
 
 # Database

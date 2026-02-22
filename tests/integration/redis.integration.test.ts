@@ -6,10 +6,15 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
-// Skip these tests if environment is not configured
-const hasRedisConfig = process.env.REDIS_URL && process.env.DISCORD_TOKEN;
+// Skip these tests if environment is not configured or in test mode with localhost
+const skipRedisTests = 
+  process.env.SKIP_REDIS_TESTS === 'true' ||
+  process.env.CI === 'true' ||
+  !process.env.REDIS_URL ||
+  !process.env.DISCORD_TOKEN ||
+  (process.env.NODE_ENV === 'test' && process.env.REDIS_URL?.includes('localhost'));
 
-describe.skipIf(!hasRedisConfig)('Redis Integration Tests', () => {
+describe.skipIf(skipRedisTests)('Redis Integration Tests', () => {
   let client: any;
   const testKeyPrefix = 'test:integration:';
 

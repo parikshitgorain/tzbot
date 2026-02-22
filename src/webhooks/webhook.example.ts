@@ -1,9 +1,11 @@
+/* eslint-disable no-console */
 /**
  * @file webhook.example.ts
  * @description Example usage of the Kick webhook receiver
  * @module webhooks
  */
 
+import { createHmac } from 'crypto';
 import { KickWebhookHandler } from './kick-webhook.js';
 import { WebhookServer } from './webhook-server.js';
 import { NotificationManager } from '@/managers/notification.manager.js';
@@ -157,8 +159,7 @@ export function exampleSignatureVerification(): void {
   });
 
   // Create signature (this is what Kick would do)
-  const crypto = require('crypto');
-  const hmac = crypto.createHmac('sha256', webhookSecret);
+  const hmac = createHmac('sha256', webhookSecret);
   hmac.update(payload);
   const signature = hmac.digest('hex');
 

@@ -24,15 +24,12 @@ export function createAnnouncementCommands(
   database: Database,
   announcementRelay: AnnouncementRelayManager | null
 ): CommandDefinition[] {
-  // Store reference that can be updated
-  let relayManagerRef = announcementRelay;
-  
   return [
-    createAnnouncementSetupCommand(database, relayManagerRef, discordClient),
-    createAnnouncementAddChannelCommand(database, relayManagerRef),
-    createAnnouncementRemoveChannelCommand(database, relayManagerRef),
-    createAnnouncementStatusCommand(database, relayManagerRef),
-    createAnnouncementToggleCommand(relayManagerRef),
+    createAnnouncementSetupCommand(database, announcementRelay, discordClient),
+    createAnnouncementAddChannelCommand(database, announcementRelay),
+    createAnnouncementRemoveChannelCommand(database, announcementRelay),
+    createAnnouncementStatusCommand(database, announcementRelay),
+    createAnnouncementToggleCommand(announcementRelay),
   ];
 }
 
@@ -437,7 +434,7 @@ function createAnnouncementStatusCommand(
             if (privateChannel) {
               privateChannelDisplay = `<#${privateChannelId}> ✅`;
             }
-          } catch (error) {
+          } catch {
             privateChannelDisplay = `❌ Invalid (ID: ${privateChannelId}) - Channel not found or bot lacks access`;
           }
         }
@@ -453,7 +450,7 @@ function createAnnouncementStatusCommand(
               if (channel) {
                 channelDisplay = `• <#${channelId}> ✅`;
               }
-            } catch (error) {
+            } catch {
               channelDisplay = `• ❌ Invalid (ID: ${channelId}) - Channel not found or bot lacks access`;
             }
           }

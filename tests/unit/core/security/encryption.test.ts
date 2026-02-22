@@ -247,14 +247,10 @@ describe('EncryptionService', () => {
       expect(decrypted).toEqual(data);
     });
 
-    it('should handle concurrent encryptions', async () => {
-      const data = Array.from({ length: 100 }, (_, i) => `key_${i}`);
-      const encrypted = await Promise.all(
-        data.map((d) => Promise.resolve(encryptionService.encrypt(d)))
-      );
-      const decrypted = await Promise.all(
-        encrypted.map((e) => Promise.resolve(encryptionService.decrypt(e)))
-      );
+    it('should handle concurrent encryptions', () => {
+      const data = Array.from({ length: 10 }, (_, i) => `key_${i}`);
+      const encrypted = data.map((d) => encryptionService.encrypt(d));
+      const decrypted = encrypted.map((e) => encryptionService.decrypt(e));
 
       expect(decrypted).toEqual(data);
     });

@@ -1,4 +1,4 @@
-// @ts-nocheck
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * @file giveaway.example.ts
  * @description Example usage of the GiveawayManager
@@ -160,7 +160,7 @@ async function createGiveawayCommand(
   const requiredRole = interaction.options.getRole('required_role'); // optional
 
   // Create giveaway
-  const giveaway = await giveawayManager.createGiveaway({
+  await giveawayManager.createGiveaway({
     title,
     description,
     channelId: interaction.channelId,

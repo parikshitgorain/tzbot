@@ -294,9 +294,14 @@ export class ConfirmationSystem {
 
       logger.info('Restoring active confirmations', { count: pendingWinners.length });
 
-      this.timerManager.restoreTimers(pendingWinners);
+      // Filter out winners without timer start time
+      const winnersWithTimers = pendingWinners.filter(
+        (w): w is typeof w & { timerStartTime: Date } => w.timerStartTime !== null
+      );
 
-      logger.info('Active confirmations restored', { count: pendingWinners.length });
+      this.timerManager.restoreTimers(winnersWithTimers);
+
+      logger.info('Active confirmations restored', { count: winnersWithTimers.length });
     } catch (error) {
       logger.error('Failed to restore active confirmations', { error });
       throw error;

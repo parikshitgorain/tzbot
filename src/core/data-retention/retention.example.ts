@@ -1,13 +1,12 @@
-// @ts-nocheck
+/* eslint-disable no-console */
 /**
  * @file retention.example.ts
  * @description Example usage of the Data Retention Service
  * @module core/data-retention
  */
 
-import { DataRetentionService, DEFAULT_RETENTION_CONFIG } from './retention.service.js';
+import { DataRetentionService } from './retention.service.js';
 import { getPool } from '@/core/database/pool.js';
-import { logger } from '@/core/logger/logger.js';
 
 /**
  * Example 1: Basic setup with default configuration

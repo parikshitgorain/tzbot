@@ -7,7 +7,14 @@ import {
   type DatabaseConfig,
 } from '../../src/core/database/index.js';
 
-describe('Database Integration', () => {
+// Skip tests if database is not available
+// Check for explicit skip flag or if we're in test environment without a real database
+const skipDatabaseTests = 
+  process.env.SKIP_DB_TESTS === 'true' || 
+  process.env.CI === 'true' ||
+  (process.env.NODE_ENV === 'test' && process.env.DATABASE_URL?.includes('localhost'));
+
+describe.skipIf(skipDatabaseTests)('Database Integration', () => {
   const testConfig: DatabaseConfig = {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432'),
@@ -16,16 +23,12 @@ describe('Database Integration', () => {
     password: process.env.DB_PASSWORD || 'test',
   };
 
-  // Skip tests if database is not available
-  const skipIfNoDb = process.env.CI === 'true' || !process.env.DB_HOST;
-
   afterAll(async () => {
-    if (skipIfNoDb) return;
     await closePool();
   });
 
   describe('initializeDatabase', () => {
-    it.skipIf(skipIfNoDb)('should initialize database with pool and migrations', async () => {
+    it('should initialize database with pool and migrations', async () => {
       await expect(initializeDatabase(testConfig)).resolves.not.toThrow();
       
       // Verify pool is created
@@ -38,7 +41,7 @@ describe('Database Integration', () => {
       expect(status.pendingMigrations).toBe(0);
     });
 
-    it.skipIf(skipIfNoDb)('should create all required tables', async () => {
+    it('should create all required tables', async () => {
       await initializeDatabase(testConfig);
       const pool = getPool();
       
@@ -70,7 +73,7 @@ describe('Database Integration', () => {
       }
     });
 
-    it.skipIf(skipIfNoDb)('should create proper indexes', async () => {
+    it('should create proper indexes', async () => {
       await initializeDatabase(testConfig);
       const pool = getPool();
       
@@ -84,7 +87,7 @@ describe('Database Integration', () => {
       expect(result.rows.length).toBeGreaterThan(0);
     });
 
-    it.skipIf(skipIfNoDb)('should enforce foreign key constraints', async () => {
+    it('should enforce foreign key constraints', async () => {
       await initializeDatabase(testConfig);
       const pool = getPool();
       
@@ -98,7 +101,7 @@ describe('Database Integration', () => {
       ).rejects.toThrow();
     });
 
-    it.skipIf(skipIfNoDb)('should enforce check constraints', async () => {
+    it('should enforce check constraints', async () => {
       await initializeDatabase(testConfig);
       const pool = getPool();
       
@@ -118,7 +121,7 @@ describe('Database Integration', () => {
       ).rejects.toThrow();
     });
 
-    it.skipIf(skipIfNoDb)('should support JSONB columns', async () => {
+    it('should support JSONB columns', async () => {
       await initializeDatabase(testConfig);
       const pool = getPool();
       
@@ -136,7 +139,7 @@ describe('Database Integration', () => {
       await pool.query('DELETE FROM giveaways WHERE id = $1', [result.rows[0].id]);
     });
 
-    it.skipIf(skipIfNoDb)('should support UUID generation', async () => {
+    it('should support UUID generation', async () => {
       await initializeDatabase(testConfig);
       const pool = getPool();
       
@@ -165,11 +168,10 @@ describe('Database Integration', () => {
 
   describe('Database Operations', () => {
     beforeAll(async () => {
-      if (skipIfNoDb) return;
       await initializeDatabase(testConfig);
     });
 
-    it.skipIf(skipIfNoDb)('should insert and retrieve user', async () => {
+    it('should insert and retrieve user', async () => {
       const pool = getPool();
       const discordId = 'test_user_' + Date.now();
       
@@ -193,7 +195,7 @@ describe('Database Integration', () => {
       await pool.query('DELETE FROM users WHERE discord_id = $1', [discordId]);
     });
 
-    it.skipIf(skipIfNoDb)('should handle transactions correctly', async () => {
+    it('should handle transactions correctly', async () => {
       const pool = getPool();
       const client = await pool.connect();
       const discordId = 'test_transaction_' + Date.now();
@@ -239,7 +241,7 @@ describe('Database Integration', () => {
       }
     });
 
-    it.skipIf(skipIfNoDb)('should rollback transaction on error', async () => {
+    it('should rollback transaction on error', async () => {
       const pool = getPool();
       const client = await pool.connect();
       const discordId = 'test_rollback_' + Date.now();

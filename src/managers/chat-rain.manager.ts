@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto';
 import type { ChatActivityRepository } from '../core/database/repositories/ChatActivityRepository.js';
 import type { ViolationRepository } from '../core/database/repositories/ViolationRepository.js';
 import type { RewardSystem, Reward } from './reward-system.js';
+import { RewardType } from './reward-system.js';
 import { ViolationType } from '../types/models.js';
 
 /**
@@ -183,7 +184,6 @@ export class ChatRainManager {
    * @internal Reserved for future use
    */
   // @ts-expect-error - Reserved for future use
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async recordWinners(winners: string[], timestamp: Date): Promise<void> {
     for (const userId of winners) {
       await this.chatActivityRepo.recordWinner(
@@ -272,7 +272,7 @@ export interface ChatRainConfig {
   cooldownMinutes: number;
   
   /** Type of reward to distribute */
-  rewardType: any;
+  rewardType: RewardType;
   
   /** Value of reward (role ID, currency amount, etc.) */
   rewardValue?: string;

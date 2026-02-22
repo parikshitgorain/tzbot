@@ -164,7 +164,7 @@ const moderationRotatingTransport = new DailyRotateFile({
   filename: path.resolve(process.cwd(), 'logs/moderation-%DATE%.log'),
   datePattern: 'YYYY-MM-DD',
   maxSize: '10m',
-  maxFiles: '90d',
+  maxFiles: '30d', // Keep logs for maximum 30 days
   format: logFormat,
   level: 'info',
 });

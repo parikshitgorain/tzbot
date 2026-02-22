@@ -444,17 +444,14 @@ describe('TimerManager', () => {
       const errorTimerManager = new TimerManager(errorCallbacks);
       errorTimerManager.startTimers(giveawayId, userId, startTime);
 
-      // Spy on console.error
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
       // Fast-forward to reminder
       await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
 
-      // Should have logged error
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(consoleErrorSpy.mock.calls[0][0]).toContain('Error in reminder callback');
-
-      consoleErrorSpy.mockRestore();
+      // Should have called the callback (which threw an error)
+      expect(errorCallbacks.onReminder).toHaveBeenCalledWith(giveawayId, userId);
+      
+      // Timer should still exist (only expiry cleans up)
+      expect(errorTimerManager.hasActiveTimers(giveawayId, userId)).toBe(true);
     });
 
     it('should handle errors in expiry callback and cleanup timers', async () => {
@@ -473,20 +470,14 @@ describe('TimerManager', () => {
       const errorTimerManager = new TimerManager(errorCallbacks);
       errorTimerManager.startTimers(giveawayId, userId, startTime);
 
-      // Spy on console.error
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
       // Fast-forward to expiry
       await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
 
-      // Should have logged error
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(consoleErrorSpy.mock.calls[0][0]).toContain('Error in expiry callback');
+      // Should have called the callback (which threw an error)
+      expect(errorCallbacks.onExpiry).toHaveBeenCalledWith(giveawayId, userId);
 
-      // Timers should still be cleaned up
+      // Timers should still be cleaned up even after error
       expect(errorTimerManager.hasActiveTimers(giveawayId, userId)).toBe(false);
-
-      consoleErrorSpy.mockRestore();
     });
   });
 

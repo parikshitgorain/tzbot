@@ -1,3 +1,4 @@
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 /**
  * @file rate-limiter.example.ts
  * @description Example usage of the rate limiter

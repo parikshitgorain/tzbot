@@ -5,6 +5,8 @@
  * Requirements: 1.3, 2.3, 4.5, 9.1, 9.2, 9.3
  */
 
+import { logError } from '../core/logger/logger.js';
+
 /**
  * Callback functions for timer events
  */
@@ -150,9 +152,9 @@ export class TimerManager {
     try {
       await this.callbacks.onReminder(giveawayId, userId);
     } catch (error) {
-      console.error(
-        `Error in reminder callback for ${giveawayId}:${userId}:`,
-        error instanceof Error ? error.message : 'Unknown error'
+      logError(
+        `Error in reminder callback for ${giveawayId}:${userId}`,
+        error as Error
       );
     }
   }
@@ -165,9 +167,9 @@ export class TimerManager {
     try {
       await this.callbacks.onExpiry(giveawayId, userId);
     } catch (error) {
-      console.error(
-        `Error in expiry callback for ${giveawayId}:${userId}:`,
-        error instanceof Error ? error.message : 'Unknown error'
+      logError(
+        `Error in expiry callback for ${giveawayId}:${userId}`,
+        error as Error
       );
     } finally {
       // Clean up timer references after expiry

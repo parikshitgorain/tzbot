@@ -152,8 +152,8 @@ export function verifyPermissionsOnStartup(guild: Guild): void {
       grantedPermissions: result.grantedPermissions,
     });
 
-    // Log to console for visibility
-    console.warn('\n' + errorMessage + '\n');
+    // Log warning for visibility
+    logger.warn('\n' + errorMessage + '\n');
   } else {
     logger.info('Bot has all required permissions', {
       guildId: guild.id,

@@ -28,7 +28,7 @@ export interface BotState {
       id: string;
       eventId: string;
       eventType: string;
-      embedData: any;
+      embedData: Record<string, unknown>;
       attempts: number;
       lastAttempt?: Date;
       createdAt: Date;

@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * @file chat-client.example.ts
  * @description Example usage of KickChatClient for monitoring Kick chat

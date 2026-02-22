@@ -249,19 +249,19 @@ export class WinnerStateRepository {
   /**
    * Map database row to WinnerRecord interface
    */
-  private mapRowToWinnerRecord(row: any): WinnerRecord {
+  private mapRowToWinnerRecord(row: Record<string, unknown>): WinnerRecord {
     return {
-      id: row.id,
-      giveawayId: row.giveaway_id,
-      userId: row.user_id,
+      id: row.id as string,
+      giveawayId: row.giveaway_id as string,
+      userId: row.user_id as string,
       status: row.status as WinnerStatus,
-      selectedAt: row.selected_at,
-      confirmedAt: row.confirmed_at || undefined,
-      rerolledAt: row.rerolled_at || undefined,
-      timerStartTime: row.timer_start_time,
-      timerActive: row.timer_active,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      selectedAt: row.selected_at as Date,
+      confirmedAt: (row.confirmed_at as Date | null) || undefined,
+      rerolledAt: (row.rerolled_at as Date | null) || undefined,
+      timerStartTime: row.timer_start_time as Date | null,
+      timerActive: row.timer_active as boolean,
+      createdAt: row.created_at as Date,
+      updatedAt: row.updated_at as Date,
     };
   }
 }

@@ -3,14 +3,25 @@
  * @description Integration tests for Pusher client connectivity
  * 
  * Note: These tests verify the Pusher client can connect to Kick's infrastructure.
- * They may be skipped in CI environments without network access.
+ * They may be skipped in CI environments without network access or when Pusher credentials are not configured.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { PusherClient } from '../../src/services/pusher/client.js';
 import type { ConnectionState } from '../../src/services/pusher/types.js';
 
-describe('Pusher Integration Tests', () => {
+// Skip tests in CI, when explicitly disabled, or when using test credentials
+const hasValidPusherConfig = 
+  process.env.PUSHER_APP_KEY && 
+  !process.env.PUSHER_APP_KEY.includes('test') &&
+  process.env.PUSHER_APP_KEY !== 'eb1d5f283081a78b932c'; // Skip if using default/test key
+
+const skipPusherTests = 
+  process.env.CI === 'true' || 
+  process.env.SKIP_PUSHER_TESTS === 'true' ||
+  !hasValidPusherConfig;
+
+describe.skipIf(skipPusherTests)('Pusher Integration Tests', () => {
   let client: PusherClient;
 
   beforeEach(() => {

@@ -187,7 +187,7 @@ export class ChatActivityRepository {
       WHERE user_id = $1
     `;
     
-    const params: any[] = [userId];
+    const params: (string | Date)[] = [userId];
     
     if (since) {
       query += ` AND timestamp >= $2`;
