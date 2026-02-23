@@ -73,7 +73,7 @@ jobs:
       - name: Run npm audit (production dependencies only)
         run: |
           echo "🔍 Scanning production dependencies for critical/high vulnerabilities..."
-          npm audit --production --audit-level=high
+          npm audit --omit=dev --audit-level=high
       
       - name: Upload security results
         if: failure()
