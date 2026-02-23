@@ -33,6 +33,7 @@ export interface PollingFallbackConfig {
   channelId: number;
   notificationChannelId: string;
   pollingIntervalMs?: number;
+  healthCheckIntervalMs?: number;
   enabled?: boolean;
 }
 
@@ -59,6 +60,7 @@ export class PollingFallbackSystem {
   private channelId: number;
   private notificationChannelId: string;
   private pollingIntervalMs: number;
+  private healthCheckIntervalMs: number;
   private enabled: boolean;
 
   private currentState: MonitoringState = 'webhook';
@@ -74,6 +76,7 @@ export class PollingFallbackSystem {
     this.channelId = config.channelId;
     this.notificationChannelId = config.notificationChannelId;
     this.pollingIntervalMs = config.pollingIntervalMs ?? 10000; // 10 seconds (Requirement 8.4)
+    this.healthCheckIntervalMs = config.healthCheckIntervalMs ?? 5000; // 5 seconds
     this.enabled = config.enabled ?? true;
 
     logger.info('PollingFallbackSystem initialized', {
@@ -97,10 +100,10 @@ export class PollingFallbackSystem {
     // Check webhook health periodically
     this.checkWebhookHealth();
 
-    // Set up periodic health checks (every 5 seconds)
+    // Set up periodic health checks
     setInterval(() => {
       this.checkWebhookHealth();
-    }, 5000);
+    }, this.healthCheckIntervalMs);
   }
 
   /**

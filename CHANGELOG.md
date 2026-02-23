@@ -1,3 +1,9 @@
+## [1.0.0-dev.3](https://github.com/parikshitgorain/tzbot/compare/v1.0.0-dev.2...v1.0.0-dev.3) (2026-02-23)
+
+### ✨ Features
+
+* **giveaway:** add hosted by feature and view participants button with professional UI ([7bb4f68](https://github.com/parikshitgorain/tzbot/commit/7bb4f680d3b06471dfd48af1b79e6447f61c02b2))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
