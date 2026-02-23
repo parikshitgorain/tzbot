@@ -56,7 +56,7 @@ log_step "Creating environment file..."
 cat > /etc/systemd/system/tzbot-monitor.env <<EOF
 SERVICE_NAME=tzbot
 DISCORD_WEBHOOK_URL=$DISCORD_WEBHOOK_URL
-CHECK_INTERVAL=300
+CHECK_INTERVAL=600
 EOF
 
 log_info "✓ Environment file created"

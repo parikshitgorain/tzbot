@@ -61,7 +61,7 @@ Install and configure PM2 for process management:
 npm install -g pm2
 
 # Create ecosystem file
-cat > /var/www/tzbot/ecosystem.config.js << 'EOF'
+cat > /var/www/tzbot/ecosystem.config.cjs << 'EOF'
 module.exports = {
   apps: [{
     name: 'tzbot',
