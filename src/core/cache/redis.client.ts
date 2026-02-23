@@ -55,6 +55,11 @@ export class RedisClient {
         options.password = config.redisPassword;
       }
 
+      // Validate Redis URL is provided
+      if (!config.redisUrl) {
+        throw new Error('Redis URL is required for connection');
+      }
+
       // Create Redis client
       this.client = new Redis(config.redisUrl, options);
 

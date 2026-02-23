@@ -177,7 +177,7 @@ function createAnnouncementSetupCommand(
               privateChannelId: privateChannel.id,
               publicChannelIds: publicChannelIds,
               guildId: interaction.guildId!,
-              moderatorRoleId: config.moderatorRoleId,
+              moderatorRoleId: config.moderatorRoleId || '',
             });
 
             announcementRelay.start();
