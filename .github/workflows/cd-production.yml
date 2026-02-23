@@ -554,13 +554,13 @@ curl -H "Content-Type: application/json" -X POST \
       \"description\": \"Service **$SERVICE_NAME** on **$HOSTNAME** has encountered an issue.\",
       \"color\": 15158332,
       \"fields\": [
-        {\"name\": \"Service\", \"value\": \"\`$SERVICE_NAME\`\", \"inline\": true},
-        {\"name\": \"Hostname\", \"value\": \"\`$HOSTNAME\`\", \"inline\": true},
-        {\"name\": \"Error Type\", \"value\": \"\`$ERROR_TYPE\`\", \"inline\": true},
-        {\"name\": \"PM2 Status\", \"value\": \"\`$PM2_STATUS\`\", \"inline\": true},
-        {\"name\": \"Version\", \"value\": \"\`$VERSION\`\", \"inline\": true},
-        {\"name\": \"Timestamp\", \"value\": \"\`$TIMESTAMP\`\", \"inline\": true},
-        {\"name\": \"Recent Logs\", \"value\": \"\`\`\`\\n${LOG_OUTPUT:0:1000}\\n\`\`\`\", \"inline\": false}
+        {\"name\": \"Service\", \"value\": \"\\\`$SERVICE_NAME\\\`\", \"inline\": true},
+        {\"name\": \"Hostname\", \"value\": \"\\\`$HOSTNAME\\\`\", \"inline\": true},
+        {\"name\": \"Error Type\", \"value\": \"\\\`$ERROR_TYPE\\\`\", \"inline\": true},
+        {\"name\": \"PM2 Status\", \"value\": \"\\\`$PM2_STATUS\\\`\", \"inline\": true},
+        {\"name\": \"Version\", \"value\": \"\\\`$VERSION\\\`\", \"inline\": true},
+        {\"name\": \"Timestamp\", \"value\": \"\\\`$TIMESTAMP\\\`\", \"inline\": true},
+        {\"name\": \"Recent Logs\", \"value\": \"\\\`\\\`\\\`\\\\n\${LOG_OUTPUT:0:1000}\\\\n\\\`\\\`\\\`\", \"inline\": false}
       ],
       \"timestamp\": \"$TIMESTAMP\"
     }]

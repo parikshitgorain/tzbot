@@ -499,6 +499,7 @@ jobs:
 
 [skip ci]"
           fi
+          fi
       
       - name: Push to release branch
         run: |
