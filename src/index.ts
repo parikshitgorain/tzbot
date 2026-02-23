@@ -42,6 +42,7 @@ import { createUtilityCommands } from '@/commands/utility.commands.js';
 import { createGiveawayCommands } from '@/commands/giveaway.commands.js';
 import { createAnnouncementCommands } from '@/commands/announcement.commands.js';
 import type { Message, ButtonInteraction } from 'discord.js';
+import { EmbedBuilder } from 'discord.js';
 import type { NotificationEvent } from '@/types/models.js';
 import { EventType } from '@/types/models.js';
 
@@ -398,12 +399,60 @@ class TZBotApplication {
     // 8. Start state persistence
     this.statePersistence.startAutoPersistence();
 
+    // 9. Send startup notification to Discord notification channel
+    await this.sendStartupNotification();
+
     logger.info('TZBOT started successfully', {
       discordConnected: this.discordClient.isConnected(),
       kickChatEnabled: !!config.kickChannelId,
       webhookServerEnabled: !!config.kickWebhookSecret,
       healthCheckEnabled: true,
     });
+  }
+
+  /**
+   * Send a startup notification to the Discord notification channel
+   * so admins know the bot has come online after a deployment.
+   */
+  private async sendStartupNotification(): Promise<void> {
+    try {
+      const channelId = config.notificationChannelId;
+      if (!channelId) {
+        logger.warn('Notification channel not configured, skipping startup notification');
+        return;
+      }
+
+      // Read version from package.json if available
+      let version = 'unknown';
+      try {
+        const { readFileSync } = await import('fs');
+        const { fileURLToPath } = await import('url');
+        const { dirname, join } = await import('path');
+        const __dirname = dirname(fileURLToPath(import.meta.url));
+        const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8')) as { version: string };
+        version = pkg.version;
+      } catch {
+        // ignore – version display is non-critical
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle('🟢 Bot is Online')
+        .setDescription('TZBOT has started successfully and is ready to serve.')
+        .addFields(
+          { name: 'Version', value: `v${version}`, inline: true },
+          { name: 'Environment', value: config.nodeEnv ?? 'production', inline: true },
+        )
+        .setColor(0x57f287)
+        .setTimestamp();
+
+      await this.discordClient.sendMessage(channelId, { embeds: [embed] });
+      logger.info('Startup notification sent to Discord');
+    } catch (error) {
+      // Non-fatal: log and continue
+      logger.warn('Failed to send startup notification', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   /**
