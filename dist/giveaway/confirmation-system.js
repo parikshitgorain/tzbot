@@ -1,0 +1,413 @@
+import { EmbedBuilder } from 'discord.js';
+import { TimerManager } from './timer-manager.js';
+import { RerollHandler } from './reroll-handler.js';
+import { MessageListener } from './message-listener.js';
+import { WinnerStatus } from '../types/models.js';
+import { logger } from '../core/logger/logger.js';
+/**
+ * ConfirmationSystem orchestrates the winner confirmation workflow
+ *
+ * Coordinates between Timer Manager, Message Listener, State Manager, and Reroll Handler
+ * to implement the complete winner confirmation and reroll process.
+ */
+export class ConfirmationSystem {
+    winnerStateRepo;
+    giveawayRepo;
+    timerManager;
+    rerollHandler;
+    configManager;
+    messageListener;
+    client = null;
+    constructor(winnerStateRepo, giveawayRepo, configManager) {
+        this.winnerStateRepo = winnerStateRepo;
+        this.giveawayRepo = giveawayRepo;
+        this.configManager = configManager;
+        this.rerollHandler = new RerollHandler(giveawayRepo, winnerStateRepo);
+        // Initialize timer manager with callbacks
+        this.timerManager = new TimerManager({
+            onReminder: this.handleReminder.bind(this),
+            onExpiry: this.handleExpiry.bind(this),
+        });
+        // Initialize message listener with confirmation callback
+        this.messageListener = new MessageListener(winnerStateRepo, this.confirmWinner.bind(this));
+    }
+    /**
+     * Initialize the confirmation system with Discord client
+     */
+    initialize(client) {
+        this.client = client;
+        this.messageListener.initialize(client);
+        logger.info('ConfirmationSystem initialized');
+    }
+    /**
+     * Start confirmation process for winners
+     * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5
+     */
+    async startConfirmation(giveawayId, winners) {
+        try {
+            if (!this.client) {
+                throw new Error('ConfirmationSystem not initialized with Discord client');
+            }
+            const giveaway = await this.giveawayRepo.get(giveawayId);
+            if (!giveaway) {
+                throw new Error(`Giveaway not found: ${giveawayId}`);
+            }
+            const now = new Date();
+            // Create winner records with PENDING status
+            for (const winner of winners) {
+                await this.winnerStateRepo.createWinner({
+                    giveawayId,
+                    userId: winner.id,
+                    status: WinnerStatus.PENDING,
+                    selectedAt: now,
+                    timerStartTime: now,
+                    timerActive: true,
+                });
+                // Start timers for each winner
+                this.timerManager.startTimers(giveawayId, winner.id, now);
+            }
+            // Send winner announcement message
+            await this.sendWinnerAnnouncement(giveaway.channelId, giveawayId, winners);
+            logger.info('Winner confirmation started', {
+                giveawayId,
+                winnerCount: winners.length,
+                winners: winners.map(w => w.id),
+            });
+        }
+        catch (error) {
+            logger.error('Failed to start winner confirmation', { giveawayId, error });
+            throw error;
+        }
+    }
+    /**
+     * Handle winner confirmation
+     * Requirements: 2.2, 2.3, 2.4, 2.5
+     */
+    async confirmWinner(giveawayId, userId) {
+        try {
+            // Check current status
+            const winner = await this.winnerStateRepo.getWinner(giveawayId, userId);
+            if (!winner) {
+                logger.warn('Winner record not found for confirmation', { giveawayId, userId });
+                return;
+            }
+            if (winner.status !== WinnerStatus.PENDING) {
+                logger.debug('Winner already processed', { giveawayId, userId, status: winner.status });
+                return;
+            }
+            // Update status to CONFIRMED
+            await this.winnerStateRepo.updateStatus(giveawayId, userId, WinnerStatus.CONFIRMED);
+            // Stop timers
+            this.timerManager.stopTimers(giveawayId, userId);
+            // Send confirmation notification
+            await this.sendConfirmationMessage(giveawayId, userId);
+            logger.info('Winner confirmed', { giveawayId, userId });
+        }
+        catch (error) {
+            logger.error('Failed to confirm winner', { giveawayId, userId, error });
+            throw error;
+        }
+    }
+    /**
+     * Handle reminder callback
+     * Requirements: 3.1, 3.2, 3.3, 3.4
+     */
+    async handleReminder(giveawayId, userId) {
+        try {
+            // Verify winner is still pending
+            const winner = await this.winnerStateRepo.getWinner(giveawayId, userId);
+            if (!winner || winner.status !== WinnerStatus.PENDING) {
+                logger.debug('Skipping reminder - winner not pending', { giveawayId, userId });
+                return;
+            }
+            // Send reminder message
+            await this.sendReminderMessage(giveawayId, userId);
+            logger.info('Reminder sent', { giveawayId, userId });
+        }
+        catch (error) {
+            logger.error('Failed to send reminder', { giveawayId, userId, error });
+        }
+    }
+    /**
+     * Handle expiry callback
+     * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7
+     */
+    async handleExpiry(giveawayId, userId) {
+        try {
+            // Verify winner is still pending
+            const winner = await this.winnerStateRepo.getWinner(giveawayId, userId);
+            if (!winner || winner.status !== WinnerStatus.PENDING) {
+                logger.debug('Skipping expiry - winner not pending', { giveawayId, userId });
+                return;
+            }
+            // Update status to REROLLED
+            await this.winnerStateRepo.updateStatus(giveawayId, userId, WinnerStatus.REROLLED);
+            // Select new winner
+            const newWinnerId = await this.rerollHandler.rerollWinner(giveawayId);
+            if (!newWinnerId) {
+                // No eligible participants remain
+                await this.announceGiveawayComplete(giveawayId);
+                logger.info('Giveaway complete - no eligible participants', { giveawayId });
+                return;
+            }
+            // Start confirmation for new winner
+            const now = new Date();
+            await this.winnerStateRepo.createWinner({
+                giveawayId,
+                userId: newWinnerId,
+                status: WinnerStatus.PENDING,
+                selectedAt: now,
+                timerStartTime: now,
+                timerActive: true,
+            });
+            this.timerManager.startTimers(giveawayId, newWinnerId, now);
+            // Send reroll announcement
+            await this.sendRerollAnnouncement(giveawayId, userId, newWinnerId);
+            logger.info('Winner rerolled', { giveawayId, originalWinner: userId, newWinner: newWinnerId });
+        }
+        catch (error) {
+            logger.error('Failed to handle expiry', { giveawayId, userId, error });
+        }
+    }
+    /**
+     * Handle manual reroll command
+     * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
+     */
+    async manualReroll(giveawayId, userId, moderatorId) {
+        try {
+            if (!this.client) {
+                throw new Error('ConfirmationSystem not initialized');
+            }
+            // Get giveaway to check guild
+            const giveaway = await this.giveawayRepo.get(giveawayId);
+            if (!giveaway) {
+                throw new Error('Giveaway not found');
+            }
+            // Fetch guild and moderator member
+            const guild = await this.client.guilds.fetch(giveaway.guildId);
+            const moderatorMember = await guild.members.fetch(moderatorId);
+            // Validate moderator permissions
+            const canUse = await this.configManager.canUseGiveawayCommands(giveaway.guildId, moderatorMember);
+            if (!canUse) {
+                throw new Error('Insufficient permissions to reroll winners');
+            }
+            // Verify winner exists
+            const winner = await this.winnerStateRepo.getWinner(giveawayId, userId);
+            if (!winner) {
+                throw new Error('User is not a winner for this giveaway');
+            }
+            // Update status to REROLLED
+            await this.winnerStateRepo.updateStatus(giveawayId, userId, WinnerStatus.REROLLED);
+            // Stop timers
+            this.timerManager.stopTimers(giveawayId, userId);
+            // Select new winner
+            const newWinnerId = await this.rerollHandler.rerollWinner(giveawayId);
+            if (!newWinnerId) {
+                await this.announceGiveawayComplete(giveawayId);
+                logger.info('Manual reroll complete - no eligible participants', { giveawayId });
+                return;
+            }
+            // Start confirmation for new winner
+            const now = new Date();
+            await this.winnerStateRepo.createWinner({
+                giveawayId,
+                userId: newWinnerId,
+                status: WinnerStatus.PENDING,
+                selectedAt: now,
+                timerStartTime: now,
+                timerActive: true,
+            });
+            this.timerManager.startTimers(giveawayId, newWinnerId, now);
+            // Send reroll announcement
+            await this.sendRerollAnnouncement(giveawayId, userId, newWinnerId);
+            logger.info('Manual reroll completed', {
+                giveawayId,
+                originalWinner: userId,
+                newWinner: newWinnerId,
+                moderator: moderatorId,
+            });
+        }
+        catch (error) {
+            logger.error('Failed to execute manual reroll', { giveawayId, userId, moderatorId, error });
+            throw error;
+        }
+    }
+    /**
+     * Restore active confirmations on system startup
+     * Requirements: 9.4, 10.4, 10.5
+     */
+    async restoreActiveConfirmations() {
+        try {
+            const pendingWinners = await this.winnerStateRepo.getAllPendingWinners();
+            logger.info('Restoring active confirmations', { count: pendingWinners.length });
+            // Filter out winners without timer start time
+            const winnersWithTimers = pendingWinners.filter((w) => w.timerStartTime !== null);
+            this.timerManager.restoreTimers(winnersWithTimers);
+            logger.info('Active confirmations restored', { count: winnersWithTimers.length });
+        }
+        catch (error) {
+            logger.error('Failed to restore active confirmations', { error });
+            throw error;
+        }
+    }
+    /**
+     * Send winner announcement message
+     * Requirements: 1.4, 1.5, 8.1, 8.5
+     */
+    async sendWinnerAnnouncement(channelId, giveawayId, winners) {
+        if (!this.client) {
+            return;
+        }
+        const winnerMentions = winners.map(w => `<@${w.id}>`).join(', ');
+        const embed = new EmbedBuilder()
+            .setTitle('🎉 Giveaway Winners Selected!')
+            .setDescription(`Congratulations ${winnerMentions}!\n\n` +
+            '**⏰ IMPORTANT:** You must send any message in this server within the next **5 minutes** to confirm your win!\n\n' +
+            '**Failure to respond will result in an automatic reroll.**\n\n' +
+            '**Moderators:** To manually reroll a winner, use:\n' +
+            `\`\`\`\n/giveaway reroll giveaway_id:${giveawayId} winner:@user\n\`\`\``)
+            .setColor(0x00ff00)
+            .setTimestamp();
+        const channel = await this.client.channels.fetch(channelId);
+        if (channel && 'send' in channel) {
+            await channel.send({ content: winnerMentions, embeds: [embed] });
+        }
+        // Send DM to each winner
+        const giveaway = await this.giveawayRepo.get(giveawayId);
+        for (const winner of winners) {
+            try {
+                const dmEmbed = new EmbedBuilder()
+                    .setTitle(`🎉 Congratulations ${winner.username}!`)
+                    .setDescription(`You won: **${giveaway?.title || 'a giveaway'}**\n\n` +
+                    '**⏰ IMPORTANT:** You must send any message in the server within the next **5 minutes** to confirm your win!\n\n' +
+                    '**Failure to respond will result in an automatic reroll.**')
+                    .setColor(0x00ff00)
+                    .setTimestamp();
+                await winner.send({ embeds: [dmEmbed] });
+                logger.info('Winner DM sent', { giveawayId, userId: winner.id });
+            }
+            catch (error) {
+                logger.warn('Failed to send DM to winner - user may have DMs disabled', {
+                    giveawayId,
+                    userId: winner.id,
+                    error: error.message,
+                });
+            }
+        }
+    }
+    /**
+     * Send confirmation message
+     * Requirements: 2.4, 8.2
+     */
+    async sendConfirmationMessage(giveawayId, userId) {
+        if (!this.client) {
+            return;
+        }
+        const giveaway = await this.giveawayRepo.get(giveawayId);
+        if (!giveaway) {
+            return;
+        }
+        const embed = new EmbedBuilder()
+            .setTitle('✅ Winner Confirmed!')
+            .setDescription(`<@${userId}> has confirmed their win!\n\n` +
+            '**Next Steps:**\n' +
+            (giveaway.condition || 'Check with the giveaway host for prize details.'))
+            .setColor(0x00ff00)
+            .setTimestamp();
+        const channel = await this.client.channels.fetch(giveaway.channelId);
+        if (channel && 'send' in channel) {
+            await channel.send({ embeds: [embed] });
+        }
+    }
+    /**
+     * Send reminder message
+     * Requirements: 3.2, 3.3, 8.3
+     */
+    async sendReminderMessage(giveawayId, userId) {
+        if (!this.client) {
+            return;
+        }
+        const giveaway = await this.giveawayRepo.get(giveawayId);
+        if (!giveaway) {
+            return;
+        }
+        const embed = new EmbedBuilder()
+            .setTitle('⏰ Giveaway Winner Reminder')
+            .setDescription(`<@${userId}>, you have **3 minutes remaining** to confirm your win!\n\n` +
+            'Send any message in this server to confirm.')
+            .setColor(0xffa500)
+            .setTimestamp();
+        const channel = await this.client.channels.fetch(giveaway.channelId);
+        if (channel && 'send' in channel) {
+            await channel.send({ content: `<@${userId}>`, embeds: [embed] });
+        }
+    }
+    /**
+     * Send reroll announcement
+     * Requirements: 4.6, 8.4
+     */
+    async sendRerollAnnouncement(giveawayId, originalUserId, newWinnerId) {
+        if (!this.client) {
+            return;
+        }
+        const giveaway = await this.giveawayRepo.get(giveawayId);
+        if (!giveaway) {
+            return;
+        }
+        const embed = new EmbedBuilder()
+            .setTitle('🔄 Winner Rerolled')
+            .setDescription(`<@${originalUserId}> did not respond in time.\n\n` +
+            `**New Winner:** <@${newWinnerId}>\n\n` +
+            '**⏰ IMPORTANT:** You must send any message in this server within the next **5 minutes** to confirm your win!\n\n' +
+            '**Moderators:** To manually reroll, use:\n' +
+            `\`\`\`\n/giveaway reroll giveaway_id:${giveawayId} winner:@user\n\`\`\``)
+            .setColor(0xffa500)
+            .setTimestamp();
+        const channel = await this.client.channels.fetch(giveaway.channelId);
+        if (channel && 'send' in channel) {
+            await channel.send({ content: `<@${newWinnerId}>`, embeds: [embed] });
+        }
+        // Send DM to new winner
+        try {
+            const newWinner = await this.client.users.fetch(newWinnerId);
+            const dmEmbed = new EmbedBuilder()
+                .setTitle(`🎉 Congratulations ${newWinner.username}!`)
+                .setDescription(`You won: **${giveaway.title}**\n\n` +
+                '**⏰ IMPORTANT:** You must send any message in the server within the next **5 minutes** to confirm your win!\n\n' +
+                '**Failure to respond will result in an automatic reroll.**')
+                .setColor(0x00ff00)
+                .setTimestamp();
+            await newWinner.send({ embeds: [dmEmbed] });
+            logger.info('Reroll winner DM sent', { giveawayId, userId: newWinnerId });
+        }
+        catch (error) {
+            logger.warn('Failed to send DM to reroll winner - user may have DMs disabled', {
+                giveawayId,
+                userId: newWinnerId,
+                error: error.message,
+            });
+        }
+    }
+    /**
+     * Announce giveaway complete (no eligible participants)
+     */
+    async announceGiveawayComplete(giveawayId) {
+        if (!this.client) {
+            return;
+        }
+        const giveaway = await this.giveawayRepo.get(giveawayId);
+        if (!giveaway) {
+            return;
+        }
+        const embed = new EmbedBuilder()
+            .setTitle('🎉 Giveaway Complete')
+            .setDescription('All eligible participants have been selected. No more rerolls available.')
+            .setColor(0x808080)
+            .setTimestamp();
+        const channel = await this.client.channels.fetch(giveaway.channelId);
+        if (channel && 'send' in channel) {
+            await channel.send({ embeds: [embed] });
+        }
+    }
+}
+//# sourceMappingURL=confirmation-system.js.map

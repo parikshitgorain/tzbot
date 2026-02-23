@@ -1,0 +1,156 @@
+/**
+ * @file validator.ts
+ * @description Configuration validation using Zod
+ * @module config
+ */
+import { z } from 'zod';
+declare const configSchema: z.ZodObject<{
+    discordToken: z.ZodString;
+    guildId: z.ZodString;
+    clientId: z.ZodString;
+    subscriberRoleId: z.ZodOptional<z.ZodString>;
+    vipRoleId: z.ZodOptional<z.ZodString>;
+    moderatorRoleId: z.ZodOptional<z.ZodString>;
+    notificationChannelId: z.ZodOptional<z.ZodString>;
+    fallbackChannelId: z.ZodOptional<z.ZodString>;
+    privateAnnouncementChannelId: z.ZodOptional<z.ZodString>;
+    publicAnnouncementChannelIds: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
+    kickApiKey: z.ZodOptional<z.ZodString>;
+    kickChannelId: z.ZodOptional<z.ZodString>;
+    kickWebhookSecret: z.ZodOptional<z.ZodString>;
+    kickOAuthClientId: z.ZodOptional<z.ZodString>;
+    kickOAuthClientSecret: z.ZodOptional<z.ZodString>;
+    databaseUrl: z.ZodString;
+    databaseMaxConnections: z.ZodDefault<z.ZodNumber>;
+    redisUrl: z.ZodOptional<z.ZodString>;
+    redisPassword: z.ZodOptional<z.ZodString>;
+    readOnlyChannels: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
+    spamThreshold: z.ZodObject<{
+        identicalMessages: z.ZodDefault<z.ZodNumber>;
+        identicalWindow: z.ZodDefault<z.ZodNumber>;
+        rapidMessages: z.ZodDefault<z.ZodNumber>;
+        rapidWindow: z.ZodDefault<z.ZodNumber>;
+    }, "strip", z.ZodTypeAny, {
+        identicalMessages: number;
+        identicalWindow: number;
+        rapidMessages: number;
+        rapidWindow: number;
+    }, {
+        identicalMessages?: number | undefined;
+        identicalWindow?: number | undefined;
+        rapidMessages?: number | undefined;
+        rapidWindow?: number | undefined;
+    }>;
+    linkScanningEnabled: z.ZodDefault<z.ZodBoolean>;
+    googleSafeBrowsingApiKey: z.ZodOptional<z.ZodString>;
+    aiEnabled: z.ZodDefault<z.ZodBoolean>;
+    aiProvider: z.ZodDefault<z.ZodEnum<["local", "openai", "anthropic"]>>;
+    aiApiKey: z.ZodOptional<z.ZodString>;
+    aiModelName: z.ZodOptional<z.ZodString>;
+    aiChannels: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
+    chatRainEnabled: z.ZodDefault<z.ZodBoolean>;
+    chatRainMinDelay: z.ZodDefault<z.ZodNumber>;
+    chatRainActiveWindow: z.ZodDefault<z.ZodNumber>;
+    chatRainMinMessages: z.ZodDefault<z.ZodNumber>;
+    webhookPort: z.ZodDefault<z.ZodNumber>;
+    webhookHost: z.ZodDefault<z.ZodString>;
+    logLevel: z.ZodDefault<z.ZodEnum<["error", "warn", "info", "debug"]>>;
+    logFile: z.ZodDefault<z.ZodString>;
+    nodeEnv: z.ZodDefault<z.ZodEnum<["development", "production", "test"]>>;
+    maxMessagesPerSecond: z.ZodDefault<z.ZodNumber>;
+    cacheEnabled: z.ZodDefault<z.ZodBoolean>;
+}, "strip", z.ZodTypeAny, {
+    discordToken: string;
+    guildId: string;
+    clientId: string;
+    publicAnnouncementChannelIds: string[];
+    databaseUrl: string;
+    databaseMaxConnections: number;
+    readOnlyChannels: string[];
+    spamThreshold: {
+        identicalMessages: number;
+        identicalWindow: number;
+        rapidMessages: number;
+        rapidWindow: number;
+    };
+    linkScanningEnabled: boolean;
+    aiEnabled: boolean;
+    aiProvider: "local" | "openai" | "anthropic";
+    aiChannels: string[];
+    chatRainEnabled: boolean;
+    chatRainMinDelay: number;
+    chatRainActiveWindow: number;
+    chatRainMinMessages: number;
+    webhookPort: number;
+    webhookHost: string;
+    logLevel: "error" | "warn" | "info" | "debug";
+    logFile: string;
+    nodeEnv: "development" | "production" | "test";
+    maxMessagesPerSecond: number;
+    cacheEnabled: boolean;
+    subscriberRoleId?: string | undefined;
+    vipRoleId?: string | undefined;
+    moderatorRoleId?: string | undefined;
+    notificationChannelId?: string | undefined;
+    fallbackChannelId?: string | undefined;
+    privateAnnouncementChannelId?: string | undefined;
+    kickApiKey?: string | undefined;
+    kickChannelId?: string | undefined;
+    kickWebhookSecret?: string | undefined;
+    kickOAuthClientId?: string | undefined;
+    kickOAuthClientSecret?: string | undefined;
+    redisUrl?: string | undefined;
+    redisPassword?: string | undefined;
+    googleSafeBrowsingApiKey?: string | undefined;
+    aiApiKey?: string | undefined;
+    aiModelName?: string | undefined;
+}, {
+    discordToken: string;
+    guildId: string;
+    clientId: string;
+    databaseUrl: string;
+    spamThreshold: {
+        identicalMessages?: number | undefined;
+        identicalWindow?: number | undefined;
+        rapidMessages?: number | undefined;
+        rapidWindow?: number | undefined;
+    };
+    subscriberRoleId?: string | undefined;
+    vipRoleId?: string | undefined;
+    moderatorRoleId?: string | undefined;
+    notificationChannelId?: string | undefined;
+    fallbackChannelId?: string | undefined;
+    privateAnnouncementChannelId?: string | undefined;
+    publicAnnouncementChannelIds?: string[] | undefined;
+    kickApiKey?: string | undefined;
+    kickChannelId?: string | undefined;
+    kickWebhookSecret?: string | undefined;
+    kickOAuthClientId?: string | undefined;
+    kickOAuthClientSecret?: string | undefined;
+    databaseMaxConnections?: number | undefined;
+    redisUrl?: string | undefined;
+    redisPassword?: string | undefined;
+    readOnlyChannels?: string[] | undefined;
+    linkScanningEnabled?: boolean | undefined;
+    googleSafeBrowsingApiKey?: string | undefined;
+    aiEnabled?: boolean | undefined;
+    aiProvider?: "local" | "openai" | "anthropic" | undefined;
+    aiApiKey?: string | undefined;
+    aiModelName?: string | undefined;
+    aiChannels?: string[] | undefined;
+    chatRainEnabled?: boolean | undefined;
+    chatRainMinDelay?: number | undefined;
+    chatRainActiveWindow?: number | undefined;
+    chatRainMinMessages?: number | undefined;
+    webhookPort?: number | undefined;
+    webhookHost?: string | undefined;
+    logLevel?: "error" | "warn" | "info" | "debug" | undefined;
+    logFile?: string | undefined;
+    nodeEnv?: "development" | "production" | "test" | undefined;
+    maxMessagesPerSecond?: number | undefined;
+    cacheEnabled?: boolean | undefined;
+}>;
+export type ConfigSchema = z.infer<typeof configSchema>;
+export declare function validateConfig(config: unknown): ConfigSchema;
+export {};
+//# sourceMappingURL=validator.d.ts.map

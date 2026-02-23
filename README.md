@@ -128,13 +128,119 @@ npm run validate
 ```
 
 ### CI/CD Pipeline
-The project includes a complete CI/CD pipeline:
-- **CI**: Automated testing on every push to `development` branch
-- **CD**: Automatic deployment to VPS when pushing to `release` branch
-- **Health Checks**: Automatic verification after deployment
-- **Rollback**: Automatic rollback on deployment failure
 
-See [CI/CD Setup Guide](docs/CICD_SETUP.md) for configuration details.
+Production-grade three-workflow CI/CD system with strict quality gates and zero-downtime deployment.
+
+#### Three Workflows
+
+**1. CI Development Pipeline** (`ci-development.yml`)
+- **Trigger:** Push/PR to `development` branch
+- **Stages:**
+  - Lint & Type Check
+  - Security Scan (npm audit high/critical)
+  - Unit Tests + Coverage
+  - Build Verification
+  - Prepare Clean Release (removes all dev artifacts)
+  - Auto-Promote to `release` branch
+- **Quality Gates:** All must pass before promotion
+- **Output:** Clean production build artifact
+
+**2. Release Versioning** (`release-versioning.yml`)
+- **Trigger:** Push to `release` branch
+- **Stages:**
+  - Validate release branch (no dev artifacts)
+  - Analyze commits for semantic versioning
+  - Bump version (major/minor/patch)
+  - Create Git tag (vX.Y.Z)
+  - Generate changelog
+  - Create GitHub Release
+- **Versioning:** Automatic based on conventional commits
+- **Output:** Tagged release with changelog
+
+**3. CD Production Deployment** (`cd-production.yml`)
+- **Trigger:** Push to `release` or tag `v*`
+- **Stages:**
+  - Validate deployment
+  - Setup SSH (secure, no StrictHostKeyChecking=no)
+  - Upload deployment package
+  - Atomic deployment (versioned releases)
+  - Install/update monitoring
+  - Health checks with retries
+  - Automatic rollback on failure
+- **Deployment:** Zero-downtime with PM2 reload
+- **Output:** Live production deployment
+
+#### Branch Strategy
+
+```
+development (dev work)
+    ↓
+CI Pipeline (lint, test, security, build)
+    ↓
+Clean Build (remove dev files)
+    ↓
+release (production-ready only)
+    ↓
+Semantic Versioning (auto bump, create tag)
+    ↓
+VPS Deployment (zero-downtime)
+    ↓
+production (live on VPS)
+```
+
+#### Deployment Flow
+
+```
+Push to development
+    ↓
+✓ Lint & Type Check
+✓ Security Scan (npm audit)
+✓ Unit Tests + Coverage
+✓ Build Verification
+    ↓
+Prepare Clean Release
+(removes tests/, *.test.*, dev configs)
+    ↓
+Auto-Promote to release
+    ↓
+Semantic Version Bump
+Create Git Tag (vX.Y.Z)
+Create GitHub Release
+    ↓
+Deploy to VPS
+    ├─ SSH with host verification
+    ├─ Upload package
+    ├─ Atomic deployment
+    ├─ Install monitoring
+    └─ Health checks (5 attempts, exponential backoff)
+        ↓
+    ✓ Success → Live
+    ✗ Failure → Automatic Rollback
+```
+
+#### Key Features
+
+- **Versioned Scripts:** All logic in `deployment/scripts/*.sh` (not inline)
+- **Strict Quality Gates:** No promotion without passing all checks
+- **Clean Releases:** Zero dev artifacts in production
+- **Safe Versioning:** Duplicate tag prevention, semantic versioning
+- **Zero-Downtime:** Atomic symlink switching, PM2 graceful reload
+- **Automatic Rollback:** Instant recovery on health check failure
+- **Deployment Locking:** Prevents concurrent deployments
+- **SSH Security:** Proper host verification, ssh-keyscan
+- **Health Validation:** Retries with exponential backoff
+- **Discord Notifications:** Real-time status updates
+
+#### Required Secrets
+
+- `VPS_SSH_KEY` - SSH private key for VPS
+- `VPS_HOST` - VPS hostname (supports dynamic DNS)
+- `VPS_USER` - VPS username
+- `DISCORD_WEBHOOK_URL` - Discord webhook for notifications
+- `PAT_TOKEN` (optional) - Personal Access Token for releases
+- `CODECOV_TOKEN` (optional) - Codecov token
+
+See [CI/CD Testing Checklist](docs/CICD_TESTING_CHECKLIST.md) for end-to-end testing guide.
 
 ## Configuration
 
@@ -248,6 +354,8 @@ For detailed structure documentation, see [Project Structure](docs/project-struc
 - [Project Structure](docs/project-structure.md) - Code organization and architecture
 - [Pusher Implementation](docs/pusher-client-implementation.md) - Kick chat integration details
 - [Log Retention Policy](docs/LOG_RETENTION_POLICY.md) - Log management and retention
+- [VPS Monitoring](docs/VPS_MONITORING.md) - Runtime monitoring and alerting system
+- [Monitoring Quick Reference](docs/MONITORING_QUICK_REFERENCE.md) - Quick monitoring commands
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
 
 ### Specifications
