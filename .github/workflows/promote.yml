@@ -311,11 +311,28 @@ jobs:
           git log $(git describe --tags --abbrev=0 2>/dev/null || echo "--all")..HEAD --oneline --no-decorate | head -10 || echo "No commits since last tag"
           echo ""
           
+          # Restrict semantic-release to the release branch only for this run.
+          # Without this, semantic-release performs a "channel merge" that pushes the
+          # cleaned release state (no dev files) into the Development branch, which
+          # removes test files and other dev-only files from Development.
+          node -e "
+          const fs = require('fs');
+          const cfg = JSON.parse(fs.readFileSync('.releaserc.json', 'utf8'));
+          cfg.branches = ['release'];
+          fs.writeFileSync('.releaserc.json', JSON.stringify(cfg, null, 2) + '\n');
+          console.log('🔒 Restricted semantic-release to release branch only');
+          "
+
           # Run semantic-release with debug output
           echo "🚀 Running semantic-release..."
           npx semantic-release --debug 2>&1 | tee semantic-release.log || {
             echo "⚠️  Semantic-release completed with warnings"
           }
+
+          # Restore original .releaserc.json so it is NOT committed with the release
+          # (the @semantic-release/git plugin only commits package.json, package-lock.json,
+          # and CHANGELOG.md, so this restore is just belt-and-suspenders safety)
+          git checkout -- .releaserc.json 2>/dev/null || true
           
           # Get new version after semantic-release
           NEW_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "$OLD_VERSION")
