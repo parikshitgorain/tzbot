@@ -230,52 +230,52 @@ jobs:
           ENV_FILE="/var/www/tzbot/shared/.env"
 
           mkdir -p /var/www/tzbot/shared
-          : > "$ENV_FILE"
+          : > "\$ENV_FILE"
 
           append_if_set() {
-            local key="$1"
-            local value="$2"
-            if [ -n "$value" ]; then
-              printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+            local key="\$1"
+            local value="\$2"
+            if [ -n "\$value" ]; then
+              printf '%s=%s\n' "\$key" "\$value" >> "\$ENV_FILE"
             else
-              echo "Skipping $key: secret not set"
+              echo "Skipping \$key: secret not set"
             fi
           }
 
-          echo "# Discord Configuration" >> "$ENV_FILE"
+          echo "# Discord Configuration" >> "\$ENV_FILE"
           append_if_set "DISCORD_TOKEN" '${{ secrets.DISCORD_TOKEN }}'
           append_if_set "DISCORD_CLIENT_ID" '${{ secrets.DISCORD_CLIENT_ID }}'
           append_if_set "DISCORD_GUILD_ID" '${{ secrets.DISCORD_GUILD_ID }}'
-          echo "" >> "$ENV_FILE"
+          echo "" >> "\$ENV_FILE"
 
-          echo "# Database Configuration" >> "$ENV_FILE"
+          echo "# Database Configuration" >> "\$ENV_FILE"
           append_if_set "DATABASE_URL" '${{ secrets.DATABASE_URL }}'
-          echo "" >> "$ENV_FILE"
+          echo "" >> "\$ENV_FILE"
 
-          echo "# Redis Configuration (optional)" >> "$ENV_FILE"
+          echo "# Redis Configuration (optional)" >> "\$ENV_FILE"
           append_if_set "REDIS_URL" '${{ secrets.REDIS_URL }}'
-          echo "" >> "$ENV_FILE"
+          echo "" >> "\$ENV_FILE"
 
-          echo "# Notification Channels" >> "$ENV_FILE"
+          echo "# Notification Channels" >> "\$ENV_FILE"
           append_if_set "NOTIFICATION_CHANNEL_ID" '${{ secrets.NOTIFICATION_CHANNEL_ID }}'
           append_if_set "FALLBACK_CHANNEL_ID" '${{ secrets.FALLBACK_CHANNEL_ID }}'
-          echo "" >> "$ENV_FILE"
+          echo "" >> "\$ENV_FILE"
 
-          echo "# Moderator Role" >> "$ENV_FILE"
+          echo "# Moderator Role" >> "\$ENV_FILE"
           append_if_set "MODERATOR_ROLE_ID" '${{ secrets.MODERATOR_ROLE_ID }}'
-          echo "" >> "$ENV_FILE"
+          echo "" >> "\$ENV_FILE"
 
-          echo "# Kick Integration (optional)" >> "$ENV_FILE"
+          echo "# Kick Integration (optional)" >> "\$ENV_FILE"
           append_if_set "KICK_CHANNEL_ID" '${{ secrets.KICK_CHANNEL_ID }}'
           append_if_set "KICK_WEBHOOK_SECRET" '${{ secrets.KICK_WEBHOOK_SECRET }}'
-          echo "" >> "$ENV_FILE"
+          echo "" >> "\$ENV_FILE"
 
-          echo "# Environment" >> "$ENV_FILE"
-          printf '%s=%s\n' "NODE_ENV" "production" >> "$ENV_FILE"
-          printf '%s=%s\n' "LOG_LEVEL" "info" >> "$ENV_FILE"
+          echo "# Environment" >> "\$ENV_FILE"
+          printf '%s=%s\n' "NODE_ENV" "production" >> "\$ENV_FILE"
+          printf '%s=%s\n' "LOG_LEVEL" "info" >> "\$ENV_FILE"
 
-          chmod 600 "$ENV_FILE"
-          echo "✅ Environment file created at $ENV_FILE"
+          chmod 600 "\$ENV_FILE"
+          echo "✅ Environment file created at \$ENV_FILE"
           EOF
 
       - name: Execute deployment on VPS
@@ -387,4 +387,5 @@ jobs:
       - name: Cleanup SSH key
         if: always()
         run: rm -f ~/.ssh/deploy_key
+
 
