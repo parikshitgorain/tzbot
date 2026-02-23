@@ -114,10 +114,33 @@ jobs:
           git push origin ${{ inputs.target_branch }}
           echo "✅ Pushed to ${{ inputs.target_branch }}"
       
+      - name: Trigger deployment
+        if: inputs.target_branch == 'release'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            console.log('🚀 Triggering deployment workflow...');
+            
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'cd-release.yml',
+              ref: 'release',
+              inputs: {
+                environment: 'production',
+                commit_sha: '${{ inputs.commit_sha }}',
+                commit_author: '${{ inputs.commit_author }}',
+                source_branch: '${{ inputs.source_branch }}'
+              }
+            });
+            
+            console.log('✅ Deployment workflow triggered');
+      
       - name: Send notification
         run: |
           VERSION=$(node -p "require('./package.json').version")
           curl -H "Content-Type: application/json" -X POST \
-            -d "{\"embeds\":[{\"title\":\"✅ Promoted to Release\",\"description\":\"**Version:** \`v$VERSION\`\\n**Commit:** \`${{ inputs.commit_sha }}\`\\n**Author:** ${{ inputs.commit_author }}\\n\\n🚀 Deployment will start automatically\",\"color\":3066993}]}" \
+            -d "{\"embeds\":[{\"title\":\"✅ Promoted to Release\",\"description\":\"**Version:** \`v$VERSION\`\\n**Commit:** \`${{ inputs.commit_sha }}\`\\n**Author:** ${{ inputs.commit_author }}\\n\\n🚀 Deployment triggered\",\"color\":3066993}]}" \
             "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
         continue-on-error: true
