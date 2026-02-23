@@ -2,9 +2,6 @@
 
 on:
   push:
-    branches:
-      - release
-      - Release
     tags:
       - 'v*'
   workflow_dispatch:
@@ -179,7 +176,6 @@ jobs:
             --exclude='tests' \
             --exclude='*.test.*' \
             --exclude='*.spec.*' \
-            --exclude='.github' \
             .
           echo "✅ Package created: $(du -h deployment-package.tar.gz | cut -f1)"
       
