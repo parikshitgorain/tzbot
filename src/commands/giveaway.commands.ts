@@ -72,6 +72,12 @@ function createGiveawayCommand(
             .setMinValue(1)
             .setMaxValue(10),
         )
+        .addUserOption((option) =>
+          option
+            .setName('hosted_by')
+            .setDescription('User who is hosting this giveaway (optional)')
+            .setRequired(false),
+        )
         .addChannelOption((option) =>
           option
             .setName('channel')
@@ -210,6 +216,7 @@ async function handleCreateGiveaway(
   const description = interaction.options.getString('description', true);
   const durationMinutes = interaction.options.getInteger('duration', true);
   const winnerCount = interaction.options.getInteger('winners', true);
+  const hostedByUser = interaction.options.getUser('hosted_by');
   const channel = interaction.options.getChannel('channel') || interaction.channel;
   const condition = interaction.options.getString('condition');
   const role1 = interaction.options.getRole('role1');
@@ -260,6 +267,7 @@ async function handleCreateGiveaway(
       winnerCount,
       durationMs,
       condition: condition || undefined,
+      hostedBy: hostedByUser?.id,
     });
 
     logger.info('Giveaway created via command', {
@@ -271,6 +279,7 @@ async function handleCreateGiveaway(
       durationMinutes,
       winnerCount,
       requiredRoles,
+      hostedBy: hostedByUser?.id,
     });
 
     // Build response
@@ -280,6 +289,10 @@ async function handleCreateGiveaway(
     response += `**Channel:** <#${channel.id}>\n`;
     response += `**Duration:** ${durationMinutes} minutes\n`;
     response += `**Winners:** ${winnerCount}\n`;
+
+    if (hostedByUser) {
+      response += `**Hosted by:** <@${hostedByUser.id}>\n`;
+    }
 
     if (requiredRoles.length > 0) {
       response += `**Required Roles:** ${requiredRoles.map(id => `<@&${id}>`).join(', ')}\n`;
@@ -378,16 +391,22 @@ async function handleListGiveaways(
       .setTitle('🎉 Active Giveaways')
       .setColor(0x00ff00)
       .setDescription(`Total active giveaways: ${giveaways.length}`)
-      .setTimestamp();
+      .setTimestamp()
+      .setFooter({ text: '🎁 Giveaway System' });
 
     for (const giveaway of giveaways) {
       const endsAt = Math.floor(giveaway.endsAt.getTime() / 1000);
       const entryCount = giveaway.entries.length;
 
       let fieldValue = `**Channel:** <#${giveaway.channelId}>\n`;
-      fieldValue += `**Entries:** ${entryCount}\n`;
-      fieldValue += `**Winners:** ${giveaway.winnerCount}\n`;
-      fieldValue += `**Ends:** <t:${endsAt}:R>\n`;
+      fieldValue += `**👥 Entries:** ${entryCount}\n`;
+      fieldValue += `**🏆 Winners:** ${giveaway.winnerCount}\n`;
+      fieldValue += `**⏰ Ends:** <t:${endsAt}:R>\n`;
+      
+      if (giveaway.hostedBy) {
+        fieldValue += `**🎤 Hosted by:** <@${giveaway.hostedBy}>\n`;
+      }
+      
       fieldValue += `**ID:** \`${giveaway.id}\``;
 
       embed.addFields({

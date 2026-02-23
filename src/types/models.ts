@@ -62,6 +62,7 @@ export interface Giveaway {
   createdAt: Date;
   condition?: string; // Optional condition/requirement for winners
   winners?: string[]; // Store winner IDs for reroll functionality
+  hostedBy?: string; // Discord user ID of the giveaway host
 }
 
 export interface GiveawayEntry {

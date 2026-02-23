@@ -32,6 +32,7 @@ export interface CreateGiveawayOptions {
   winnerCount: number;
   durationMs: number;
   condition?: string;
+  hostedBy?: string; // Discord user ID of the giveaway host
 }
 
 /**
@@ -98,15 +99,24 @@ export class GiveawayManager {
         endsAt,
         options.winnerCount,
         options.requiredRoles,
+        options.hostedBy,
       );
 
       // Create entry button
-      const button = new ButtonBuilder()
+      const enterButton = new ButtonBuilder()
         .setCustomId(`giveaway_enter_${giveawayId}`)
         .setLabel('🎉 Enter Giveaway')
-        .setStyle(ButtonStyle.Primary);
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('🎁');
 
-      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
+      // Create view participants button
+      const viewButton = new ButtonBuilder()
+        .setCustomId(`giveaway_view_${giveawayId}`)
+        .setLabel('👥 View Participants')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('📋');
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(enterButton, viewButton);
 
       // Send giveaway message
       const message = await this.discordClient.sendMessage(options.channelId, {
@@ -134,6 +144,7 @@ export class GiveawayManager {
         createdAt: now,
         condition: options.condition,
         winners: [],
+        hostedBy: options.hostedBy,
       };
 
       // Save to database
@@ -170,6 +181,12 @@ export class GiveawayManager {
     guildId: string,
   ): Promise<void> {
     try {
+      // Check if this is a view participants button
+      if (interaction.customId.startsWith('giveaway_view_')) {
+        await this.handleViewParticipants(interaction);
+        return;
+      }
+
       // Extract giveaway ID from button custom ID
       const giveawayId = interaction.customId.replace('giveaway_enter_', '');
 
@@ -252,6 +269,120 @@ export class GiveawayManager {
 
       await interaction.reply({
         content: '❌ An error occurred while entering the giveaway. Please try again.',
+        ephemeral: true,
+      });
+    }
+  }
+
+  /**
+   * Handle view participants button interaction
+   * Shows real-time list of participants
+   */
+  private async handleViewParticipants(interaction: ButtonInteraction): Promise<void> {
+    try {
+      // Extract giveaway ID from button custom ID
+      const giveawayId = interaction.customId.replace('giveaway_view_', '');
+
+      // Get giveaway from database
+      const giveaway = await this.giveawayRepository.get(giveawayId);
+
+      if (!giveaway) {
+        await interaction.reply({
+          content: '❌ This giveaway no longer exists.',
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // Get all entries
+      const entries = await this.giveawayRepository.getEntries(giveawayId);
+
+      if (entries.length === 0) {
+        await interaction.reply({
+          content: '📋 No participants yet. Be the first to enter!',
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // Build participants list
+      const embed = new EmbedBuilder()
+        .setTitle(`📋 ${giveaway.title} - Participants`)
+        .setColor(0x5865f2)
+        .setTimestamp()
+        .setFooter({ text: `🎁 Total Participants: ${entries.length}` });
+
+      // Add description with giveaway info
+      let description = `**🏆 Winners to be selected:** ${giveaway.winnerCount}\n`;
+      description += `**⏰ Ends:** <t:${Math.floor(giveaway.endsAt.getTime() / 1000)}:R>\n\n`;
+      
+      if (giveaway.hostedBy) {
+        description += `**🎤 Hosted by:** <@${giveaway.hostedBy}>\n\n`;
+      }
+
+      description += `**👥 Participants (${entries.length}):**\n`;
+
+      // Limit to 50 participants per page to avoid message length limits
+      const maxDisplay = 50;
+      const displayEntries = entries.slice(0, maxDisplay);
+
+      // Sort by timestamp (oldest first)
+      displayEntries.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+      // Add participants with entry number
+      for (let i = 0; i < displayEntries.length; i++) {
+        const entry = displayEntries[i];
+        const entryNumber = i + 1;
+        const timestamp = Math.floor(entry.timestamp.getTime() / 1000);
+        description += `${entryNumber}. <@${entry.userId}> - <t:${timestamp}:R>\n`;
+      }
+
+      if (entries.length > maxDisplay) {
+        description += `\n*...and ${entries.length - maxDisplay} more participants*`;
+      }
+
+      embed.setDescription(description);
+
+      // Add statistics field
+      const now = Date.now();
+      const timeRemaining = giveaway.endsAt.getTime() - now;
+      const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
+      const minutesRemaining = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+
+      let statsValue = `**Entry Rate:** ${entries.length} participants\n`;
+      if (hoursRemaining > 0) {
+        statsValue += `**Time Left:** ${hoursRemaining}h ${minutesRemaining}m\n`;
+      } else if (minutesRemaining > 0) {
+        statsValue += `**Time Left:** ${minutesRemaining}m\n`;
+      } else {
+        statsValue += `**Time Left:** Ending soon!\n`;
+      }
+      statsValue += `**Your Odds:** 1 in ${entries.length}`;
+
+      embed.addFields({
+        name: '📊 Statistics',
+        value: statsValue,
+        inline: false,
+      });
+
+      await interaction.reply({
+        embeds: [embed],
+        ephemeral: true,
+      });
+
+      logger.info('Giveaway participants viewed', {
+        giveawayId,
+        userId: interaction.user.id,
+        totalParticipants: entries.length,
+      });
+    } catch (error) {
+      logError('Failed to show giveaway participants', error as Error, {
+        userId: interaction.user.id,
+        customId: interaction.customId,
+      });
+
+      await interaction.reply({
+        content: '❌ An error occurred while loading participants. Please try again.',
         ephemeral: true,
       });
     }
@@ -495,17 +626,22 @@ export class GiveawayManager {
       const winnerMentions = winners.map((id) => `<@${id}>`).join(', ');
 
       // Build announcement description with reroll command
-      let description = `Congratulations to the winners!\n\n**Winners:** ${winnerMentions}`;
+      let description = `🎊 Congratulations to the winners!\n\n**🏆 Winners:** ${winnerMentions}`;
+
+      if (giveaway.hostedBy) {
+        description += `\n**🎤 Hosted by:** <@${giveaway.hostedBy}>`;
+      }
 
       if (winners.length > 0) {
         description += `\n\n**Moderators:** To reroll a winner, use:\n\`\`\`\n/giveaway reroll giveaway_id:${giveaway.id} winner: @user\n\`\`\``;
       }
 
       const embed = new EmbedBuilder()
-        .setTitle(`🎉 ${giveaway.title} - Winners!`)
+        .setTitle(`🎉 ${giveaway.title} - Winners Announced!`)
         .setDescription(description)
         .setColor(0x00ff00)
-        .setTimestamp();
+        .setTimestamp()
+        .setFooter({ text: '🎁 Congratulations to all winners!' });
 
       await this.discordClient.sendMessage(giveaway.channelId, {
         content: winnerMentions,
@@ -553,10 +689,19 @@ export class GiveawayManager {
   private async announceNoWinners(giveaway: Giveaway): Promise<void> {
     try {
       const embed = new EmbedBuilder()
-        .setTitle(`${giveaway.title} - Ended`)
-        .setDescription('This giveaway ended with no entries.')
+        .setTitle(`🎉 ${giveaway.title} - Ended`)
+        .setDescription('❌ This giveaway ended with no entries.')
         .setColor(0xff0000)
-        .setTimestamp();
+        .setTimestamp()
+        .setFooter({ text: '🎁 Better luck next time!' });
+
+      if (giveaway.hostedBy) {
+        embed.addFields({
+          name: '🎤 Hosted by',
+          value: `<@${giveaway.hostedBy}>`,
+          inline: false,
+        });
+      }
 
       await this.discordClient.sendMessage(giveaway.channelId, {
         embeds: [embed],
@@ -580,25 +725,35 @@ export class GiveawayManager {
     endsAt: Date,
     winnerCount: number,
     requiredRoles: string[],
+    hostedBy?: string,
   ): EmbedBuilder {
     const embed = new EmbedBuilder()
       .setTitle(`🎉 ${title}`)
-      .setDescription(description)
+      .setDescription(`${description}\n\n✨ Click the button below to enter!`)
       .setColor(0x5865f2)
       .addFields(
-        { name: 'Winners', value: `${winnerCount}`, inline: true },
+        { name: '🏆 Winners', value: `${winnerCount}`, inline: true },
         {
-          name: 'Ends At',
+          name: '⏰ Ends',
           value: `<t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
           inline: true,
         },
-        { name: 'Entries', value: '0', inline: true },
+        { name: '👥 Entries', value: '0', inline: true },
       )
-      .setTimestamp();
+      .setTimestamp()
+      .setFooter({ text: '🎁 Good luck to all participants!' });
+
+    if (hostedBy) {
+      embed.addFields({
+        name: '🎤 Hosted by',
+        value: `<@${hostedBy}>`,
+        inline: false,
+      });
+    }
 
     if (requiredRoles.length > 0) {
       embed.addFields({
-        name: 'Required Roles',
+        name: '🔒 Required Roles',
         value: requiredRoles.map((id) => `<@&${id}>`).join(', '),
         inline: false,
       });
@@ -623,7 +778,7 @@ export class GiveawayManager {
 
         // Update entries field
         const fields = embed.data.fields || [];
-        const entryFieldIndex = fields.findIndex((f) => f.name === 'Entries');
+        const entryFieldIndex = fields.findIndex((f) => f.name === '👥 Entries');
 
         if (entryFieldIndex !== -1) {
           fields[entryFieldIndex].value = `${entryCount}`;
@@ -655,18 +810,27 @@ export class GiveawayManager {
         .setTitle(`🎉 ${giveaway.title} - Ended`)
         .setDescription(giveaway.description)
         .setColor(0x808080)
-        .setTimestamp();
+        .setTimestamp()
+        .setFooter({ text: '🎁 Giveaway has ended' });
 
       if (winners.length > 0) {
         embed.addFields({
-          name: 'Winners',
+          name: '🏆 Winners',
           value: winners.map((id) => `<@${id}>`).join(', '),
           inline: false,
         });
       } else {
         embed.addFields({
-          name: 'Winners',
-          value: 'No entries',
+          name: '🏆 Winners',
+          value: '❌ No entries',
+          inline: false,
+        });
+      }
+
+      if (giveaway.hostedBy) {
+        embed.addFields({
+          name: '🎤 Hosted by',
+          value: `<@${giveaway.hostedBy}>`,
           inline: false,
         });
       }
@@ -838,13 +1002,22 @@ export class GiveawayManager {
       const embed = new EmbedBuilder()
         .setTitle(`🔄 ${giveaway.title} - Winner Rerolled`)
         .setDescription(
-          'A winner has been rerolled!\n\n' +
-          `**Previous Winner:** <@${oldWinnerId}>\n` +
-          `**New Winner:** <@${newWinnerId}>\n\n` +
-          'Congratulations to the new winner!',
+          '🎲 A winner has been rerolled!\n\n' +
+          `**❌ Previous Winner:** <@${oldWinnerId}>\n` +
+          `**✅ New Winner:** <@${newWinnerId}>\n\n` +
+          '🎊 Congratulations to the new winner!',
         )
         .setColor(0xffa500)
-        .setTimestamp();
+        .setTimestamp()
+        .setFooter({ text: '🎁 Winner rerolled by moderators' });
+
+      if (giveaway.hostedBy) {
+        embed.addFields({
+          name: '🎤 Hosted by',
+          value: `<@${giveaway.hostedBy}>`,
+          inline: false,
+        });
+      }
 
       await this.discordClient.sendMessage(giveaway.channelId, {
         content: `<@${newWinnerId}>`,
@@ -877,10 +1050,19 @@ export class GiveawayManager {
       const message = await this.discordClient.getMessage(giveaway.channelId, giveaway.messageId);
 
       const embed = new EmbedBuilder()
-        .setTitle(`${giveaway.title} - Cancelled`)
-        .setDescription('This giveaway has been cancelled.')
+        .setTitle(`🎉 ${giveaway.title} - Cancelled`)
+        .setDescription('❌ This giveaway has been cancelled.')
         .setColor(0xff0000)
-        .setTimestamp();
+        .setTimestamp()
+        .setFooter({ text: '🎁 Giveaway cancelled by moderators' });
+
+      if (giveaway.hostedBy) {
+        embed.addFields({
+          name: '🎤 Hosted by',
+          value: `<@${giveaway.hostedBy}>`,
+          inline: false,
+        });
+      }
 
       await message.edit({ embeds: [embed], components: [] });
     } catch (error) {
