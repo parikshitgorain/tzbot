@@ -43,6 +43,7 @@ describe('GiveawayManager', () => {
       getEntries: vi.fn().mockResolvedValue([]),
       hasEntry: vi.fn().mockResolvedValue(false),
       updateStatus: vi.fn().mockResolvedValue(undefined),
+      updateWinners: vi.fn().mockResolvedValue(undefined),
     } as unknown as GiveawayRepository;
 
     giveawayManager = new GiveawayManager(mockDiscordClient, mockGiveawayRepository);
@@ -62,6 +63,7 @@ describe('GiveawayManager', () => {
         requiredRoles: ['role_123'],
         winnerCount: 3,
         durationMs: 60000, // 1 minute
+        hostedBy: 'user_456',
       };
 
       const giveaway = await giveawayManager.createGiveaway(options);
@@ -70,10 +72,12 @@ describe('GiveawayManager', () => {
       expect(giveaway.title).toBe(options.title);
       expect(giveaway.description).toBe(options.description);
       expect(giveaway.channelId).toBe(options.channelId);
+      expect(giveaway.guildId).toBe(options.guildId);
       expect(giveaway.requiredRoles).toEqual(options.requiredRoles);
       expect(giveaway.winnerCount).toBe(options.winnerCount);
       expect(giveaway.status).toBe('active');
       expect(giveaway.entries).toEqual([]);
+      expect(giveaway.hostedBy).toBe(options.hostedBy);
     });
 
     it('should send a message with embed and button', async () => {
@@ -97,6 +101,28 @@ describe('GiveawayManager', () => {
       );
     });
 
+    it('should create a giveaway with hostedBy field', async () => {
+      const options = {
+        title: 'Test Giveaway',
+        description: 'Test Description',
+        channelId: 'channel_123',
+        guildId: 'guild_123',
+        requiredRoles: [],
+        winnerCount: 1,
+        durationMs: 60000,
+        hostedBy: 'user_789',
+      };
+
+      const giveaway = await giveawayManager.createGiveaway(options);
+
+      expect(giveaway.hostedBy).toBe(options.hostedBy);
+      expect(mockGiveawayRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hostedBy: options.hostedBy,
+        })
+      );
+    });
+
     it('should save giveaway to database', async () => {
       const options = {
         title: 'Test Giveaway',
@@ -115,6 +141,7 @@ describe('GiveawayManager', () => {
           title: options.title,
           description: options.description,
           channelId: options.channelId,
+          guildId: options.guildId,
           status: 'active',
         })
       );
@@ -138,6 +165,7 @@ describe('GiveawayManager', () => {
       // Mock get to return the giveaway
       vi.mocked(mockGiveawayRepository.get).mockResolvedValue({
         ...giveaway,
+        guildId: 'guild_123',
         entries: [],
       });
 
@@ -158,6 +186,7 @@ describe('GiveawayManager', () => {
     it('should allow entry when user has required role', async () => {
       const giveaway: Giveaway = {
         id: 'giveaway_123',
+        guildId: 'guild_123',
         title: 'Test',
         description: 'Test',
         channelId: 'channel_123',
@@ -215,6 +244,7 @@ describe('GiveawayManager', () => {
     it('should reject entry when user lacks required role', async () => {
       const giveaway: Giveaway = {
         id: 'giveaway_123',
+        guildId: 'guild_123',
         title: 'Test',
         description: 'Test',
         channelId: 'channel_123',
@@ -264,6 +294,7 @@ describe('GiveawayManager', () => {
     it('should prevent duplicate entries', async () => {
       const giveaway: Giveaway = {
         id: 'giveaway_123',
+        guildId: 'guild_123',
         title: 'Test',
         description: 'Test',
         channelId: 'channel_123',
@@ -299,6 +330,7 @@ describe('GiveawayManager', () => {
     it('should reject entry for ended giveaway', async () => {
       const giveaway: Giveaway = {
         id: 'giveaway_123',
+        guildId: 'guild_123',
         title: 'Test',
         description: 'Test',
         channelId: 'channel_123',
@@ -333,6 +365,7 @@ describe('GiveawayManager', () => {
     it('should allow entry when no roles are required', async () => {
       const giveaway: Giveaway = {
         id: 'giveaway_123',
+        guildId: 'guild_123',
         title: 'Test',
         description: 'Test',
         channelId: 'channel_123',
@@ -375,6 +408,7 @@ describe('GiveawayManager', () => {
       const activeGiveaways: Giveaway[] = [
         {
           id: 'giveaway_1',
+          guildId: 'guild_123',
           title: 'Test 1',
           description: 'Test',
           channelId: 'channel_123',
@@ -388,6 +422,7 @@ describe('GiveawayManager', () => {
         },
         {
           id: 'giveaway_2',
+          guildId: 'guild_123',
           title: 'Test 2',
           description: 'Test',
           channelId: 'channel_123',
@@ -413,6 +448,7 @@ describe('GiveawayManager', () => {
 
       const expiredGiveaway: Giveaway = {
         id: 'giveaway_expired',
+        guildId: 'guild_123',
         title: 'Expired',
         description: 'Test',
         channelId: 'channel_123',
@@ -446,6 +482,7 @@ describe('GiveawayManager', () => {
     it('should cancel a giveaway and update status', async () => {
       const giveaway: Giveaway = {
         id: 'giveaway_123',
+        guildId: 'guild_123',
         title: 'Test',
         description: 'Test',
         channelId: 'channel_123',

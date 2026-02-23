@@ -27,7 +27,7 @@ describe('SpamDetector', () => {
       // Send 4 identical messages within 10 seconds
       for (let i = 0; i < 4; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        const result = detector.checkSpam(userId, message, timestamp);
+        const result = detector.checkSpam(userId, `msg_${i}`, message, timestamp);
         expect(result.isSpam).toBe(false);
       }
     });
@@ -39,12 +39,12 @@ describe('SpamDetector', () => {
       // Send 4 messages first
       for (let i = 0; i < 4; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        detector.checkSpam(userId, message, timestamp);
+        detector.checkSpam(userId, `msg_${i}`, message, timestamp);
       }
 
       // 5th message should trigger spam detection
       const fifthTime = new Date(baseTime.getTime() + 4000);
-      const result = detector.checkSpam(userId, message, fifthTime);
+      const result = detector.checkSpam(userId, 'msg_4', message, fifthTime);
 
       expect(result.isSpam).toBe(true);
       expect(result.reason).toContain('5 identical messages');
@@ -59,12 +59,12 @@ describe('SpamDetector', () => {
       // Send 4 messages
       for (let i = 0; i < 4; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        detector.checkSpam(userId, message, timestamp);
+        detector.checkSpam(userId, `msg_${i}`, message, timestamp);
       }
 
       // Send 5th message after 11 seconds (outside window)
       const lateTime = new Date(baseTime.getTime() + 11000);
-      const result = detector.checkSpam(userId, message, lateTime);
+      const result = detector.checkSpam(userId, 'msg_4', message, lateTime);
 
       expect(result.isSpam).toBe(false);
     });
@@ -75,13 +75,13 @@ describe('SpamDetector', () => {
       // Send 3 of message A
       for (let i = 0; i < 3; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        detector.checkSpam(userId, 'Message A', timestamp);
+        detector.checkSpam(userId, `msgA_${i}`, 'Message A', timestamp);
       }
 
       // Send 3 of message B
       for (let i = 0; i < 3; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        const result = detector.checkSpam(userId, 'Message B', timestamp);
+        const result = detector.checkSpam(userId, `msgB_${i}`, 'Message B', timestamp);
         expect(result.isSpam).toBe(false);
       }
     });
@@ -94,7 +94,7 @@ describe('SpamDetector', () => {
       // Send 9 different messages within 5 seconds
       for (let i = 0; i < 9; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 500);
-        const result = detector.checkSpam(userId, `Message ${i}`, timestamp);
+        const result = detector.checkSpam(userId, `msg_${i}`, `Message ${i}`, timestamp);
         expect(result.isSpam).toBe(false);
       }
     });
@@ -105,12 +105,12 @@ describe('SpamDetector', () => {
       // Send 9 messages first
       for (let i = 0; i < 9; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 500);
-        detector.checkSpam(userId, `Message ${i}`, timestamp);
+        detector.checkSpam(userId, `msg_${i}`, `Message ${i}`, timestamp);
       }
 
       // 10th message should trigger spam detection
       const tenthTime = new Date(baseTime.getTime() + 4500);
-      const result = detector.checkSpam(userId, 'Message 9', tenthTime);
+      const result = detector.checkSpam(userId, 'msg_9', 'Message 9', tenthTime);
 
       expect(result.isSpam).toBe(true);
       expect(result.reason).toContain('10 messages');
@@ -124,12 +124,12 @@ describe('SpamDetector', () => {
       // Send 9 messages
       for (let i = 0; i < 9; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 500);
-        detector.checkSpam(userId, `Message ${i}`, timestamp);
+        detector.checkSpam(userId, `msg_${i}`, `Message ${i}`, timestamp);
       }
 
       // Send 10th message after 6 seconds (outside window)
       const lateTime = new Date(baseTime.getTime() + 6000);
-      const result = detector.checkSpam(userId, 'Message 9', lateTime);
+      const result = detector.checkSpam(userId, 'msg_9', 'Message 9', lateTime);
 
       expect(result.isSpam).toBe(false);
     });
@@ -144,11 +144,11 @@ describe('SpamDetector', () => {
       // This meets both criteria, but identical should be detected first
       for (let i = 0; i < 9; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 500);
-        detector.checkSpam(userId, message, timestamp);
+        detector.checkSpam(userId, `msg_${i}`, message, timestamp);
       }
 
       const tenthTime = new Date(baseTime.getTime() + 4500);
-      const result = detector.checkSpam(userId, message, tenthTime);
+      const result = detector.checkSpam(userId, 'msg_9', message, tenthTime);
 
       expect(result.isSpam).toBe(true);
       expect(result.reason).toContain('identical messages');
@@ -163,13 +163,13 @@ describe('SpamDetector', () => {
       // User 1 sends 4 messages
       for (let i = 0; i < 4; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        detector.checkSpam('user1', message, timestamp);
+        detector.checkSpam('user1', `msg_${i}`, message, timestamp);
       }
 
       // User 2 sends 4 messages
       for (let i = 0; i < 4; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        const result = detector.checkSpam('user2', message, timestamp);
+        const result = detector.checkSpam('user2', `msg_${i}`, message, timestamp);
         expect(result.isSpam).toBe(false);
       }
     });
@@ -182,13 +182,14 @@ describe('SpamDetector', () => {
       // Send messages over 20 seconds
       for (let i = 0; i < 20; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        detector.checkSpam(userId, `Message ${i}`, timestamp);
+        detector.checkSpam(userId, `msg_${i}`, `Message ${i}`, timestamp);
       }
 
       // Check that old messages are cleaned up
-      // Only messages within the last 10 seconds should remain
-      const messageCount = detector.getUserMessageCount(userId, 10);
-      expect(messageCount).toBeLessThanOrEqual(10);
+      // Messages from 10-19 seconds (11 messages) should remain since cleanup happens after adding
+      const lastTime = new Date(baseTime.getTime() + 19000);
+      const messageCount = detector.getUserMessageCount(userId, 10, lastTime);
+      expect(messageCount).toBeLessThanOrEqual(11);
     });
   });
 
@@ -207,13 +208,13 @@ describe('SpamDetector', () => {
       // Send 2 messages (should not trigger)
       for (let i = 0; i < 2; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        const result = customDetector.checkSpam(userId, message, timestamp);
+        const result = customDetector.checkSpam(userId, `msg_${i}`, message, timestamp);
         expect(result.isSpam).toBe(false);
       }
 
       // 3rd message should trigger with custom threshold
       const thirdTime = new Date(baseTime.getTime() + 2000);
-      const result = customDetector.checkSpam(userId, message, thirdTime);
+      const result = customDetector.checkSpam(userId, 'msg_2', message, thirdTime);
       expect(result.isSpam).toBe(true);
     });
 
@@ -230,12 +231,12 @@ describe('SpamDetector', () => {
       // Send 4 different messages
       for (let i = 0; i < 4; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 500);
-        customDetector.checkSpam(userId, `Message ${i}`, timestamp);
+        customDetector.checkSpam(userId, `msg_${i}`, `Message ${i}`, timestamp);
       }
 
       // 5th message should trigger with custom threshold
       const fifthTime = new Date(baseTime.getTime() + 2000);
-      const result = customDetector.checkSpam(userId, 'Message 4', fifthTime);
+      const result = customDetector.checkSpam(userId, 'msg_4', 'Message 4', fifthTime);
       expect(result.isSpam).toBe(true);
     });
   });
@@ -247,7 +248,7 @@ describe('SpamDetector', () => {
       // Send some messages
       for (let i = 0; i < 5; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        detector.checkSpam(userId, `Message ${i}`, timestamp);
+        detector.checkSpam(userId, `msg_${i}`, `Message ${i}`, timestamp);
       }
 
       // Clear history
@@ -263,7 +264,7 @@ describe('SpamDetector', () => {
 
       // Send messages for multiple users
       for (let i = 0; i < 3; i++) {
-        detector.checkSpam(`user${i}`, 'Test', baseTime);
+        detector.checkSpam(`user${i}`, `msg_${i}`, 'Test', baseTime);
       }
 
       // Clear all history
@@ -282,7 +283,7 @@ describe('SpamDetector', () => {
       // Send 5 messages
       for (let i = 0; i < 5; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        detector.checkSpam(userId, `Message ${i}`, timestamp);
+        detector.checkSpam(userId, `msg_${i}`, `Message ${i}`, timestamp);
       }
 
       const referenceTime = new Date(baseTime.getTime() + 5000);
@@ -293,13 +294,13 @@ describe('SpamDetector', () => {
 
   describe('Edge Cases', () => {
     it('should handle empty message content', () => {
-      const result = detector.checkSpam(userId, '', new Date());
+      const result = detector.checkSpam(userId, 'msg_1', '', new Date());
       expect(result.isSpam).toBe(false);
     });
 
     it('should handle very long message content', () => {
       const longMessage = 'a'.repeat(10000);
-      const result = detector.checkSpam(userId, longMessage, new Date());
+      const result = detector.checkSpam(userId, 'msg_1', longMessage, new Date());
       expect(result.isSpam).toBe(false);
     });
 
@@ -309,11 +310,12 @@ describe('SpamDetector', () => {
 
       for (let i = 0; i < 5; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        detector.checkSpam(userId, message, timestamp);
+        detector.checkSpam(userId, `msg_${i}`, message, timestamp);
       }
 
       const result = detector.checkSpam(
         userId,
+        'msg_5',
         message,
         new Date(baseTime.getTime() + 5000)
       );
@@ -326,11 +328,12 @@ describe('SpamDetector', () => {
 
       for (let i = 0; i < 5; i++) {
         const timestamp = new Date(baseTime.getTime() + i * 1000);
-        detector.checkSpam(userId, message, timestamp);
+        detector.checkSpam(userId, `msg_${i}`, message, timestamp);
       }
 
       const result = detector.checkSpam(
         userId,
+        'msg_5',
         message,
         new Date(baseTime.getTime() + 5000)
       );
