@@ -23,8 +23,8 @@ import type { UserBadgeInfo } from './chat-client.js';
  */
 export interface RoleSyncConfig {
   guildId: string;
-  subscriberRoleId: string;
-  vipRoleId: string;
+  subscriberRoleId?: string;
+  vipRoleId?: string;
   enabled: boolean;
 }
 
@@ -195,61 +195,65 @@ export class RoleSyncSystem implements IRoleSyncSystem {
       const kickUsername = await this.linkingSystem.getKickUsername(discordId);
       result.kickUsername = kickUsername || 'unknown';
 
-      // Check current roles
-      const hasSubscriberRole = await this.hasRole(
-        discordId,
-        this.config.subscriberRoleId,
-      );
-      const hasVIPRole = await this.hasRole(discordId, this.config.vipRoleId);
+      // Sync subscriber role (only if configured)
+      if (this.config.subscriberRoleId) {
+        const hasSubscriberRole = await this.hasRole(
+          discordId,
+          this.config.subscriberRoleId,
+        );
 
-      // Sync subscriber role
-      if (hasSubscriberBadge && !hasSubscriberRole) {
-        await this.discordClient.addRole(
-          this.config.guildId,
-          discordId,
-          this.config.subscriberRoleId,
-        );
-        result.rolesAdded.push('subscriber');
-        logger.info('Added subscriber role', {
-          discordId,
-          kickUsername: result.kickUsername,
-        });
-      } else if (!hasSubscriberBadge && hasSubscriberRole) {
-        await this.discordClient.removeRole(
-          this.config.guildId,
-          discordId,
-          this.config.subscriberRoleId,
-        );
-        result.rolesRemoved.push('subscriber');
-        logger.info('Removed subscriber role', {
-          discordId,
-          kickUsername: result.kickUsername,
-        });
+        if (hasSubscriberBadge && !hasSubscriberRole) {
+          await this.discordClient.addRole(
+            this.config.guildId,
+            discordId,
+            this.config.subscriberRoleId,
+          );
+          result.rolesAdded.push('subscriber');
+          logger.info('Added subscriber role', {
+            discordId,
+            kickUsername: result.kickUsername,
+          });
+        } else if (!hasSubscriberBadge && hasSubscriberRole) {
+          await this.discordClient.removeRole(
+            this.config.guildId,
+            discordId,
+            this.config.subscriberRoleId,
+          );
+          result.rolesRemoved.push('subscriber');
+          logger.info('Removed subscriber role', {
+            discordId,
+            kickUsername: result.kickUsername,
+          });
+        }
       }
 
-      // Sync VIP role
-      if (hasVIPBadge && !hasVIPRole) {
-        await this.discordClient.addRole(
-          this.config.guildId,
-          discordId,
-          this.config.vipRoleId,
-        );
-        result.rolesAdded.push('vip');
-        logger.info('Added VIP role', {
-          discordId,
-          kickUsername: result.kickUsername,
-        });
-      } else if (!hasVIPBadge && hasVIPRole) {
-        await this.discordClient.removeRole(
-          this.config.guildId,
-          discordId,
-          this.config.vipRoleId,
-        );
-        result.rolesRemoved.push('vip');
-        logger.info('Removed VIP role', {
-          discordId,
-          kickUsername: result.kickUsername,
-        });
+      // Sync VIP role (only if configured)
+      if (this.config.vipRoleId) {
+        const hasVIPRole = await this.hasRole(discordId, this.config.vipRoleId);
+
+        if (hasVIPBadge && !hasVIPRole) {
+          await this.discordClient.addRole(
+            this.config.guildId,
+            discordId,
+            this.config.vipRoleId,
+          );
+          result.rolesAdded.push('vip');
+          logger.info('Added VIP role', {
+            discordId,
+            kickUsername: result.kickUsername,
+          });
+        } else if (!hasVIPBadge && hasVIPRole) {
+          await this.discordClient.removeRole(
+            this.config.guildId,
+            discordId,
+            this.config.vipRoleId,
+          );
+          result.rolesRemoved.push('vip');
+          logger.info('Removed VIP role', {
+            discordId,
+            kickUsername: result.kickUsername,
+          });
+        }
       }
 
       // Log if no changes were made

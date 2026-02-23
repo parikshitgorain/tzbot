@@ -236,7 +236,9 @@ function createConfigCommand(config: BotConfig): CommandDefinition {
           },
           {
             name: 'Notification Channel',
-            value: `<#${config.notificationChannelId}>`,
+            value: config.notificationChannelId
+              ? `<#${config.notificationChannelId}>`
+              : 'Not set',
             inline: true,
           },
           {
@@ -248,17 +250,21 @@ function createConfigCommand(config: BotConfig): CommandDefinition {
           },
           {
             name: 'Subscriber Role',
-            value: `<@&${config.subscriberRoleId}>`,
+            value: config.subscriberRoleId
+              ? `<@&${config.subscriberRoleId}>`
+              : 'Not set',
             inline: true,
           },
           {
             name: 'VIP Role',
-            value: `<@&${config.vipRoleId}>`,
+            value: config.vipRoleId ? `<@&${config.vipRoleId}>` : 'Not set',
             inline: true,
           },
           {
             name: 'Moderator Role',
-            value: `<@&${config.moderatorRoleId}>`,
+            value: config.moderatorRoleId
+              ? `<@&${config.moderatorRoleId}>`
+              : 'Not set',
             inline: true,
           },
           {

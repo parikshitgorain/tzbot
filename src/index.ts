@@ -541,6 +541,12 @@ class TZBotApplication {
    * Initialize Redis cache
    */
   private async initializeRedis(): Promise<void> {
+    // Skip Redis if not configured
+    if (!config.redisUrl) {
+      logger.info('Redis URL not configured - caching disabled');
+      return;
+    }
+
     logger.info('Initializing Redis cache...');
 
     try {
@@ -620,11 +626,11 @@ class TZBotApplication {
 
     // Notification manager
     this.notificationManager = new NotificationManager(this.discordClient, {
-      primaryChannelId: config.notificationChannelId,
+      primaryChannelId: config.notificationChannelId || '',
       fallbackChannelId: config.fallbackChannelId,
       maxRetries: 3,
       retryDelayMs: 5000,
-      getChannelId: () => config.notificationChannelId, // Dynamic channel ID getter
+      getChannelId: () => config.notificationChannelId || '', // Dynamic channel ID getter
       getFallbackChannelId: () => config.fallbackChannelId, // Dynamic fallback channel ID getter
     });
 
@@ -693,7 +699,7 @@ class TZBotApplication {
             privateChannelId: String(privateChannelId),
             publicChannelIds,
             guildId: config.guildId,
-            moderatorRoleId: config.moderatorRoleId,
+            moderatorRoleId: config.moderatorRoleId || '',
           });
 
           this.announcementRelay.start();
@@ -739,7 +745,7 @@ class TZBotApplication {
     this.channelAccess = new ChannelAccessEnforcer(
       this.discordClient,
       this.database.repositories.violations,
-      config.moderatorRoleId,
+      config.moderatorRoleId || '',
       [], // Read-only channel configs will be loaded from config
     );
 
@@ -803,7 +809,7 @@ class TZBotApplication {
     this.webhookHandler = new KickWebhookHandler({
       webhookSecret: config.kickWebhookSecret || '',
       notificationManager: this.notificationManager,
-      notificationChannelId: config.notificationChannelId,
+      notificationChannelId: config.notificationChannelId || '',
     });
 
     // Webhook server
@@ -1501,7 +1507,7 @@ class TZBotApplication {
         }
 
         // Check for malicious links
-        const isModerator = message.member?.roles.cache.has(config.moderatorRoleId) || false;
+        const isModerator = message.member?.roles.cache.has(config.moderatorRoleId || '') || false;
         const linkScanResult = await this.linkScanner.scanMessage(
           message.content,
           message.author.id,

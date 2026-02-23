@@ -248,31 +248,68 @@ jobs:
           append_if_set "DISCORD_GUILD_ID" '${{ secrets.DISCORD_GUILD_ID }}'
           echo "" >> "\$ENV_FILE"
 
-          echo "# Database Configuration" >> "\$ENV_FILE"
-          append_if_set "DATABASE_URL" '${{ secrets.DATABASE_URL }}'
-          echo "" >> "\$ENV_FILE"
-
-          echo "# Redis Configuration (optional)" >> "\$ENV_FILE"
-          append_if_set "REDIS_URL" '${{ secrets.REDIS_URL }}'
-          echo "" >> "\$ENV_FILE"
-
-          echo "# Notification Channels" >> "\$ENV_FILE"
-          append_if_set "NOTIFICATION_CHANNEL_ID" '${{ secrets.NOTIFICATION_CHANNEL_ID }}'
-          append_if_set "FALLBACK_CHANNEL_ID" '${{ secrets.FALLBACK_CHANNEL_ID }}'
-          echo "" >> "\$ENV_FILE"
-
-          echo "# Moderator Role" >> "\$ENV_FILE"
+          echo "# Discord Role IDs" >> "\$ENV_FILE"
+          append_if_set "SUBSCRIBER_ROLE_ID" '${{ secrets.SUBSCRIBER_ROLE_ID }}'
+          append_if_set "VIP_ROLE_ID" '${{ secrets.VIP_ROLE_ID }}'
           append_if_set "MODERATOR_ROLE_ID" '${{ secrets.MODERATOR_ROLE_ID }}'
           echo "" >> "\$ENV_FILE"
 
+          echo "# Discord Channel IDs" >> "\$ENV_FILE"
+          append_if_set "NOTIFICATION_CHANNEL_ID" '${{ secrets.NOTIFICATION_CHANNEL_ID }}'
+          append_if_set "FALLBACK_CHANNEL_ID" '${{ secrets.FALLBACK_CHANNEL_ID }}'
+          append_if_set "PRIVATE_ANNOUNCEMENT_CHANNEL_ID" '${{ secrets.PRIVATE_ANNOUNCEMENT_CHANNEL_ID }}'
+          append_if_set "PUBLIC_ANNOUNCEMENT_CHANNEL_IDS" '${{ secrets.PUBLIC_ANNOUNCEMENT_CHANNEL_IDS }}'
+          echo "" >> "\$ENV_FILE"
+
+          echo "# Database Configuration" >> "\$ENV_FILE"
+          append_if_set "DATABASE_URL" '${{ secrets.DATABASE_URL }}'
+          append_if_set "DATABASE_MAX_CONNECTIONS" '${{ secrets.DATABASE_MAX_CONNECTIONS }}'
+          echo "" >> "\$ENV_FILE"
+
+          echo "# Redis Configuration" >> "\$ENV_FILE"
+          append_if_set "REDIS_URL" '${{ secrets.REDIS_URL }}'
+          append_if_set "REDIS_PASSWORD" '${{ secrets.REDIS_PASSWORD }}'
+          echo "" >> "\$ENV_FILE"
+
           echo "# Kick Integration (optional)" >> "\$ENV_FILE"
+          append_if_set "KICK_API_KEY" '${{ secrets.KICK_API_KEY }}'
           append_if_set "KICK_CHANNEL_ID" '${{ secrets.KICK_CHANNEL_ID }}'
           append_if_set "KICK_WEBHOOK_SECRET" '${{ secrets.KICK_WEBHOOK_SECRET }}'
+          append_if_set "KICK_OAUTH_CLIENT_ID" '${{ secrets.KICK_OAUTH_CLIENT_ID }}'
+          append_if_set "KICK_OAUTH_CLIENT_SECRET" '${{ secrets.KICK_OAUTH_CLIENT_SECRET }}'
+          echo "" >> "\$ENV_FILE"
+
+          echo "# Google Safe Browsing API" >> "\$ENV_FILE"
+          append_if_set "GOOGLE_SAFE_BROWSING_API_KEY" '${{ secrets.GOOGLE_SAFE_BROWSING_API_KEY }}'
+          echo "" >> "\$ENV_FILE"
+
+          echo "# AI Configuration" >> "\$ENV_FILE"
+          printf '%s=%s\n' "AI_ENABLED" "false" >> "\$ENV_FILE"
+          append_if_set "AI_PROVIDER" '${{ secrets.AI_PROVIDER }}'
+          append_if_set "AI_API_KEY" '${{ secrets.AI_API_KEY }}'
+          append_if_set "AI_MODEL_NAME" '${{ secrets.AI_MODEL_NAME }}'
+          append_if_set "AI_CHANNELS" '${{ secrets.AI_CHANNELS }}'
+          echo "" >> "\$ENV_FILE"
+
+          echo "# Chat Rain Configuration" >> "\$ENV_FILE"
+          printf '%s=%s\n' "CHAT_RAIN_ENABLED" "true" >> "\$ENV_FILE"
+          printf '%s=%s\n' "CHAT_RAIN_MIN_DELAY" "300" >> "\$ENV_FILE"
+          printf '%s=%s\n' "CHAT_RAIN_ACTIVE_WINDOW" "600" >> "\$ENV_FILE"
+          printf '%s=%s\n' "CHAT_RAIN_MIN_MESSAGES" "3" >> "\$ENV_FILE"
+          echo "" >> "\$ENV_FILE"
+
+          echo "# Webhook Server Configuration" >> "\$ENV_FILE"
+          printf '%s=%s\n' "WEBHOOK_PORT" "3000" >> "\$ENV_FILE"
+          printf '%s=%s\n' "WEBHOOK_HOST" "0.0.0.0" >> "\$ENV_FILE"
+          echo "" >> "\$ENV_FILE"
+
+          echo "# Logging Configuration" >> "\$ENV_FILE"
+          printf '%s=%s\n' "LOG_LEVEL" "info" >> "\$ENV_FILE"
+          printf '%s=%s\n' "LOG_FILE" "logs/tzbot.log" >> "\$ENV_FILE"
           echo "" >> "\$ENV_FILE"
 
           echo "# Environment" >> "\$ENV_FILE"
           printf '%s=%s\n' "NODE_ENV" "production" >> "\$ENV_FILE"
-          printf '%s=%s\n' "LOG_LEVEL" "info" >> "\$ENV_FILE"
 
           chmod 600 "\$ENV_FILE"
           echo "✅ Environment file created at \$ENV_FILE"
