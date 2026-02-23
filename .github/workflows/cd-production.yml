@@ -140,8 +140,25 @@ jobs:
         with:
           ref: release
       
+      - name: Debug - List files
+        run: |
+          echo "📂 Current directory: $(pwd)"
+          echo "📂 Listing root:"
+          ls -la
+          echo "📂 Checking deployment directory:"
+          ls -la deployment/ || echo "❌ No deployment directory"
+          echo "📂 Checking deployment/scripts:"
+          ls -la deployment/scripts/ || echo "❌ No deployment/scripts directory"
+      
       - name: Setup SSH
         run: |
+          if [ ! -f deployment/scripts/setup_ssh.sh ]; then
+            echo "❌ setup_ssh.sh not found!"
+            echo "Current directory: $(pwd)"
+            echo "Files in deployment/scripts:"
+            ls -la deployment/scripts/ || echo "Directory doesn't exist"
+            exit 1
+          fi
           chmod +x deployment/scripts/setup_ssh.sh
           deployment/scripts/setup_ssh.sh "${{ secrets.VPS_SSH_KEY }}" "${{ secrets.VPS_HOST }}"
       
