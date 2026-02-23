@@ -257,15 +257,28 @@ jobs:
           echo "📊 Current version: v$OLD_VERSION"
           echo "📍 Branch: $(git branch --show-current)"
           echo ""
+
+          # If the current version is a dev pre-release (e.g. 1.0.0-dev.5), reset it to
+          # the clean release version so semantic-release starts from a valid baseline.
+          if echo "$OLD_VERSION" | grep -qE '\-dev\.'; then
+            CLEAN_VERSION=$(echo "$OLD_VERSION" | sed 's/-dev\..*//')
+            echo "🔄 Resetting pre-release version v$OLD_VERSION → v$CLEAN_VERSION for release channel"
+            node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version='$CLEAN_VERSION'; fs.writeFileSync('package.json', JSON.stringify(p, null, 2)+'\n');"
+            git add package.json
+            git commit -m "chore: reset version to $CLEAN_VERSION for release [skip ci]" || true
+            OLD_VERSION="$CLEAN_VERSION"
+          fi
+
+          # Check only release-channel tags (exclude dev pre-release tags like v1.0.0-dev.x)
+          RELEASE_TAG_COUNT=$(git tag | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | wc -l)
+          echo "📌 Existing tags: $(git tag | wc -l) total, $RELEASE_TAG_COUNT release-channel"
           
-          # Check for existing tags
-          TAG_COUNT=$(git tag | wc -l)
-          echo "📌 Existing tags: $TAG_COUNT"
-          
-          if [ "$TAG_COUNT" -eq 0 ]; then
-            echo "⚠️  No tags found - creating initial tag v$OLD_VERSION"
-            git tag -a "v$OLD_VERSION" -m "Initial release v$OLD_VERSION"
-            git push origin "v$OLD_VERSION"
+          if [ "$RELEASE_TAG_COUNT" -eq 0 ]; then
+            # Use the clean (non-pre-release) version for the initial tag
+            CLEAN_VERSION=$(echo "$OLD_VERSION" | sed 's/-.*$//')
+            echo "⚠️  No release tags found - creating initial tag v$CLEAN_VERSION"
+            git tag -a "v$CLEAN_VERSION" -m "Initial release v$CLEAN_VERSION" || true
+            git push origin "v$CLEAN_VERSION" || true
           fi
           
           echo ""

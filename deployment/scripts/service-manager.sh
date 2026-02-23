@@ -90,27 +90,26 @@ pm2_start() {
 pm2_restart() {
     log_info "Restarting PM2 service: $SERVICE_NAME"
     cd "$DEPLOY_BASE/current" || cd "$DEPLOY_BASE"
-    
-    # Check if process exists
-    if pm2 describe "$SERVICE_NAME" > /dev/null 2>&1; then
-        log_info "Process exists, restarting..."
-        retry_command "Restart PM2 process" "pm2 restart '$SERVICE_NAME'"
+
+    # Prefer startOrReload with ecosystem config so PM2 picks up the new release
+    # (pm2 restart uses the OLD saved script path and won't load the new release)
+    if [ -f "ecosystem.config.cjs" ]; then
+        log_info "Reloading from ecosystem config (picks up new release)..."
+        retry_command "Reload PM2 from ecosystem" "pm2 startOrReload ecosystem.config.cjs --update-env"
+    elif [ -f "ecosystem.config.js" ]; then
+        log_info "Reloading from ecosystem config (picks up new release)..."
+        retry_command "Reload PM2 from ecosystem" "pm2 startOrReload ecosystem.config.js --update-env"
+    elif pm2 describe "$SERVICE_NAME" > /dev/null 2>&1; then
+        # NOTE: pm2 restart uses the SAVED script path from a previous start, so
+        # this fallback will NOT load the new release code.  It should only be
+        # reached when no ecosystem config is present (an unexpected state).
+        log_warn "No ecosystem config found — restarting with saved PM2 config (may use old release)"
+        retry_command "Restart PM2 process" "pm2 restart $SERVICE_NAME"
     else
-        log_warn "Process not found, starting fresh..."
-        if [ -f "$DEPLOY_BASE/ecosystem.config.cjs" ]; then
-            retry_command "Start PM2 from ecosystem" "pm2 start '$DEPLOY_BASE/ecosystem.config.cjs'"
-        elif [ -f "$DEPLOY_BASE/ecosystem.config.js" ]; then
-            retry_command "Start PM2 from ecosystem" "pm2 start '$DEPLOY_BASE/ecosystem.config.js'"
-        elif [ -f "ecosystem.config.cjs" ]; then
-            retry_command "Start PM2 from local ecosystem" "pm2 start ecosystem.config.cjs"
-        elif [ -f "ecosystem.config.js" ]; then
-            retry_command "Start PM2 from local ecosystem" "pm2 start ecosystem.config.js"
-        else
-            log_info "Starting from dist/index.js..."
-            retry_command "Start PM2 from index" "pm2 start dist/index.js --name '$SERVICE_NAME'"
-        fi
-        retry_command "Save PM2 config" "pm2 save"
+        log_warn "Process not found, starting from dist/index.js..."
+        retry_command "Start PM2 from index" "pm2 start dist/index.js --name $SERVICE_NAME"
     fi
+    retry_command "Save PM2 config" "pm2 save"
     
     log_info "Waiting ${STARTUP_DELAY}s for service initialization..."
     sleep "$STARTUP_DELAY"
