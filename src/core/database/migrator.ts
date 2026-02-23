@@ -28,7 +28,9 @@ let logger: Logger = fallbackLogger;
 // Try to import the main logger
 try {
   const loggerModule = await import('../logger/logger.js');
-  logger = loggerModule.logger;
+  if (loggerModule.logger) {
+    logger = loggerModule.logger;
+  }
 } catch {
   // Use fallback logger
 }

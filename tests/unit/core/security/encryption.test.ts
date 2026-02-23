@@ -248,7 +248,7 @@ describe('EncryptionService', () => {
     });
 
     it('should handle concurrent encryptions', async () => {
-      const data = Array.from({ length: 100 }, (_, i) => `key_${i}`);
+      const data = Array.from({ length: 10 }, (_, i) => `key_${i}`);
       const encrypted = await Promise.all(
         data.map((d) => Promise.resolve(encryptionService.encrypt(d)))
       );

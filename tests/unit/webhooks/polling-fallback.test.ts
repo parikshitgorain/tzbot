@@ -45,6 +45,7 @@ describe('PollingFallbackSystem', () => {
       channelId: 12345,
       notificationChannelId: '987654321',
       pollingIntervalMs: 100, // Short interval for testing
+      healthCheckIntervalMs: 200, // Short health check interval for testing
       enabled: true,
     });
   });
@@ -118,7 +119,7 @@ describe('PollingFallbackSystem', () => {
       vi.mocked(mockWebhookHandler.shouldActivatePollingFallback).mockReturnValue(false);
 
       // Wait for health check
-      await new Promise(resolve => setTimeout(resolve, 5100));
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       // Should transition back to webhook
       expect(pollingSystem.getCurrentState()).toBe('webhook');
@@ -133,7 +134,7 @@ describe('PollingFallbackSystem', () => {
 
       // Simulate recovery
       vi.mocked(mockWebhookHandler.shouldActivatePollingFallback).mockReturnValue(false);
-      await new Promise(resolve => setTimeout(resolve, 5100));
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       // Should have reset failure count
       expect(mockWebhookHandler.resetFailureCount).toHaveBeenCalled();
@@ -147,7 +148,7 @@ describe('PollingFallbackSystem', () => {
 
       // Simulate recovery
       vi.mocked(mockWebhookHandler.shouldActivatePollingFallback).mockReturnValue(false);
-      await new Promise(resolve => setTimeout(resolve, 5100));
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       const history = pollingSystem.getTransitionHistory();
       const lastTransition = history[history.length - 1];

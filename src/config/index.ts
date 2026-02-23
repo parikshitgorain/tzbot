@@ -129,7 +129,3 @@ export const config = loadConfig();
 
 // Export types
 export type { BotConfig, SpamThreshold } from './types.js';
-
-// Export ConfigManager for hot-reload
-export { ConfigManager } from './config-manager.js';
-export type { ConfigChangeEvent, ConfigManagerOptions } from './config-manager.js';
