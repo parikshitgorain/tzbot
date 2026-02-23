@@ -1,6 +1,12 @@
 /**
  * @file violation-tracker.test.ts
- * @description Unit tests for ViolationTracker
+ * @description Unit tests for ViolationTracker (LEGACY - replaced by OffenseManager + PunishmentCalculator)
+ * 
+ * NOTE: This is a legacy/stub implementation. The actual punishment system uses:
+ * - SpamDetector: Detects spam (5 identical messages in 10s OR 10 messages in 5s)
+ * - OffenseManager + PunishmentCalculator: Handles progressive punishment escalation
+ * 
+ * See tests/unit/moderation/punishment-calculator.test.ts for the correct escalation tests
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -8,7 +14,7 @@ import { ViolationTracker } from '../../../src/moderation/violation-tracker.js';
 import type { ViolationRepository } from '../../../src/core/database/repositories/ViolationRepository.js';
 import { ViolationType, PunishmentLevel } from '../../../src/types/models.js';
 
-describe.skip('ViolationTracker', () => {
+describe.skip('ViolationTracker (LEGACY)', () => {
   let tracker: ViolationTracker;
   let mockRepo: ViolationRepository;
 

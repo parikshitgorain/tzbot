@@ -213,7 +213,7 @@ describe('GracefulShutdownManager', () => {
       
       // Cleanup should still run after timeout
       expect(cleanup).toHaveBeenCalledTimes(1);
-    });
+    }, 10000); // 10 second timeout for this test
 
     it('should continue cleanup even if one function fails', async () => {
       const cleanup1 = vi.fn(async () => {

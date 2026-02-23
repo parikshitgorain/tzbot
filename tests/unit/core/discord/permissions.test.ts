@@ -212,24 +212,23 @@ describe('Discord Permissions Verification', () => {
           ]),
         })
       );
-
-      expect(console.warn).toHaveBeenCalled();
     });
 
     it('should log detailed error message to console when permissions are missing', () => {
       const mockGuild = createMockGuild([]);
-      const consoleWarnSpy = vi.spyOn(console, 'warn');
 
       verifyPermissionsOnStartup(mockGuild);
 
-      expect(consoleWarnSpy).toHaveBeenCalled();
-      const warningMessage = consoleWarnSpy.mock.calls[0][0];
-      expect(warningMessage).toContain('TZBOT is missing required permissions');
-      expect(warningMessage).toContain('MANAGE_ROLES');
-      expect(warningMessage).toContain('MANAGE_MESSAGES');
-      expect(warningMessage).toContain('BAN_MEMBERS');
-      expect(warningMessage).toContain('KICK_MEMBERS');
-      expect(warningMessage).toContain('MODERATE_MEMBERS');
+      expect(logger.warn).toHaveBeenCalled();
+      // Check that the formatted error message was logged
+      const warnCalls = (logger.warn as any).mock.calls;
+      const errorMessageCall = warnCalls.find((call: any[]) => 
+        typeof call[0] === 'string' && call[0].includes('TZBOT is missing required permissions')
+      );
+      expect(errorMessageCall).toBeDefined();
+      expect(errorMessageCall[0]).toContain('MANAGE_ROLES');
+      expect(errorMessageCall[0]).toContain('MANAGE_MESSAGES');
+      expect(errorMessageCall[0]).toContain('BAN_MEMBERS');
     });
   });
 

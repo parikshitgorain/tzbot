@@ -348,12 +348,14 @@ describe('Utility Commands', () => {
   });
 
   describe('Command properties', () => {
-    it('should return all five utility commands', () => {
+    it('should return all seven utility commands', () => {
       const commands = createUtilityCommands(mockClient, mockDatabase, mockConfig);
 
-      expect(commands).toHaveLength(5);
+      expect(commands).toHaveLength(7);
       expect(commands.map((cmd) => cmd.name)).toEqual([
         'config',
+        'setup',
+        'userinfo',
         'link',
         'unlink',
         'checklink',

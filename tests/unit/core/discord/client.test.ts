@@ -24,8 +24,8 @@ vi.mock('@/core/discord/permissions.js', () => ({
 }));
 
 // Mock Discord.js
-vi.mock('discord.js', () => ({
-  Client: vi.fn().mockImplementation(() => ({
+vi.mock('discord.js', () => {
+  const mockClient = {
     login: vi.fn().mockResolvedValue('token'),
     destroy: vi.fn().mockResolvedValue(undefined),
     on: vi.fn(),
@@ -40,21 +40,27 @@ vi.mock('discord.js', () => ({
     channels: {
       fetch: vi.fn(),
     },
-  })),
-  GatewayIntentBits: {
-    Guilds: 1,
-    GuildMessages: 2,
-    GuildMembers: 4,
-    GuildModeration: 8,
-    MessageContent: 16,
-    DirectMessages: 32,
-  },
-  Partials: {
-    Channel: 1,
-    Message: 2,
-  },
-  EmbedBuilder: vi.fn(),
-}));
+  };
+
+  return {
+    Client: vi.fn(function() {
+      return mockClient;
+    }),
+    GatewayIntentBits: {
+      Guilds: 1,
+      GuildMessages: 2,
+      GuildMembers: 4,
+      GuildModeration: 8,
+      MessageContent: 16,
+      DirectMessages: 32,
+    },
+    Partials: {
+      Channel: 1,
+      Message: 2,
+    },
+    EmbedBuilder: vi.fn(),
+  };
+});
 
 describe('DiscordClient', () => {
   let client: DiscordClient;

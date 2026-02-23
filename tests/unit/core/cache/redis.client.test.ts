@@ -52,7 +52,9 @@ describe('RedisClient', () => {
     };
 
     // Mock Redis constructor
-    (Redis as any).mockImplementation(() => mockRedisInstance);
+    (Redis as any).mockImplementation(function() {
+      return mockRedisInstance;
+    });
 
     redisClient = new RedisClient();
   });
