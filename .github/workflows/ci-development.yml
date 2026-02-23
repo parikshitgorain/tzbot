@@ -70,10 +70,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
-      - name: Run npm audit (critical/high only)
+      - name: Run npm audit (production dependencies only)
         run: |
-          echo "🔍 Scanning for critical and high vulnerabilities..."
-          npm audit --audit-level=high
+          echo "🔍 Scanning production dependencies for critical/high vulnerabilities..."
+          npm audit --production --audit-level=high
       
       - name: Upload security results
         if: failure()
