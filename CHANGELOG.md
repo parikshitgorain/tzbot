@@ -1,3 +1,15 @@
+## [1.0.0-dev.4](https://github.com/parikshitgorain/tzbot/compare/v1.0.0-dev.3...v1.0.0-dev.4) (2026-02-23)
+
+### 🐛 Bug Fixes
+
+* add vitest config with path aliases and create violation-tracker stub ([8286257](https://github.com/parikshitgorain/tzbot/commit/8286257692e4658ff2f81e3683d50f1ebf6db0b2))
+* reduce concurrent encryption test size to avoid 5000ms timeout in CI ([8f649cf](https://github.com/parikshitgorain/tzbot/commit/8f649cfc39bc19aaa49d44a9fa19cb703a58314a))
+* reliable dev file cleanup in release promotion + general failure notification ([5cf7999](https://github.com/parikshitgorain/tzbot/commit/5cf7999239acc086cdd2b3209e37dc438b2ff9c6))
+* resolve all test failures - setup env loading, timing issues, DB mocking, circular dep ([33ba56c](https://github.com/parikshitgorain/tzbot/commit/33ba56c050972da1c07da07e75f39964e74fe365))
+* resolve final test failures - skip outdated warn command tests ([f1de907](https://github.com/parikshitgorain/tzbot/commit/f1de90700f87b4b5af54e6119bb1525327ac1011))
+* resolve remaining test failures - improve from 9 to 4 failed test files ([f010ca2](https://github.com/parikshitgorain/tzbot/commit/f010ca20a4a0d49ebcc8d4a85a8fbba37de6a78f))
+* update all tests to match new giveaway implementation with guildId and hostedBy fields ([c9fffb1](https://github.com/parikshitgorain/tzbot/commit/c9fffb1b0846bdfed0c067bfb867bd8175db809a))
+
 ## [1.0.0-dev.3](https://github.com/parikshitgorain/tzbot/compare/v1.0.0-dev.2...v1.0.0-dev.3) (2026-02-23)
 
 ### ✨ Features
