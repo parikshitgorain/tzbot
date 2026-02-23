@@ -324,7 +324,7 @@ Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           BREAKING=$(echo "$CHANGELOG" | grep -iE "!:" || echo "")
           OTHERS=$(echo "$CHANGELOG" | grep -viE "^- (feat|feature|fix|bugfix|chore\(release\))" || echo "")
           
-          CHANGELOG_CONTENT="## What's Changed\n\n"
+          CHANGELOG_CONTENT="## What Changed\n\n"
           
           if [ -n "$BREAKING" ]; then
             CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### ⚠️ BREAKING CHANGES\n${BREAKING}\n\n"
