@@ -152,13 +152,21 @@ jobs:
       
       - name: Setup SSH
         run: |
-          if [ ! -f deployment/scripts/setup_ssh.sh ]; then
-            echo "❌ setup_ssh.sh not found!"
-            echo "Current directory: $(pwd)"
-            echo "Files in deployment/scripts:"
-            ls -la deployment/scripts/ || echo "Directory doesn't exist"
+          if [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+            echo "❌ VPS_SSH_KEY secret is not set or empty"
             exit 1
           fi
+          
+          if [ -z "${{ secrets.VPS_HOST }}" ]; then
+            echo "❌ VPS_HOST secret is not set or empty"
+            exit 1
+          fi
+          
+          if [ ! -f deployment/scripts/setup_ssh.sh ]; then
+            echo "❌ setup_ssh.sh not found!"
+            exit 1
+          fi
+          
           chmod +x deployment/scripts/setup_ssh.sh
           deployment/scripts/setup_ssh.sh "${{ secrets.VPS_SSH_KEY }}" "${{ secrets.VPS_HOST }}"
       
