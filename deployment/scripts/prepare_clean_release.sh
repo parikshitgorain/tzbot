@@ -22,6 +22,11 @@ cp tsconfig.json "$OUTPUT_DIR/"
 cp .env.example "$OUTPUT_DIR/"
 cp README.md "$OUTPUT_DIR/"
 
+# Copy .github/workflows for CD and release workflows
+echo "📦 Copying workflow files..."
+mkdir -p "$OUTPUT_DIR/.github"
+cp -r .github/workflows "$OUTPUT_DIR/.github/" 2>/dev/null || echo "⚠️ No workflows directory found"
+
 # Copy source (needed for some runtime scenarios)
 mkdir -p "$OUTPUT_DIR/src"
 cp -r src "$OUTPUT_DIR/"
