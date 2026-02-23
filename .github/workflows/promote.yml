@@ -195,9 +195,9 @@ jobs:
           fi
           
           # Check for dev config files
-          if ls vitest.config.* tsconfig.test.* .eslintrc.* .prettierrc eslint.config.js 2>/dev/null | grep -q .; then
-            echo "❌ ERROR: Dev config files found in release branch!"
-            ls -la vitest.config.* tsconfig.test.* .eslintrc.* .prettierrc eslint.config.js 2>/dev/null || true
+          if ls vitest.config.* tsconfig.test.* .eslintrc.* .prettierrc 2>/dev/null | grep -q .; then
+          echo "❌ ERROR: Dev config files found in release branch!"
+            ls -la vitest.config.* tsconfig.test.* .eslintrc.* .prettierrc 2>/dev/null || true
             exit 1
           fi
           

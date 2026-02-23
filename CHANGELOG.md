@@ -27,8 +27,61 @@ All notable changes to this project will be documented in this file.
 
 * Add comprehensive giveaway enhancement documentation
 * Add giveaway quick reference guide for moderators
-* Add UI comparison guide showing before/after improvements
 * Add update summary with migration instructions
+
+## [1.0.0-dev.2](https://github.com/parikshitgorain/tzbot/compare/v1.0.0-dev.1...v1.0.0-dev.2) (2026-02-23)
+
+### ⚠ BREAKING CHANGES
+
+* None
+
+Features:
+- Add interaction-response.ts utility for safe Discord responses
+- Add comprehensive CI/CD pipeline review documentation
+- Add webhook troubleshooting and setup guides
+- Add deployment action plan with prioritized fixes
+
+Documentation:
+- CICD_REVIEW.md: Complete technical review of workflows
+- CICD_ACTION_PLAN.md: Implementation roadmap for improvements
+- CICD_CHECKLIST.md: Quick reference for deployments
+- INTERACTION_ERROR_HANDLING.md: Discord interaction best practices
+- WEBHOOK_TROUBLESHOOTING.md: Fix webhook notification issues
+- WEBHOOK_SETUP_QUICK_START.md: 5-minute webhook setup guide
+
+Bug Fixes:
+- Fix 'Unknown interaction' error when operations take >3 seconds
+- Fix 'Interaction already acknowledged' double-response errors
+- Prevent deployment notification failures from blocking CI/CD
+- Add retry logic and proper state checking for interactions
+
+Improvements:
+- Wrap relay manager initialization in try-catch
+- Add interaction state validation before responding
+- Improve error logging with specific Discord error codes
+- Add DISCORD_WEBHOOK_URL to .env.example
+
+Scripts:
+- Update setup-webhook.sh for interactive webhook configuration
+- Update test-webhook.sh for comprehensive webhook testing
+
+Closes: Interaction error handling issues
+Closes: Missing webhook notifications issue
+
+### 🐛 Bug Fixes
+
+* add .js extensions to all imports in giveaway module ([4910c64](https://github.com/parikshitgorain/tzbot/commit/4910c649a076b3cc9b24a26e146b36c7cc7cc4a9))
+* add .js extensions to all relative imports in giveaway module ([ca38fc1](https://github.com/parikshitgorain/tzbot/commit/ca38fc1d8507d63789acb6fdb97db8369c5880ba))
+* add .js extensions to relative imports for ES modules ([470cbcb](https://github.com/parikshitgorain/tzbot/commit/470cbcb478d821db1b59110dda8453bdbb630181))
+* **ci:** add cleanup step to remove dev files from release branch after merge ([807c16d](https://github.com/parikshitgorain/tzbot/commit/807c16d7d97bd2fa182969de6e54a12c5f053803))
+* improve Discord interaction error handling and add CI/CD documentation ([efd92ee](https://github.com/parikshitgorain/tzbot/commit/efd92eedcc5cdb2fbbaef7ee41667ccbf06a635e))
+* **lint:** add ESLint v10 flat config with relaxed rules for existing codebase ([50511d4](https://github.com/parikshitgorain/tzbot/commit/50511d4a7f18d50ed9526da6eb274bb768e90e25))
+* **lint:** replace any types with unknown and fix regex escape warnings ([927006f](https://github.com/parikshitgorain/tzbot/commit/927006f96051c84dfb77cfddeff5cb865e293ac9))
+* move discord.js from devDependencies to dependencies ([4096474](https://github.com/parikshitgorain/tzbot/commit/4096474e96e3134d33a540b87065e421eb417d6f))
+* prevent double defer in announcement-setup command ([0ead53e](https://github.com/parikshitgorain/tzbot/commit/0ead53ed1e06ad8f6b51dc1448b5763960f540d3))
+* prevent duplicate announcement relay listener registration ([679a885](https://github.com/parikshitgorain/tzbot/commit/679a8852d50dd7d6b35a76d032b817e4b002808c))
+* prevent duplicate message relay by properly managing event listeners ([8f6f978](https://github.com/parikshitgorain/tzbot/commit/8f6f978d2ea183d5721e13869337265905a93ba2))
+>>>>>>> 995aab0b4c8c840a43c7b21b79f096f309d55a91
 
 ## 1.0.0-dev.1 (2026-02-22)
 
