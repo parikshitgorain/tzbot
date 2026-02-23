@@ -255,7 +255,7 @@ jobs:
             exit 1
           fi
           
-          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           
           if ! ssh-keygen -l -f ~/.ssh/deploy_key &>/dev/null; then
@@ -306,6 +306,13 @@ jobs:
             'bash -s' << 'ENDSSH'
           set -e
           LOCK_FILE="/var/lock/tzbot_deploy.lock"
+          
+          cleanup_lock() {
+            rm -f "$LOCK_FILE"
+            echo "🔓 Lock cleanup on exit"
+          }
+          
+          trap cleanup_lock EXIT INT TERM
           
           if [ -f "$LOCK_FILE" ]; then
             LOCK_AGE=$(($(date +%s) - $(stat -c %Y "$LOCK_FILE" 2>/dev/null || stat -f %m "$LOCK_FILE")))
@@ -787,7 +794,7 @@ NOTIFIER_EOF
             SSH_KEY="${{ secrets.DEPLOY_KEY }}"
           fi
           
-          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           
           ssh-keyscan -H "${{ steps.dns.outputs.vps_ip }}" >> ~/.ssh/known_hosts 2>/dev/null
