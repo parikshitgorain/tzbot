@@ -10,7 +10,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { PusherClient } from '../../src/services/pusher/client.js';
 import type { ConnectionState } from '../../src/services/pusher/types.js';
 
-describe('Pusher Integration Tests', () => {
+// Skip in CI environments - Pusher requires real network access to Kick's infrastructure
+const isCI = !!process.env.CI;
+
+describe.skipIf(isCI)('Pusher Integration Tests', () => {
   let client: PusherClient;
 
   beforeEach(() => {

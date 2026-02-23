@@ -6,8 +6,9 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
-// Skip these tests if environment is not configured
-const hasRedisConfig = process.env.REDIS_URL && process.env.DISCORD_TOKEN;
+// Skip these tests if environment is not configured or if running in CI
+// (CI environments have REDIS_URL set in .env.test but no actual Redis instance)
+const hasRedisConfig = !process.env.CI && process.env.REDIS_URL && process.env.DISCORD_TOKEN;
 
 describe.skipIf(!hasRedisConfig)('Redis Integration Tests', () => {
   let client: any;
