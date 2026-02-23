@@ -63,6 +63,22 @@ jobs:
           fi
           echo "✅ Commit verified"
       
+      - name: Safety check - validate branches
+        run: |
+          SOURCE="${{ inputs.source_branch }}"
+          TARGET="${{ inputs.target_branch }}"
+          echo "Source branch: $SOURCE"
+          echo "Target branch: $TARGET"
+          if [ "$SOURCE" = "$TARGET" ]; then
+            echo "❌ ERROR: source_branch and target_branch are the same ($SOURCE). Aborting."
+            exit 1
+          fi
+          if [ "$TARGET" = "Development" ] || [ "$TARGET" = "development" ]; then
+            echo "❌ ERROR: Promotion target cannot be the Development branch. Aborting to protect Development."
+            exit 1
+          fi
+          echo "✅ Branch safety check passed"
+
       - name: Checkout target branch
         run: |
           git checkout ${{ inputs.target_branch }}
@@ -75,6 +91,14 @@ jobs:
           echo "Commit SHA: ${{ inputs.commit_sha }}"
           echo "Commit Author: ${{ inputs.commit_author }}"
           
+          # Safety: confirm we are on the target branch, never on source/Development
+          CURRENT_BRANCH=$(git branch --show-current)
+          if [ "$CURRENT_BRANCH" != "${{ inputs.target_branch }}" ]; then
+            echo "❌ ERROR: Expected to be on ${{ inputs.target_branch }} but found $CURRENT_BRANCH. Aborting."
+            exit 1
+          fi
+          echo "✅ Confirmed on target branch: $CURRENT_BRANCH"
+          
           # Requirement 2.1: Merge changes to Release_Branch
           # Requirement 2.2: Use --no-ff to preserve commit history
           if git merge --no-ff ${{ inputs.source_branch }} -m "Merge ${{ inputs.source_branch }} into ${{ inputs.target_branch }} - Auto-promotion after successful CI" -m "Promoted commit: ${{ inputs.commit_sha }}" -m "Original author: ${{ inputs.commit_author }}"; then
@@ -83,8 +107,9 @@ jobs:
           else
             echo "⚠️ Merge conflicts detected - attempting auto-resolution"
             
-            # Auto-resolve conflicts for dev-only files (prefer deletion in release)
-            # These files should not exist in release branch
+            # Safety: Only remove dev-only files when merging INTO a release/production branch,
+            # never from the Development/source branch itself.
+            # These files should not exist in the release branch.
             git rm -rf tests/ .kiro/specs/ .agents/ || true
             git rm -f vitest.config.ts tsconfig.test.json .eslintrc.json .prettierrc eslint.config.js skills-lock.json || true
             git rm -f scripts/clear-commands.ts scripts/register-commands-to-guild.ts scripts/setup-test-db.ts || true
