@@ -491,14 +491,13 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "chore: promote clean build to release
-
-- Source commit: ${GITHUB_SHA:0:7}
-- Author: ${{ github.actor }}
-- Version: ${{ env.RELEASE_VERSION }}
-- Build date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-[skip ci]"
-          fi
+          
+          - Source commit: ${GITHUB_SHA:0:7}
+          - Author: ${{ github.actor }}
+          - Version: ${{ env.RELEASE_VERSION }}
+          - Build date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          
+          [skip ci]"
           fi
       
       - name: Push to release branch
