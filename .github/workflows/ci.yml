@@ -11,10 +11,49 @@ on:
       - release
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 jobs:
+  bump-dev-version:
+    name: Bump Dev Version
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/Development' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Bump prerelease version
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Bump prerelease version
+          npm version prerelease --preid=dev --no-git-tag-version
+          
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "New version: $NEW_VERSION"
+          
+          # Commit and push if version changed
+          if [ "$CURRENT_VERSION" != "$NEW_VERSION" ]; then
+            git add package.json package-lock.json
+            git commit -m "chore: bump dev version to $NEW_VERSION [skip ci]"
+            git push origin Development
+          fi
+
   lint-and-typecheck:
     name: Lint & Type Check
     runs-on: ubuntu-latest
