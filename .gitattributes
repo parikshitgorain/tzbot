@@ -22,5 +22,5 @@ scripts/setup-test-db.ts export-ignore
 
 # Documentation that's not needed in production
 *.md export-ignore
-!README.md export-ignore
-!CHANGELOG.md export-ignore
+\!README.md export-ignore
+\!CHANGELOG.md export-ignore
