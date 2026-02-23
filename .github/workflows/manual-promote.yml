@@ -1,0 +1,63 @@
+name: Manual Promote to Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  manual-promote:
+    name: Manual Promote to Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Development
+        uses: actions/checkout@v4
+        with:
+          ref: Development
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build production bundle
+        run: npm run build
+      
+      - name: Prepare clean release
+        run: |
+          chmod +x deployment/scripts/prepare_clean_release.sh
+          deployment/scripts/prepare_clean_release.sh /tmp/clean-build
+      
+      - name: Promote to release branch
+        run: |
+          chmod +x deployment/scripts/promote_to_release.sh
+          deployment/scripts/promote_to_release.sh /tmp/clean-build ${{ github.sha }}
+      
+      - name: Send Discord notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            COLOR=3066993
+            TITLE="✅ Manual Promotion Successful"
+            DESC="Clean build manually promoted to release"
+          else
+            COLOR=15158332
+            TITLE="❌ Manual Promotion Failed"
+            DESC="Failed to manually promote to release branch"
+          fi
+          
+          curl -H "Content-Type: application/json" -X POST \
+            -d "{\"embeds\":[{\"title\":\"${TITLE}\",\"description\":\"${DESC}\",\"color\":${COLOR},\"fields\":[{\"name\":\"Commit\",\"value\":\"\`${GITHUB_SHA:0:7}\`\"},{\"name\":\"Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
+        continue-on-error: true
