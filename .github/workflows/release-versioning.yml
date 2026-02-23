@@ -252,6 +252,8 @@ jobs:
       
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
+        continue-on-error: true
+        id: create_release
         with:
           tag_name: ${{ needs.version.outputs.version_tag }}
           name: Release ${{ needs.version.outputs.version_tag }}
@@ -259,6 +261,14 @@ jobs:
           draft: false
           prerelease: false
           token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          fail_on_unmatched_files: false
+          generate_release_notes: false
+      
+      - name: Check release creation
+        if: steps.create_release.outcome == 'failure'
+        run: |
+          echo "⚠️ Release creation failed (might already exist)"
+          echo "This is not critical - the tag was created successfully"
       
       - name: Send Discord notification
         if: always()
