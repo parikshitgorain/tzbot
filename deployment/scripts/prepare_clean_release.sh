@@ -78,9 +78,13 @@ rm -f *_COMPLETE.md
 rm -f CHANGELOG.md
 rm -f *.log
 
-# Remove VCS files
+# Remove VCS files (keep .github/workflows for CD/release workflows)
 rm -rf .git
-rm -rf .github
+rm -rf .github/ISSUE_TEMPLATE 2>/dev/null || true
+rm -rf .github/pull_request_template.md 2>/dev/null || true
+rm -f .github/BRANCHING_STRATEGY.md 2>/dev/null || true
+rm -f .github/DEPLOYMENT_GUIDE.md 2>/dev/null || true
+# Keep .github/workflows/ for CD and release workflows
 rm -f .gitignore
 rm -f .gitattributes
 rm -f .neon
