@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { InMemoryStateStore } from '../../../../src/moderation/rate-limiter/state-store.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { InMemoryStateStore, RedisStateStore } from '../../../../src/moderation/rate-limiter/state-store.js';
+import type { RedisClient } from '../../../../src/core/cache/redis.client.js';
 
 describe('InMemoryStateStore', () => {
   let store: InMemoryStateStore;
@@ -148,6 +149,114 @@ describe('InMemoryStateStore', () => {
 
       const keys = await store.getAllKeys();
       expect(keys.length).toBe(3);
+    });
+  });
+});
+
+describe('RedisStateStore', () => {
+  let mockRedis: {
+    get: ReturnType<typeof vi.fn>;
+    set: ReturnType<typeof vi.fn>;
+    del: ReturnType<typeof vi.fn>;
+    keys: ReturnType<typeof vi.fn>;
+  };
+  let store: RedisStateStore;
+
+  beforeEach(() => {
+    mockRedis = {
+      get: vi.fn(),
+      set: vi.fn().mockResolvedValue(undefined),
+      del: vi.fn().mockResolvedValue(undefined),
+      keys: vi.fn().mockResolvedValue([]),
+    };
+    store = new RedisStateStore(mockRedis as unknown as RedisClient);
+  });
+
+  describe('getLastMessageTime()', () => {
+    it('returns null when key not in Redis', async () => {
+      mockRedis.get.mockResolvedValue(null);
+      expect(await store.getLastMessageTime('u1', 'c1')).toBeNull();
+    });
+
+    it('returns parsed integer from Redis', async () => {
+      mockRedis.get.mockResolvedValue('12345');
+      expect(await store.getLastMessageTime('u1', 'c1')).toBe(12345);
+    });
+
+    it('falls back to in-memory on Redis error', async () => {
+      mockRedis.get.mockRejectedValue(new Error('Redis down'));
+      expect(await store.getLastMessageTime('u1', 'c1')).toBeNull();
+    });
+  });
+
+  describe('setLastMessageTime()', () => {
+    it('calls Redis set with correct key', async () => {
+      await store.setLastMessageTime('u1', 'c1', 1000);
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        expect.stringContaining('ratelimit:msg'),
+        '1000',
+        expect.any(Number),
+      );
+    });
+
+    it('falls back to in-memory on Redis error', async () => {
+      mockRedis.set.mockRejectedValue(new Error('Redis down'));
+      await expect(store.setLastMessageTime('u1', 'c1', 1000)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('getViolationExpiry()', () => {
+    it('returns null when key not in Redis', async () => {
+      mockRedis.get.mockResolvedValue(null);
+      expect(await store.getViolationExpiry('u1', 'c1')).toBeNull();
+    });
+
+    it('returns parsed expiry time', async () => {
+      mockRedis.get.mockResolvedValue('9999');
+      expect(await store.getViolationExpiry('u1', 'c1')).toBe(9999);
+    });
+
+    it('falls back to in-memory on Redis error', async () => {
+      mockRedis.get.mockRejectedValue(new Error('Redis down'));
+      expect(await store.getViolationExpiry('u1', 'c1')).toBeNull();
+    });
+  });
+
+  describe('setViolationExpiry()', () => {
+    it('calls Redis set with violation key', async () => {
+      await store.setViolationExpiry('u1', 'c1', 9999);
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        expect.stringContaining('ratelimit:violation'),
+        '9999',
+        expect.any(Number),
+      );
+    });
+
+    it('falls back to in-memory on Redis error', async () => {
+      mockRedis.set.mockRejectedValue(new Error('Redis down'));
+      await expect(store.setViolationExpiry('u1', 'c1', 9999)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('removeExpired()', () => {
+    it('resolves without error', async () => {
+      await expect(store.removeExpired(Date.now())).resolves.toBeUndefined();
+    });
+  });
+
+  describe('getAllKeys()', () => {
+    it('returns combined msg and violation keys from Redis', async () => {
+      mockRedis.keys
+        .mockResolvedValueOnce(['ratelimit:msg:c1:u1'])
+        .mockResolvedValueOnce(['ratelimit:violation:c1:u1']);
+      const keys = await store.getAllKeys();
+      expect(keys).toHaveLength(2);
+    });
+
+    it('falls back to in-memory on Redis error', async () => {
+      mockRedis.keys.mockRejectedValue(new Error('Redis down'));
+      const keys = await store.getAllKeys();
+      expect(Array.isArray(keys)).toBe(true);
     });
   });
 });

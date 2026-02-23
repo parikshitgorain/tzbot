@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   SpamDetector,
   DEFAULT_SPAM_THRESHOLDS,
@@ -92,6 +92,94 @@ describe('SpamDetector', () => {
       expect(DEFAULT_SPAM_THRESHOLDS.identicalWindow).toBe(10);
       expect(DEFAULT_SPAM_THRESHOLDS.rapidMessages).toBe(10);
       expect(DEFAULT_SPAM_THRESHOLDS.rapidWindow).toBe(5);
+    });
+  });
+
+  describe('setSpamCooldown()', () => {
+    it('sets cooldown so isInSpamCooldown returns true', () => {
+      detector.setSpamCooldown('user1');
+      expect(detector.isInSpamCooldown('user1')).toBe(true);
+    });
+
+    it('creates history entry when user has none', () => {
+      detector.setSpamCooldown('newuser');
+      expect(detector.isInSpamCooldown('newuser')).toBe(true);
+    });
+  });
+
+  describe('isInSpamCooldown()', () => {
+    it('returns false for user with no history', () => {
+      expect(detector.isInSpamCooldown('nobody')).toBe(false);
+    });
+
+    it('returns false after cooldown expires', () => {
+      detector.setSpamCooldown('user1');
+      // Manually expire cooldown
+      const h = (detector as any).userHistory as Map<string, { spamCooldownUntil?: Date }>;
+      h.get('user1')!.spamCooldownUntil = new Date(Date.now() - 1000);
+      expect(detector.isInSpamCooldown('user1')).toBe(false);
+    });
+  });
+
+  describe('incrementSpamCount()', () => {
+    it('increments and returns current count', () => {
+      detector.setSpamCooldown('user1');
+      expect(detector.incrementSpamCount('user1')).toBe(1);
+      expect(detector.incrementSpamCount('user1')).toBe(2);
+    });
+
+    it('returns 0 for user with no history', () => {
+      expect(detector.incrementSpamCount('ghost')).toBe(0);
+    });
+  });
+
+  describe('getSpamCount()', () => {
+    it('returns 0 for user with no history', () => {
+      expect(detector.getSpamCount('nobody')).toBe(0);
+    });
+
+    it('returns accumulated count', () => {
+      detector.setSpamCooldown('user1');
+      detector.incrementSpamCount('user1');
+      detector.incrementSpamCount('user1');
+      expect(detector.getSpamCount('user1')).toBe(2);
+    });
+  });
+
+  describe('clearAllHistory()', () => {
+    it('clears all user histories', () => {
+      const thresholds: SpamThresholds = {
+        identicalMessages: 2, identicalWindow: 10, rapidMessages: 100, rapidWindow: 5,
+      };
+      const det = new SpamDetector(thresholds);
+      const now = new Date();
+      det.checkSpam('u1', 'm1', 'msg', now);
+      det.checkSpam('u2', 'm2', 'msg', now);
+      det.clearAllHistory();
+      expect(det.checkSpam('u1', 'm3', 'msg', now).isSpam).toBe(false);
+      expect(det.checkSpam('u2', 'm4', 'msg', now).isSpam).toBe(false);
+    });
+  });
+
+  describe('getUserMessageCount()', () => {
+    it('returns 0 for user with no history', () => {
+      expect(detector.getUserMessageCount('nobody', 10)).toBe(0);
+    });
+
+    it('counts messages within the window', () => {
+      const now = new Date();
+      detector.checkSpam('user1', 'm1', 'a', now);
+      detector.checkSpam('user1', 'm2', 'b', now);
+      detector.checkSpam('user1', 'm3', 'c', now);
+      expect(detector.getUserMessageCount('user1', 30, now)).toBe(3);
+    });
+
+    it('excludes messages outside the window', () => {
+      const old = new Date(Date.now() - 60_000);
+      const now = new Date();
+      detector.checkSpam('user1', 'm1', 'old msg', old);
+      detector.checkSpam('user1', 'm2', 'new msg', now);
+      expect(detector.getUserMessageCount('user1', 5, now)).toBe(1);
     });
   });
 });

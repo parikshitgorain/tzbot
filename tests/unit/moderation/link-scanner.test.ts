@@ -1,5 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LinkScanner } from '../../../src/moderation/link-scanner.js';
+
+// Mock the Google Safe Browsing client module-level singleton
+vi.mock('@/services/google-safe-browsing/client.js', () => ({
+  googleSafeBrowsingClient: {
+    isConfigured: vi.fn().mockReturnValue(false),
+    checkUrl: vi.fn(),
+  },
+}));
+
+import { googleSafeBrowsingClient } from '@/services/google-safe-browsing/client.js';
 
 describe('LinkScanner', () => {
   let scanner: LinkScanner;
@@ -202,6 +212,61 @@ describe('LinkScanner', () => {
         'user1',
       );
       expect(result.isMalicious).toBe(false);
+    });
+  });
+
+  describe('scanMessage() with Google Safe Browsing enabled', () => {
+    it('returns malicious when GSB flags a URL', async () => {
+      (googleSafeBrowsingClient.isConfigured as ReturnType<typeof vi.fn>).mockReturnValue(true);
+      (googleSafeBrowsingClient.checkUrl as ReturnType<typeof vi.fn>).mockResolvedValue({
+        isSafe: false,
+        threats: ['MALWARE'],
+        url: 'https://evil.com',
+        cached: false,
+        checkedAt: new Date(),
+      });
+
+      const gsbScanner = new LinkScanner(new Set(), true);
+      const result = await gsbScanner.scanMessage('visit https://evil.com', 'user1');
+      expect(result.isMalicious).toBe(true);
+      expect(result.reason).toContain('MALWARE');
+    });
+
+    it('returns isMalicious=false when GSB reports URL as safe', async () => {
+      (googleSafeBrowsingClient.isConfigured as ReturnType<typeof vi.fn>).mockReturnValue(true);
+      (googleSafeBrowsingClient.checkUrl as ReturnType<typeof vi.fn>).mockResolvedValue({
+        isSafe: true,
+        threats: [],
+        url: 'https://safe.com',
+        cached: false,
+        checkedAt: new Date(),
+      });
+
+      const gsbScanner = new LinkScanner(new Set(), true);
+      const result = await gsbScanner.scanMessage('visit https://safe.com', 'user1');
+      expect(result.isMalicious).toBe(false);
+    });
+
+    it('returns isMalicious=false when GSB throws (fail-safe)', async () => {
+      (googleSafeBrowsingClient.isConfigured as ReturnType<typeof vi.fn>).mockReturnValue(true);
+      (googleSafeBrowsingClient.checkUrl as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('API error'));
+
+      const gsbScanner = new LinkScanner(new Set(), true);
+      const result = await gsbScanner.scanMessage('visit https://example.com', 'user1');
+      expect(result.isMalicious).toBe(false);
+    });
+
+    it('adds https:// prefix for URL without protocol before calling GSB', async () => {
+      (googleSafeBrowsingClient.isConfigured as ReturnType<typeof vi.fn>).mockReturnValue(true);
+      (googleSafeBrowsingClient.checkUrl as ReturnType<typeof vi.fn>).mockResolvedValue({
+        isSafe: true, threats: [], url: '', cached: false, checkedAt: new Date(),
+      });
+
+      const gsbScanner = new LinkScanner(new Set(), true);
+      await gsbScanner.scanMessage('visit www.example.com', 'user1');
+      expect(googleSafeBrowsingClient.checkUrl).toHaveBeenCalledWith(
+        expect.stringContaining('https://'),
+      );
     });
   });
 });
