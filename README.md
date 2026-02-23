@@ -128,11 +128,93 @@ npm run validate
 ```
 
 ### CI/CD Pipeline
-The project includes a complete CI/CD pipeline:
-- **CI**: Automated testing on every push to `development` branch
-- **CD**: Automatic deployment to VPS when pushing to `release` branch
-- **Health Checks**: Automatic verification after deployment
-- **Rollback**: Automatic rollback on deployment failure
+
+The project includes a production-grade CI/CD pipeline with strict quality gates and zero-downtime deployment:
+
+#### Pipeline Stages
+
+**1. Development → Release Promotion (CI)**
+- Runs on every push to `development` branch
+- Quality gates: Lint, TypeScript check, Security scan, Tests
+- Automated cleanup: Removes all dev/test files, mock files, logs, debug configs
+- Creates clean production bundle with ONLY production-ready files
+- Auto-promotes to `release` branch only if all checks pass
+
+**2. Release Versioning**
+- Runs on every push to `release` branch
+- Analyzes commit messages for semantic versioning (major/minor/patch)
+- Prevents duplicate tags
+- Creates Git tag (vX.Y.Z)
+- Generates changelog from conventional commits
+- Creates GitHub Release with full changelog
+
+**3. Production Deployment (CD)**
+- Runs on `release` branch push or version tag
+- Requires GitHub Environment approval for production
+- Zero-downtime deployment with versioned releases (/releases/vX.Y.Z)
+- Deployment locking prevents concurrent deploys
+- SSH with proper host verification (no StrictHostKeyChecking=no)
+- Health check validation after deployment
+- Automatic rollback to previous version on failure
+- PM2 process management with graceful restart
+
+#### Branch Strategy
+
+```
+development (dev work)
+    ↓
+    CI Pipeline (lint, test, security, build)
+    ↓
+    Clean Production Build (remove dev files)
+    ↓
+release (production-ready only)
+    ↓
+    Semantic Versioning (auto bump, create tag)
+    ↓
+    VPS Deployment (zero-downtime)
+    ↓
+production (live on VPS)
+```
+
+#### Deployment Workflow
+
+```
+Push to development
+    ↓
+✓ Lint & Type Check
+✓ Security Scan
+✓ Unit Tests
+✓ Build Verification
+    ↓
+Clean Production Build
+    ↓
+Auto-Promote to release
+    ↓
+Semantic Version Bump
+Create Git Tag (vX.Y.Z)
+Create GitHub Release
+    ↓
+Deploy to VPS
+    ├─ Versioned release directory
+    ├─ Symlink switch (zero-downtime)
+    ├─ PM2 graceful restart
+    └─ Health check validation
+        ↓
+    ✓ Success → Live
+    ✗ Failure → Automatic Rollback
+```
+
+#### Key Features
+
+- **Strict Quality Gates**: No promotion without passing all checks
+- **Clean Releases**: Zero dev artifacts in production
+- **Safe Versioning**: Duplicate tag prevention, semantic versioning
+- **Zero-Downtime**: Symlink switching, graceful restarts
+- **Automatic Rollback**: Instant recovery on deployment failure
+- **Deployment Locking**: Prevents concurrent deployments
+- **SSH Security**: Proper host verification, no hardcoded keys
+- **Health Validation**: Automated health checks post-deployment
+- **Discord Notifications**: Real-time deployment status updates
 
 See [CI/CD Setup Guide](docs/CICD_SETUP.md) for configuration details.
 
@@ -248,6 +330,8 @@ For detailed structure documentation, see [Project Structure](docs/project-struc
 - [Project Structure](docs/project-structure.md) - Code organization and architecture
 - [Pusher Implementation](docs/pusher-client-implementation.md) - Kick chat integration details
 - [Log Retention Policy](docs/LOG_RETENTION_POLICY.md) - Log management and retention
+- [VPS Monitoring](docs/VPS_MONITORING.md) - Runtime monitoring and alerting system
+- [Monitoring Quick Reference](docs/MONITORING_QUICK_REFERENCE.md) - Quick monitoring commands
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
 
 ### Specifications

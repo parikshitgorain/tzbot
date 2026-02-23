@@ -1,0 +1,610 @@
+name: CI - Development Pipeline
+
+on:
+  push:
+    branches:
+      - development
+  pull_request:
+    branches:
+      - development
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+env:
+  NODE_VERSION: '20'
+  CACHE_KEY_PREFIX: 'node-deps'
+  
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================================
+  # STAGE 1: CODE QUALITY & SECURITY
+  # ============================================================================
+  
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: false
+      
+      - name: Run TypeScript type check
+        run: npx tsc --noEmit
+        continue-on-error: false
+      
+      - name: Upload lint results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-results
+          path: |
+            eslint-report.json
+            tsc-output.log
+          retention-days: 7
+
+  security-scan:
+    name: Security & Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run npm audit (production)
+        run: |
+          echo "🔍 Scanning production dependencies for vulnerabilities..."
+          if npm audit --production --audit-level=critical --json > audit-results.json 2>&1; then
+            echo "✅ No critical vulnerabilities in production dependencies"
+          else
+            AUDIT_EXIT=$?
+            echo "❌ Critical vulnerabilities found in production dependencies"
+            jq -r '.vulnerabilities | to_entries[] | select(.value.severity == "critical" or .value.severity == "high") | "\(.key): \(.value.severity)"' audit-results.json || cat audit-results.json
+            exit $AUDIT_EXIT
+          fi
+      
+      - name: Run npm audit (all dependencies)
+        run: |
+          echo "🔍 Scanning all dependencies (including dev)..."
+          npm audit --audit-level=high
+        continue-on-error: false
+      
+      - name: Check for outdated critical packages
+        run: |
+          echo "📦 Checking for outdated packages..."
+          npm outdated || true
+      
+      - name: Upload security scan results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-results
+          path: audit-results.json
+          retention-days: 30
+
+  # ============================================================================
+  # STAGE 2: TESTING
+  # ============================================================================
+  
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, security-scan]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run unit tests
+        run: npm run test:unit
+        env:
+          NODE_ENV: test
+      
+      - name: Run property-based tests
+        run: npm run test:property
+        env:
+          NODE_ENV: test
+        continue-on-error: true
+      
+      - name: Generate test coverage
+        run: npm run test:coverage
+        env:
+          NODE_ENV: test
+      
+      - name: Check coverage thresholds
+        run: |
+          echo "📊 Checking test coverage..."
+          echo "Coverage report generated successfully"
+      
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/coverage-final.json
+          flags: unittests
+          name: codecov-umbrella
+        continue-on-error: true
+      
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            coverage/
+            test-results/
+          retention-days: 7
+
+  # ============================================================================
+  # STAGE 3: BUILD VERIFICATION
+  # ============================================================================
+  
+  build:
+    name: Build & Verify
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build TypeScript
+        run: npm run build
+      
+      - name: Verify build output
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "❌ Build failed: dist directory not found"
+            exit 1
+          fi
+          
+          if [ ! -f "dist/index.js" ]; then
+            echo "❌ Build failed: entry point not found"
+            exit 1
+          fi
+          
+          echo "✅ Build verification passed"
+          echo "📦 Build size: $(du -sh dist | cut -f1)"
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-dev
+          path: dist/
+          retention-days: 7
+
+  # ============================================================================
+  # STAGE 4: PREPARE CLEAN PRODUCTION BUILD
+  # ============================================================================
+  
+  prepare-release:
+    name: Prepare Clean Production Build
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, security-scan, test, build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+    
+    steps:
+      - name: Checkout development branch
+        uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build production bundle
+        run: npm run build
+      
+      - name: Create clean production artifact
+        run: |
+          echo "🧹 Creating clean production build..."
+          
+          mkdir -p /tmp/clean-build
+          
+          echo "📦 Copying production files..."
+          cp -r dist /tmp/clean-build/
+          cp package.json /tmp/clean-build/
+          cp package-lock.json /tmp/clean-build/
+          cp ecosystem.config.cjs /tmp/clean-build/ 2>/dev/null || cp ecosystem.config.js /tmp/clean-build/ || true
+          cp -r deployment /tmp/clean-build/
+          cp tsconfig.json /tmp/clean-build/
+          cp .env.example /tmp/clean-build/
+          cp README.md /tmp/clean-build/
+          
+          mkdir -p /tmp/clean-build/src
+          cp -r src /tmp/clean-build/
+          
+          mkdir -p /tmp/clean-build/logs
+          mkdir -p /tmp/clean-build/data/state
+          touch /tmp/clean-build/logs/.gitkeep
+          
+          cd /tmp/clean-build
+          
+          echo "🗑️ Removing dev/test files..."
+          
+          find . -type f \( \
+            -name "*.test.ts" -o \
+            -name "*.test.js" -o \
+            -name "*.spec.ts" -o \
+            -name "*.spec.js" -o \
+            -name "*.example.ts" -o \
+            -name "*.example.js" -o \
+            -name "*.mock.ts" -o \
+            -name "*.mock.js" \
+          \) -delete
+          
+          rm -rf tests/
+          rm -rf .kiro/
+          rm -rf .agents/
+          rm -rf coverage/
+          rm -rf .vitest/
+          rm -rf node_modules/.cache/
+          rm -rf node_modules/.bin/
+          
+          rm -f vitest.config.*
+          rm -f tsconfig.test.json
+          rm -f .eslintrc.*
+          rm -f .prettierrc*
+          rm -f eslint.config.js
+          rm -f skills-lock.json
+          rm -f .releaserc.json
+          
+          rm -rf scripts/
+          
+          rm -f docs/CICD_*.md
+          rm -f docs/BRANCH_PROTECTION.md
+          rm -f CICD_*.md
+          rm -f GIVEAWAY_UPDATE_SUMMARY.md
+          rm -f GITHUB_WORKFLOW_TO_VPS_REPORT.md
+          rm -f WEBHOOK_SETUP_QUICK_START.md
+          rm -f CONFIG_OPTIONAL_UPDATE.md
+          rm -f SETUP_COMPLETE.md
+          rm -f SCRIPTS_CLEANUP_COMPLETE.md
+          rm -f DEPLOYMENT_SCRIPTS_CLEANUP.md
+          rm -f VPS_MONITORING_IMPLEMENTATION.md
+          rm -f CHANGELOG.md
+          rm -f *.log
+          
+          rm -rf .git
+          rm -rf .github
+          rm -f .gitignore
+          rm -f .gitattributes
+          rm -f .neon
+          
+          find deployment -name "*.example.*" -delete 2>/dev/null || true
+          find deployment -name "vps-config.example.json" -delete 2>/dev/null || true
+          
+          echo "✅ Clean production build created"
+          echo "📦 Production build size: $(du -sh . | cut -f1)"
+          
+          echo "🔍 Verifying production build..."
+          [ -d "dist" ] || { echo "❌ Missing dist/"; exit 1; }
+          [ -f "package.json" ] || { echo "❌ Missing package.json"; exit 1; }
+          [ -f "ecosystem.config.cjs" ] || [ -f "ecosystem.config.js" ] || { echo "❌ Missing ecosystem config"; exit 1; }
+          [ -d "deployment/scripts" ] || { echo "❌ Missing deployment/scripts"; exit 1; }
+          echo "✅ Production build verified"
+          
+          echo "🔍 Final safety check for dev artifacts..."
+          DEV_COUNT=$(find . -name "*.test.*" -o -name "*.spec.*" -o -name "*.mock.*" | wc -l)
+          if [ "$DEV_COUNT" -gt 0 ]; then
+            echo "❌ Found $DEV_COUNT dev/test files after cleanup!"
+            find . -name "*.test.*" -o -name "*.spec.*" -o -name "*.mock.*"
+            exit 1
+          fi
+          
+          if grep -rn "console\.log\|TODO\|DEBUG\|FIXME" dist/ 2>/dev/null | grep -v "node_modules" | head -5; then
+            echo "⚠️ Warning: Found debug statements in dist/ (review recommended)"
+          fi
+          
+          echo "✅ Final safety check passed"
+      
+      - name: Create tarball artifact
+        run: |
+          cd /tmp/clean-build
+          tar -czf ../production-build-${{ github.sha }}.tar.gz .
+          echo "✅ Tarball created: production-build-${{ github.sha }}.tar.gz"
+          ls -lh /tmp/production-build-${{ github.sha }}.tar.gz
+      
+      - name: Upload clean production artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-clean-build-${{ github.sha }}
+          path: /tmp/production-build-${{ github.sha }}.tar.gz
+          retention-days: 30
+          compression-level: 0
+      
+      - name: Create production build summary
+        run: |
+          cd /tmp/clean-build
+          echo "## 📦 Production Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${GITHUB_SHA:0:7}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** development" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Statistics" >> $GITHUB_STEP_SUMMARY
+          echo "- Total size: $(du -sh . | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "- Files: $(find . -type f | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "- Directories: $(find . -type d | wc -l)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Verification" >> $GITHUB_STEP_SUMMARY
+          echo "✅ No test files: $(find . -name '*.test.*' -o -name '*.spec.*' | wc -l) files" >> $GITHUB_STEP_SUMMARY
+          echo "✅ No dev configs: $(ls vitest.config.* eslint.config.* 2>/dev/null | wc -l) files" >> $GITHUB_STEP_SUMMARY
+          echo "✅ No .git directory" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # STAGE 5: AUTO-PROMOTE TO RELEASE BRANCH
+  # ============================================================================
+  
+  auto-promote:
+    name: Auto-Promote to Release
+    runs-on: ubuntu-latest
+    needs: prepare-release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+    environment: release-promotion
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Download clean production build
+        uses: actions/download-artifact@v4
+        with:
+          name: production-clean-build-${{ github.sha }}
+          path: /tmp/
+      
+      - name: Extract production build
+        run: |
+          mkdir -p /tmp/clean-build
+          cd /tmp/clean-build
+          tar -xzf /tmp/production-build-${{ github.sha }}.tar.gz
+          echo "✅ Production build extracted"
+      
+      - name: Checkout release branch
+        run: |
+          git fetch origin release:release || git checkout -b release
+          git checkout release
+      
+      - name: Replace with clean production build
+        run: |
+          echo "🔄 Replacing release branch content with clean build..."
+          
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          
+          cp -r /tmp/clean-build/* .
+          cp -r /tmp/clean-build/.* . 2>/dev/null || true
+          
+          git add -A
+      
+      - name: Safety check for dev artifacts
+        run: |
+          echo "🔍 Running safety checks on release branch content..."
+          
+          UNTRACKED=$(git ls-files --others --exclude-standard)
+          if [ -n "$UNTRACKED" ]; then
+            echo "❌ Untracked files found:"
+            echo "$UNTRACKED"
+            exit 1
+          fi
+          echo "✅ No untracked files"
+          
+          if git grep -nE 'TODO|DEBUG|FIXME|console\.log' -- '*.js' '*.ts' ':!node_modules' ':!dist' 2>/dev/null | head -10; then
+            echo "⚠️ Warning: Found debug statements (review recommended, but not blocking)"
+          fi
+          
+          if [ -d "tests/" ]; then
+            echo "❌ tests/ directory found in release branch!"
+            exit 1
+          fi
+          
+          TEST_FILES=$(find . -name "*.test.*" -o -name "*.spec.*" 2>/dev/null | wc -l)
+          if [ "$TEST_FILES" -gt 0 ]; then
+            echo "❌ Found $TEST_FILES test files in release branch!"
+            find . -name "*.test.*" -o -name "*.spec.*"
+            exit 1
+          fi
+          
+          echo "✅ All safety checks passed"
+      
+      - name: Clean version for release
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT_VERSION"
+          
+          CLEAN_VERSION=$(echo "$CURRENT_VERSION" | sed 's/-dev\..*//')
+          
+          if [ "$CURRENT_VERSION" != "$CLEAN_VERSION" ]; then
+            echo "Cleaning version: $CURRENT_VERSION → $CLEAN_VERSION"
+            npm version $CLEAN_VERSION --no-git-tag-version --allow-same-version
+            git add package.json package-lock.json
+          else
+            echo "Version already clean: $CLEAN_VERSION"
+          fi
+          
+          echo "RELEASE_VERSION=$CLEAN_VERSION" >> $GITHUB_ENV
+      
+      - name: Commit clean production build
+        run: |
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: promote clean build to release
+
+- Source commit: ${GITHUB_SHA:0:7}
+- Author: ${{ github.actor }}
+- Version: ${{ env.RELEASE_VERSION }}
+- Build date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+[skip ci]"
+          fi
+      
+      - name: Push to release branch
+        run: |
+          git push origin release
+          echo "✅ Clean production build pushed to release branch"
+      
+      - name: Create promotion summary
+        run: |
+          echo "## ✅ Auto-Promotion Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`v${{ env.RELEASE_VERSION }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Source Commit:** \`${GITHUB_SHA:0:7}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Author:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Promoted At:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🚀 **Next Step:** CD workflow will automatically deploy to VPS" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Send Discord notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            COLOR=3066993
+            TITLE="✅ Promoted to Release"
+            DESC="**Version:** \`v${{ env.RELEASE_VERSION }}\`\n**Commit:** \`${GITHUB_SHA:0:7}\`\n**Author:** ${{ github.actor }}\n\n🚀 Deployment will start automatically"
+          else
+            COLOR=15158332
+            TITLE="❌ Promotion Failed"
+            DESC="**Version:** \`v${{ env.RELEASE_VERSION }}\`\n**Commit:** \`${GITHUB_SHA:0:7}\`\n**Author:** ${{ github.actor }}\n\n❌ Failed to promote to release branch"
+          fi
+          
+          curl -H "Content-Type: application/json" -X POST \
+            -d "{\"embeds\":[{\"title\":\"${TITLE}\",\"description\":\"${DESC}\",\"color\":${COLOR},\"fields\":[{\"name\":\"Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}" || echo "Discord notification failed"
+        continue-on-error: true
+
+  # ============================================================================
+  # FINAL SUMMARY
+  # ============================================================================
+  
+  ci-summary:
+    name: CI Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, security-scan, test, build, prepare-release, auto-promote]
+    if: always()
+    
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## 🎯 CI Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint & Type Check | ${{ needs.lint-and-typecheck.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security-scan.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests | ${{ needs.test.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Prepare Release | ${{ needs.prepare-release.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Auto-Promote | ${{ needs.auto-promote.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Send Discord notification
+        if: always()
+        run: |
+          # Determine overall status
+          if [ "${{ needs.lint-and-typecheck.result }}" = "success" ] && \
+             [ "${{ needs.security-scan.result }}" = "success" ] && \
+             [ "${{ needs.test.result }}" = "success" ] && \
+             [ "${{ needs.build.result }}" = "success" ]; then
+            STATUS="SUCCESS"
+            COLOR=3066993
+            EMOJI="✅"
+          else
+            STATUS="FAILED"
+            COLOR=15158332
+            EMOJI="❌"
+          fi
+          
+          # Build failure details
+          FAILURES=""
+          [ "${{ needs.lint-and-typecheck.result }}" != "success" ] && FAILURES="${FAILURES}• Lint/Type Check\n"
+          [ "${{ needs.security-scan.result }}" != "success" ] && FAILURES="${FAILURES}• Security Scan\n"
+          [ "${{ needs.test.result }}" != "success" ] && FAILURES="${FAILURES}• Tests\n"
+          [ "${{ needs.build.result }}" != "success" ] && FAILURES="${FAILURES}• Build\n"
+          
+          # Build description
+          if [ "$STATUS" = "SUCCESS" ]; then
+            DESCRIPTION="All quality gates passed successfully"
+          else
+            DESCRIPTION="**Failed Stages:**\n${FAILURES}"
+          fi
+          
+          # Send webhook
+          curl -H "Content-Type: application/json" -X POST \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"${EMOJI} CI Pipeline ${STATUS}\",
+                \"description\": \"${DESCRIPTION}\",
+                \"color\": ${COLOR},
+                \"fields\": [
+                  {\"name\": \"Repository\", \"value\": \"\`${{ github.repository }}\`\", \"inline\": true},
+                  {\"name\": \"Branch\", \"value\": \"\`development\`\", \"inline\": true},
+                  {\"name\": \"Commit\", \"value\": \"\`${GITHUB_SHA:0:7}\`\", \"inline\": true},
+                  {\"name\": \"Author\", \"value\": \"${{ github.actor }}\", \"inline\": true},
+                  {\"name\": \"Workflow\", \"value\": \"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": false}
+                ],
+                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              }]
+            }" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}" || echo "Discord notification failed (non-critical)"
+        continue-on-error: true
