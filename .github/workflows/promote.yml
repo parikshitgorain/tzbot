@@ -136,23 +136,25 @@ jobs:
         run: |
           echo "🧹 Cleaning dev-only files from release branch..."
           
-          # Remove test files and directories
-          git rm -rf tests/ 2>/dev/null || true
-          git rm -rf .kiro/specs/ .agents/ 2>/dev/null || true
+          # Remove test files and directories (physical removal to avoid git rm tracking issues)
+          rm -rf tests/ .kiro/specs/ .agents/ 2>/dev/null || true
           
           # Remove dev config files
-          git rm -f vitest.config.ts vitest.config.js 2>/dev/null || true
-          git rm -f tsconfig.test.json 2>/dev/null || true
-          git rm -f .eslintrc.json .eslintrc.js .eslintrc.cjs 2>/dev/null || true
-          git rm -f .prettierrc .prettierrc.json .prettierrc.js 2>/dev/null || true
-          git rm -f eslint.config.js eslint.config.mjs eslint.config.cjs 2>/dev/null || true
-          git rm -f skills-lock.json 2>/dev/null || true
+          rm -f vitest.config.ts vitest.config.js vitest.config.cjs \
+            tsconfig.test.json \
+            .eslintrc.json .eslintrc.js .eslintrc.cjs \
+            .prettierrc .prettierrc.json .prettierrc.js \
+            eslint.config.js eslint.config.mjs eslint.config.cjs \
+            skills-lock.json 2>/dev/null || true
           
           # Remove dev scripts
-          git rm -f scripts/clear-commands.ts scripts/register-commands-to-guild.ts scripts/setup-test-db.ts 2>/dev/null || true
+          rm -f scripts/clear-commands.ts scripts/register-commands-to-guild.ts scripts/setup-test-db.ts 2>/dev/null || true
           
           # Remove example files
-          find . -path ./node_modules -prune -o \( -name "*.example.ts" -o -name "*.example.js" \) -print0 2>/dev/null | xargs -0 git rm -f 2>/dev/null || true
+          find . -path ./node_modules -prune -o \( -name "*.example.ts" -o -name "*.example.js" \) -print0 2>/dev/null | xargs -0 rm -f 2>/dev/null || true
+          
+          # Stage all deletions (including files removed with rm that were git-tracked)
+          git add -A
           
           # Check if there are changes to commit
           if git diff --cached --quiet; then
@@ -308,6 +310,12 @@ jobs:
           fi
           
           bash -c 'curl -H "Content-Type: application/json" -X POST -d "{\"embeds\":[{\"title\":\"🔢 Version Updated\",\"description\":\"'"$MESSAGE"'\",\"color\":3066993}]}" "${{ secrets.DISCORD_WEBHOOK_URL }}"' || true
+        continue-on-error: true
+      
+      - name: Notify promotion failure
+        if: failure() && steps.merge.outputs.merge_status != 'conflict'
+        run: |
+          bash -c 'curl -H "Content-Type: application/json" -X POST -d "{\"embeds\":[{\"title\":\"❌ Branch Promotion Failed\",\"description\":\"**Source:** \`${{ inputs.source_branch }}\`\\n**Target:** \`${{ inputs.target_branch }}\`\\n**Commit:** \`${{ inputs.commit_sha }}\`\\n\\n⚠️ Check workflow logs for details\",\"color\":15158332}]}" "${{ secrets.DISCORD_WEBHOOK_URL }}"' || true
         continue-on-error: true
       
       - name: Notify merge conflict
