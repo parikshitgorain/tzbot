@@ -1,0 +1,295 @@
+name: Release - Versioning & Tagging
+
+on:
+  push:
+    branches:
+      - release
+      - Release
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: '20'
+  
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ============================================================================
+  # STAGE 1: VALIDATE RELEASE
+  # ============================================================================
+  
+  validate:
+    name: Validate Release Branch
+    runs-on: ubuntu-latest
+    outputs:
+      is_valid: ${{ steps.validate.outputs.is_valid }}
+      version: ${{ steps.version.outputs.version }}
+    
+    steps:
+      - name: Checkout release
+        uses: actions/checkout@v4
+        with:
+          ref: release
+          fetch-depth: 0
+      
+      - name: Validate branch
+        id: validate
+        run: |
+          if [ "${{ github.ref_name }}" != "release" ]; then
+            echo "❌ Not on release branch"
+            echo "is_valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          if echo "$COMMIT_MSG" | grep -qiE '\[skip (ci|release)\]'; then
+            echo "ℹ️ Skipping release"
+            echo "is_valid=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "✅ Validation passed"
+          echo "is_valid=true" >> $GITHUB_OUTPUT
+      
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+      
+      - name: Check for dev artifacts
+        run: |
+          echo "🔍 Checking for dev artifacts..."
+          
+          if [ -d "tests/" ] || [ -f "vitest.config.ts" ] || [ -f "eslint.config.js" ]; then
+            echo "❌ Dev artifacts found in release branch!"
+            exit 1
+          fi
+          
+          TEST_FILES=$(find . -name "*.test.*" -o -name "*.spec.*" 2>/dev/null | wc -l)
+          if [ "$TEST_FILES" -gt 0 ]; then
+            echo "❌ Found $TEST_FILES test files!"
+            exit 1
+          fi
+          
+          echo "✅ Release branch is clean"
+
+  # ============================================================================
+  # STAGE 2: SEMANTIC VERSIONING
+  # ============================================================================
+  
+  version:
+    name: Generate Semantic Version
+    runs-on: ubuntu-latest
+    needs: validate
+    if: needs.validate.outputs.is_valid == 'true'
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
+      version_tag: ${{ steps.bump.outputs.version_tag }}
+      should_release: ${{ steps.check.outputs.should_release }}
+    
+    steps:
+      - name: Checkout release
+        uses: actions/checkout@v4
+        with:
+          ref: release
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Check for changes
+        id: check
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous tags, first release"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "last_tag=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          COMMITS_SINCE=$(git rev-list ${LAST_TAG}..HEAD --count)
+          
+          if [ "$COMMITS_SINCE" -eq 0 ]; then
+            echo "No new commits since $LAST_TAG"
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          else
+            echo "Found $COMMITS_SINCE commits since $LAST_TAG"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
+      
+      - name: Analyze commits
+        id: analyze
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          LAST_TAG="${{ steps.check.outputs.last_tag }}"
+          
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"%s" HEAD)
+          else
+            COMMITS=$(git log --pretty=format:"%s" ${LAST_TAG}..HEAD)
+          fi
+          
+          BUMP_TYPE="patch"
+          
+          if echo "$COMMITS" | grep -qiE "^(feat|fix|refactor|perf)(\(.+\))?!:|^BREAKING CHANGE:"; then
+            BUMP_TYPE="major"
+          elif echo "$COMMITS" | grep -qiE "^feat(\(.+\))?:"; then
+            BUMP_TYPE="minor"
+          fi
+          
+          echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+          echo "Bump type: $BUMP_TYPE"
+      
+      - name: Bump version
+        id: bump
+        if: steps.check.outputs.should_release == 'true'
+        run: |
+          BUMP_TYPE="${{ steps.analyze.outputs.bump_type }}"
+          
+          npm version $BUMP_TYPE --no-git-tag-version
+          
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          VERSION_TAG="v$NEW_VERSION"
+          
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
+          echo "New version: $VERSION_TAG"
+          
+          if git rev-parse "$VERSION_TAG" >/dev/null 2>&1; then
+            echo "❌ Tag $VERSION_TAG already exists!"
+            exit 1
+          fi
+          
+          git add package.json package-lock.json
+          git commit -m "chore(release): bump version to $NEW_VERSION [skip ci]"
+          git push origin release
+
+  # ============================================================================
+  # STAGE 3: CREATE RELEASE
+  # ============================================================================
+  
+  release:
+    name: Create Git Tag & GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate, version]
+    if: needs.version.outputs.should_release == 'true'
+    
+    steps:
+      - name: Checkout release
+        uses: actions/checkout@v4
+        with:
+          ref: release
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Pull latest changes
+        run: git pull origin release
+      
+      - name: Create Git tag
+        run: |
+          TAG_NAME="${{ needs.version.outputs.version_tag }}"
+          
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "⚠️ Tag $TAG_NAME already exists"
+          else
+            git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+            git push origin "$TAG_NAME"
+            echo "✅ Tag created: $TAG_NAME"
+          fi
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          TAG_NAME="${{ needs.version.outputs.version_tag }}"
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" HEAD)
+          else
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..HEAD)
+          fi
+          
+          FEATURES=$(echo "$CHANGELOG" | grep -iE "^- (feat|feature)" || echo "")
+          FIXES=$(echo "$CHANGELOG" | grep -iE "^- (fix|bugfix)" || echo "")
+          BREAKING=$(echo "$CHANGELOG" | grep -iE "!:" || echo "")
+          OTHERS=$(echo "$CHANGELOG" | grep -viE "^- (feat|feature|fix|bugfix|chore\(release\))" || echo "")
+          
+          CHANGELOG_CONTENT="## What Changed\n\n"
+          
+          [ -n "$BREAKING" ] && CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### ⚠️ BREAKING CHANGES\n${BREAKING}\n\n"
+          [ -n "$FEATURES" ] && CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### ✨ Features\n${FEATURES}\n\n"
+          [ -n "$FIXES" ] && CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### 🐛 Bug Fixes\n${FIXES}\n\n"
+          [ -n "$OTHERS" ] && CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### 📝 Other Changes\n${OTHERS}\n\n"
+          
+          echo -e "$CHANGELOG_CONTENT" > /tmp/changelog.md
+          
+          echo "changelog_file=/tmp/changelog.md" >> $GITHUB_OUTPUT
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.version.outputs.version_tag }}
+          name: Release ${{ needs.version.outputs.version_tag }}
+          body_path: ${{ steps.changelog.outputs.changelog_file }}
+          draft: false
+          prerelease: false
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+      
+      - name: Send Discord notification
+        if: always()
+        run: |
+          TAG_NAME="${{ needs.version.outputs.version_tag }}"
+          
+          if [ "${{ job.status }}" = "success" ]; then
+            COLOR=5814783
+            TITLE="🎉 New Release: $TAG_NAME"
+            STATUS="✅ Successfully created"
+          else
+            COLOR=15158332
+            TITLE="❌ Release Failed: $TAG_NAME"
+            STATUS="❌ Failed to create"
+          fi
+          
+          CHANGELOG=$(head -n 10 /tmp/changelog.md 2>/dev/null | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g' || echo "No changelog")
+          
+          curl -H "Content-Type: application/json" -X POST \
+            -d "{\"embeds\":[{\"title\":\"${TITLE}\",\"description\":\"${CHANGELOG}\",\"color\":${COLOR},\"fields\":[{\"name\":\"Version\",\"value\":\"\`${TAG_NAME}\`\"},{\"name\":\"Status\",\"value\":\"${STATUS}\"},{\"name\":\"Release\",\"value\":\"[View Release](${{ github.server_url }}/${{ github.repository }}/releases/tag/${TAG_NAME})\"}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
+        continue-on-error: true
+
+  # ============================================================================
+  # NO RELEASE NEEDED
+  # ============================================================================
+  
+  skip:
+    name: Skip Release (No Changes)
+    runs-on: ubuntu-latest
+    needs: version
+    if: needs.version.outputs.should_release == 'false'
+    
+    steps:
+      - name: Log skip
+        run: echo "No new commits since last release"

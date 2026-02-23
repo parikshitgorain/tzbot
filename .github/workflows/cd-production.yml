@@ -1,0 +1,304 @@
+﻿name: CD - Production Deployment
+
+on:
+  push:
+    branches:
+      - release
+      - Release
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: false
+        default: 'production'
+        type: choice
+        options:
+          - production
+
+permissions:
+  contents: read
+  deployments: write
+
+env:
+  NODE_VERSION: '20'
+  DEPLOY_TIMEOUT: 600
+  HEALTH_CHECK_TIMEOUT: 120
+  
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  # ============================================================================
+  # STAGE 1: VALIDATE DEPLOYMENT
+  # ============================================================================
+  
+  validate:
+    name: Validate Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      is_valid: ${{ steps.validate.outputs.is_valid }}
+      version: ${{ steps.version.outputs.version }}
+      short_sha: ${{ steps.sha.outputs.short_sha }}
+    
+    steps:
+      - name: Checkout release
+        uses: actions/checkout@v4
+        with:
+          ref: release
+          fetch-depth: 0
+      
+      - name: Validate source
+        id: validate
+        run: |
+          echo "Event: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Ref: ${{ github.ref }}"
+          
+          if [[ "${{ github.ref }}" != "refs/heads/release" ]] && [[ "${{ github.ref }}" != refs/tags/v* ]]; then
+            echo "❌ Not from release branch or version tag"
+            echo "is_valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          echo "✅ Validation passed"
+          echo "is_valid=true" >> $GITHUB_OUTPUT
+      
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+      
+      - name: Get short SHA
+        id: sha
+        run: |
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+      
+      - name: Verify production readiness
+        run: |
+          echo "🔍 Verifying production readiness..."
+          
+          [ -d "dist" ] || { echo "❌ Missing dist/"; exit 1; }
+          [ -f "package.json" ] || { echo "❌ Missing package.json"; exit 1; }
+          [ -f "ecosystem.config.cjs" ] || [ -f "ecosystem.config.js" ] || { echo "❌ Missing ecosystem config"; exit 1; }
+          [ -d "deployment/scripts" ] || { echo "❌ Missing deployment/scripts"; exit 1; }
+          
+          if [ -d "tests/" ] || [ -f "vitest.config.ts" ] || [ -f "eslint.config.js" ]; then
+            echo "❌ Dev artifacts in release branch!"
+            exit 1
+          fi
+          
+          TEST_FILES=$(find . -name "*.test.*" -o -name "*.spec.*" 2>/dev/null | wc -l)
+          if [ "$TEST_FILES" -gt 0 ]; then
+            echo "❌ Found $TEST_FILES test files!"
+            exit 1
+          fi
+          
+          echo "✅ Production ready"
+
+  # ============================================================================
+  # STAGE 2: CREATE DEPLOYMENT RECORD
+  # ============================================================================
+  
+  create-deployment:
+    name: Create Deployment Record
+    runs-on: ubuntu-latest
+    needs: validate
+    if: needs.validate.outputs.is_valid == 'true'
+    outputs:
+      deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+    
+    steps:
+      - name: Create GitHub deployment
+        id: deployment
+        uses: chrnorm/deployment-action@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          environment: production
+          ref: ${{ github.ref }}
+          description: "Deploying v${{ needs.validate.outputs.version }}"
+
+  # ============================================================================
+  # STAGE 3: DEPLOY TO VPS
+  # ============================================================================
+  
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: [validate, create-deployment]
+    environment: production
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout release
+        uses: actions/checkout@v4
+        with:
+          ref: release
+      
+      - name: Setup SSH
+        run: |
+          chmod +x deployment/scripts/setup_ssh.sh
+          deployment/scripts/setup_ssh.sh "${{ secrets.VPS_SSH_KEY }}" "${{ secrets.VPS_HOST }}"
+      
+      - name: Create deployment package
+        run: |
+          echo "📦 Creating deployment package..."
+          tar -czf deployment-package.tar.gz \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='tests' \
+            --exclude='*.test.*' \
+            --exclude='*.spec.*' \
+            --exclude='.github' \
+            .
+          echo "✅ Package created: $(du -h deployment-package.tar.gz | cut -f1)"
+      
+      - name: Upload package to VPS
+        timeout-minutes: 5
+        run: |
+          echo "📤 Uploading deployment package..."
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o ConnectTimeout=30 \
+            deployment-package.tar.gz \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/deployment-package.tar.gz
+          echo "✅ Package uploaded"
+      
+      - name: Deploy on VPS
+        timeout-minutes: 10
+        run: |
+          echo "🚀 Deploying application..."
+          
+          # Copy deployment script
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            deployment/scripts/deploy_release.sh \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/deploy_release.sh
+          
+          # Execute deployment
+          ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o ConnectTimeout=30 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "bash /tmp/deploy_release.sh && rm /tmp/deploy_release.sh"
+          
+          echo "✅ Deployment completed"
+      
+      - name: Install/Update monitoring
+        timeout-minutes: 2
+        run: |
+          echo "📊 Installing VPS monitoring..."
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            deployment/scripts/install-monitoring.sh \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/install-monitoring.sh
+          
+          ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "bash /tmp/install-monitoring.sh && rm /tmp/install-monitoring.sh"
+        continue-on-error: true
+      
+      - name: Wait for startup
+        run: |
+          echo "⏳ Waiting for application startup..."
+          sleep 15
+      
+      - name: Run health checks
+        id: health
+        timeout-minutes: 3
+        run: |
+          echo "🏥 Running health checks..."
+          
+          # Copy health check script
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            deployment/scripts/health_check.sh \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/health_check.sh
+          
+          # Run health checks
+          ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "bash /tmp/health_check.sh 5 5 && rm /tmp/health_check.sh"
+      
+      - name: Rollback on failure
+        if: failure() && steps.health.outcome == 'failure'
+        timeout-minutes: 5
+        run: |
+          echo "🔄 Health check failed, initiating rollback..."
+          
+          # Copy rollback script
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            deployment/scripts/rollback.sh \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/rollback.sh
+          
+          # Execute rollback
+          ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "bash /tmp/rollback.sh && rm /tmp/rollback.sh"
+          
+          echo "✅ Rollback completed"
+          
+          # Send rollback notification
+          curl -H "Content-Type: application/json" -X POST \
+            -d "{\"embeds\":[{\"title\":\"🔄 Automatic Rollback\",\"description\":\"Health check failed, rolled back to previous release\",\"color\":15158332,\"fields\":[{\"name\":\"Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\"},{\"name\":\"Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\"}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
+          
+          exit 1
+        continue-on-error: false
+      
+      - name: Update deployment status - Success
+        if: success()
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          deployment-id: ${{ needs.create-deployment.outputs.deployment_id }}
+          state: 'success'
+          environment-url: 'https://${{ secrets.VPS_HOST }}'
+      
+      - name: Update deployment status - Failure
+        if: failure()
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          deployment-id: ${{ needs.create-deployment.outputs.deployment_id }}
+          state: 'failure'
+      
+      - name: Send Discord notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            COLOR=3066993
+            TITLE="✅ Deployment Successful"
+            DESC="Version \`v${{ needs.validate.outputs.version }}\` deployed to production"
+          else
+            COLOR=15158332
+            TITLE="❌ Deployment Failed"
+            DESC="Version \`v${{ needs.validate.outputs.version }}\` failed to deploy"
+          fi
+          
+          curl -H "Content-Type: application/json" -X POST \
+            -d "{\"embeds\":[{\"title\":\"${TITLE}\",\"description\":\"${DESC}\",\"color\":${COLOR},\"fields\":[{\"name\":\"Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\"},{\"name\":\"Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\"},{\"name\":\"Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
+        continue-on-error: true
+      
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-logs-${{ github.sha }}
+          path: |
+            /tmp/*.log
+            ~/.ssh/known_hosts
+          retention-days: 7
+        continue-on-error: true
