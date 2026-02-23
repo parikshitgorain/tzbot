@@ -54,10 +54,29 @@ jobs:
       - name: Merge source branch
         run: |
           echo "Merging ${{ inputs.source_branch }} into ${{ inputs.target_branch }}"
-          git merge --no-ff ${{ inputs.source_branch }} \
+          
+          if git merge --no-ff ${{ inputs.source_branch }} \
             -m "Merge ${{ inputs.source_branch }} into ${{ inputs.target_branch }}" \
             -m "Promoted commit: ${{ inputs.commit_sha }}" \
-            -m "Author: ${{ inputs.commit_author }}"
+            -m "Author: ${{ inputs.commit_author }}"; then
+            echo "✅ Merge successful"
+          else
+            echo "⚠️ Merge conflicts detected, resolving..."
+            
+            # For package.json and package-lock.json conflicts, use Development version
+            # (will be cleaned in next step)
+            git checkout --theirs package.json package-lock.json || true
+            
+            # For other conflicts, prefer Development version
+            git checkout --theirs -- . || true
+            
+            # Stage resolved files
+            git add -A
+            
+            # Complete the merge
+            git commit --no-edit
+            echo "✅ Conflicts resolved"
+          fi
       
       - name: Clean version for release
         if: inputs.target_branch == 'release'
