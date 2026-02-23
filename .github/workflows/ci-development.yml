@@ -3,9 +3,11 @@ name: CI - Development Pipeline
 on:
   push:
     branches:
+      - Development
       - development
   pull_request:
     branches:
+      - Development
       - development
 
 permissions:
@@ -160,13 +162,12 @@ jobs:
     name: Prepare Clean Release
     runs-on: ubuntu-latest
     needs: [lint, security, test, build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/Development' || github.ref == 'refs/heads/development')
     
     steps:
       - name: Checkout development
         uses: actions/checkout@v4
         with:
-          ref: development
           fetch-depth: 0
       
       - name: Setup Node.js
@@ -208,7 +209,7 @@ jobs:
     name: Auto-Promote to Release
     runs-on: ubuntu-latest
     needs: prepare-release
-    if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/Development' || github.ref == 'refs/heads/development')
     environment: release-promotion
     
     steps:
