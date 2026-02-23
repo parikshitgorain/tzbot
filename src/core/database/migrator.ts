@@ -74,6 +74,12 @@ const MIGRATIONS: Migration[] = [
     upPath: join(__dirname, 'schema', '005_add_guild_id_to_giveaways.sql'),
     downPath: join(__dirname, 'schema', '005_add_guild_id_to_giveaways_down.sql'),
   },
+  {
+    version: 6,
+    name: '006_add_hosted_by_to_giveaways',
+    upPath: join(__dirname, 'schema', '006_add_hosted_by_to_giveaways.sql'),
+    downPath: join(__dirname, 'schema', '006_add_hosted_by_to_giveaways_down.sql'),
+  },
 ];
 
 /**

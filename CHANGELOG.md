@@ -1,3 +1,35 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+
+### ✨ Features
+
+* **giveaway**: Add "Hosted by" feature to credit giveaway sponsors and hosts
+* **giveaway**: Add real-time participants viewer button to see who entered
+* **giveaway**: Enhance UI with professional emoji styling across all giveaway states
+* **giveaway**: Improve entry button with green color and gift emoji
+* **giveaway**: Add encouraging footer messages to all giveaway embeds
+* **giveaway**: Display host attribution in winner announcements and rerolls
+* **giveaway**: Show participant statistics (entry rate, time left, odds)
+
+### 🎨 UI Improvements
+
+* **giveaway**: Add emoji indicators (🏆 Winners, ⏰ Time, 👥 Entries, 🎤 Host, 🔒 Roles)
+* **giveaway**: Add "View Participants" button with real-time participant list
+* **giveaway**: Enhance visual hierarchy with consistent emoji usage
+* **giveaway**: Improve mobile experience with better scannability
+* **giveaway**: Add celebration emojis (🎊, ✨, 🎁) for better engagement
+* **giveaway**: Display entry timestamps and odds calculation
+
+### 📚 Documentation
+
+* Add comprehensive giveaway enhancement documentation
+* Add giveaway quick reference guide for moderators
+* Add UI comparison guide showing before/after improvements
+* Add update summary with migration instructions
+
 ## 1.0.0-dev.1 (2026-02-22)
 
 ### ✨ Features

@@ -17,9 +17,9 @@ export class GiveawayRepository {
       INSERT INTO giveaways (
         id, guild_id, title, description, channel_id, message_id, 
         required_roles, winner_count, status, ends_at, created_at,
-        condition, winners
+        condition, winners, hosted_by
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       ON CONFLICT (id) 
       DO UPDATE SET 
         title = EXCLUDED.title,
@@ -27,7 +27,8 @@ export class GiveawayRepository {
         status = EXCLUDED.status,
         ends_at = EXCLUDED.ends_at,
         condition = EXCLUDED.condition,
-        winners = EXCLUDED.winners
+        winners = EXCLUDED.winners,
+        hosted_by = EXCLUDED.hosted_by
     `;
 
     try {
@@ -45,6 +46,7 @@ export class GiveawayRepository {
         giveaway.createdAt,
         giveaway.condition || null,
         JSON.stringify(giveaway.winners || []),
+        giveaway.hostedBy || null,
       ]);
     } catch (error) {
       throw new Error(`Failed to save giveaway: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -60,7 +62,7 @@ export class GiveawayRepository {
       SELECT 
         g.id, g.guild_id, g.title, g.description, g.channel_id, g.message_id,
         g.required_roles, g.winner_count, g.status, g.ends_at, g.created_at,
-        g.condition, g.winners
+        g.condition, g.winners, g.hosted_by
       FROM giveaways g
       WHERE g.id = $1
     `;
@@ -92,6 +94,7 @@ export class GiveawayRepository {
         entries,
         condition: row.condition || undefined,
         winners: row.winners || [],
+        hostedBy: row.hosted_by || undefined,
       };
     } catch (error) {
       throw new Error(`Failed to get giveaway: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -107,7 +110,7 @@ export class GiveawayRepository {
       SELECT 
         id, guild_id, title, description, channel_id, message_id,
         required_roles, winner_count, status, ends_at, created_at,
-        condition, winners
+        condition, winners, hosted_by
       FROM giveaways
       WHERE status = 'active'
       ORDER BY ends_at ASC
@@ -135,6 +138,7 @@ export class GiveawayRepository {
           entries,
           condition: row.condition || undefined,
           winners: row.winners || [],
+          hostedBy: row.hosted_by || undefined,
         });
       }
 
@@ -232,7 +236,7 @@ export class GiveawayRepository {
       SELECT 
         id, guild_id, title, description, channel_id, message_id,
         required_roles, winner_count, status, ends_at, created_at,
-        condition, winners
+        condition, winners, hosted_by
       FROM giveaways
       WHERE channel_id = $1
     `;
@@ -268,6 +272,7 @@ export class GiveawayRepository {
           entries,
           condition: row.condition || undefined,
           winners: row.winners || [],
+          hostedBy: row.hosted_by || undefined,
         });
       }
 
