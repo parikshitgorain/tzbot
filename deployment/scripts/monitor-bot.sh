@@ -7,7 +7,7 @@ set -e
 # Configuration
 SERVICE_NAME="${SERVICE_NAME:-tzbot}"
 DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL}"
-CHECK_INTERVAL="${CHECK_INTERVAL:-300}" # 5 minutes
+CHECK_INTERVAL="${CHECK_INTERVAL:-600}" # 10 minutes
 ALERT_FILE="/tmp/tzbot-last-alert"
 
 # Colors
@@ -100,8 +100,8 @@ should_send_alert() {
     local current_time=$(date +%s)
     local time_diff=$((current_time - last_alert_time))
     
-    # Don't send same alert within 15 minutes
-    if [ "$last_alert_type" = "$alert_type" ] && [ $time_diff -lt 900 ]; then
+    # Don't send same alert within 10 minutes
+    if [ "$last_alert_type" = "$alert_type" ] && [ $time_diff -lt 600 ]; then
         return 1
     fi
     
@@ -169,13 +169,12 @@ monitor_bot() {
                 log_error "Bot process not found in PM2"
                 was_down=true
                 
-                if should_send_alert "critical"; then
-                    send_alert "critical" \
-                        "🚨 Bot Process Missing" \
-                        "**Status:** 🔴 Not Found\n**Action:** Manual intervention required\n\n⚠️ Bot is not running in PM2!"
-                    
-                    record_alert "critical"
-                fi
+                # Emergency: send instant notification without dedup check
+                send_alert "critical" \
+                    "🚨 Bot Process Missing" \
+                    "**Status:** 🔴 Not Found\n**Action:** Manual intervention required\n\n⚠️ Bot is not running in PM2!"
+                
+                record_alert "critical"
                 ;;
                 
             *)

@@ -73,7 +73,9 @@ pm2_start() {
         pm2 start "$SERVICE_NAME"
     else
         log_warn "Service not found, starting from ecosystem file"
-        if [ -f "$DEPLOY_BASE/ecosystem.config.js" ]; then
+        if [ -f "$DEPLOY_BASE/ecosystem.config.cjs" ]; then
+            pm2 start "$DEPLOY_BASE/ecosystem.config.cjs"
+        elif [ -f "$DEPLOY_BASE/ecosystem.config.js" ]; then
             pm2 start "$DEPLOY_BASE/ecosystem.config.js"
         else
             pm2 start dist/index.js --name "$SERVICE_NAME"
@@ -95,8 +97,12 @@ pm2_restart() {
         retry_command "Restart PM2 process" "pm2 restart '$SERVICE_NAME'"
     else
         log_warn "Process not found, starting fresh..."
-        if [ -f "$DEPLOY_BASE/ecosystem.config.js" ]; then
+        if [ -f "$DEPLOY_BASE/ecosystem.config.cjs" ]; then
+            retry_command "Start PM2 from ecosystem" "pm2 start '$DEPLOY_BASE/ecosystem.config.cjs'"
+        elif [ -f "$DEPLOY_BASE/ecosystem.config.js" ]; then
             retry_command "Start PM2 from ecosystem" "pm2 start '$DEPLOY_BASE/ecosystem.config.js'"
+        elif [ -f "ecosystem.config.cjs" ]; then
+            retry_command "Start PM2 from local ecosystem" "pm2 start ecosystem.config.cjs"
         elif [ -f "ecosystem.config.js" ]; then
             retry_command "Start PM2 from local ecosystem" "pm2 start ecosystem.config.js"
         else
