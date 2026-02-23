@@ -129,64 +129,77 @@ npm run validate
 
 ### CI/CD Pipeline
 
-The project includes a production-grade CI/CD pipeline with strict quality gates and zero-downtime deployment:
+Production-grade three-workflow CI/CD system with strict quality gates and zero-downtime deployment.
 
-#### Pipeline Stages
+#### Three Workflows
 
-**1. Development → Release Promotion (CI)**
-- Runs on every push to `development` branch
-- Quality gates: Lint, TypeScript check, Security scan, Tests
-- Automated cleanup: Removes all dev/test files, mock files, logs, debug configs
-- Creates clean production bundle with ONLY production-ready files
-- Auto-promotes to `release` branch only if all checks pass
+**1. CI Development Pipeline** (`ci-development.yml`)
+- **Trigger:** Push/PR to `development` branch
+- **Stages:**
+  - Lint & Type Check
+  - Security Scan (npm audit high/critical)
+  - Unit Tests + Coverage
+  - Build Verification
+  - Prepare Clean Release (removes all dev artifacts)
+  - Auto-Promote to `release` branch
+- **Quality Gates:** All must pass before promotion
+- **Output:** Clean production build artifact
 
-**2. Release Versioning**
-- Runs on every push to `release` branch
-- Analyzes commit messages for semantic versioning (major/minor/patch)
-- Prevents duplicate tags
-- Creates Git tag (vX.Y.Z)
-- Generates changelog from conventional commits
-- Creates GitHub Release with full changelog
+**2. Release Versioning** (`release-versioning.yml`)
+- **Trigger:** Push to `release` branch
+- **Stages:**
+  - Validate release branch (no dev artifacts)
+  - Analyze commits for semantic versioning
+  - Bump version (major/minor/patch)
+  - Create Git tag (vX.Y.Z)
+  - Generate changelog
+  - Create GitHub Release
+- **Versioning:** Automatic based on conventional commits
+- **Output:** Tagged release with changelog
 
-**3. Production Deployment (CD)**
-- Runs on `release` branch push or version tag
-- Requires GitHub Environment approval for production
-- Zero-downtime deployment with versioned releases (/releases/vX.Y.Z)
-- Deployment locking prevents concurrent deploys
-- SSH with proper host verification (no StrictHostKeyChecking=no)
-- Health check validation after deployment
-- Automatic rollback to previous version on failure
-- PM2 process management with graceful restart
+**3. CD Production Deployment** (`cd-production.yml`)
+- **Trigger:** Push to `release` or tag `v*`
+- **Stages:**
+  - Validate deployment
+  - Setup SSH (secure, no StrictHostKeyChecking=no)
+  - Upload deployment package
+  - Atomic deployment (versioned releases)
+  - Install/update monitoring
+  - Health checks with retries
+  - Automatic rollback on failure
+- **Deployment:** Zero-downtime with PM2 reload
+- **Output:** Live production deployment
 
 #### Branch Strategy
 
 ```
 development (dev work)
     ↓
-    CI Pipeline (lint, test, security, build)
+CI Pipeline (lint, test, security, build)
     ↓
-    Clean Production Build (remove dev files)
+Clean Build (remove dev files)
     ↓
 release (production-ready only)
     ↓
-    Semantic Versioning (auto bump, create tag)
+Semantic Versioning (auto bump, create tag)
     ↓
-    VPS Deployment (zero-downtime)
+VPS Deployment (zero-downtime)
     ↓
 production (live on VPS)
 ```
 
-#### Deployment Workflow
+#### Deployment Flow
 
 ```
 Push to development
     ↓
 ✓ Lint & Type Check
-✓ Security Scan
-✓ Unit Tests
+✓ Security Scan (npm audit)
+✓ Unit Tests + Coverage
 ✓ Build Verification
     ↓
-Clean Production Build
+Prepare Clean Release
+(removes tests/, *.test.*, dev configs)
     ↓
 Auto-Promote to release
     ↓
@@ -195,10 +208,11 @@ Create Git Tag (vX.Y.Z)
 Create GitHub Release
     ↓
 Deploy to VPS
-    ├─ Versioned release directory
-    ├─ Symlink switch (zero-downtime)
-    ├─ PM2 graceful restart
-    └─ Health check validation
+    ├─ SSH with host verification
+    ├─ Upload package
+    ├─ Atomic deployment
+    ├─ Install monitoring
+    └─ Health checks (5 attempts, exponential backoff)
         ↓
     ✓ Success → Live
     ✗ Failure → Automatic Rollback
@@ -206,17 +220,27 @@ Deploy to VPS
 
 #### Key Features
 
-- **Strict Quality Gates**: No promotion without passing all checks
-- **Clean Releases**: Zero dev artifacts in production
-- **Safe Versioning**: Duplicate tag prevention, semantic versioning
-- **Zero-Downtime**: Symlink switching, graceful restarts
-- **Automatic Rollback**: Instant recovery on deployment failure
-- **Deployment Locking**: Prevents concurrent deployments
-- **SSH Security**: Proper host verification, no hardcoded keys
-- **Health Validation**: Automated health checks post-deployment
-- **Discord Notifications**: Real-time deployment status updates
+- **Versioned Scripts:** All logic in `deployment/scripts/*.sh` (not inline)
+- **Strict Quality Gates:** No promotion without passing all checks
+- **Clean Releases:** Zero dev artifacts in production
+- **Safe Versioning:** Duplicate tag prevention, semantic versioning
+- **Zero-Downtime:** Atomic symlink switching, PM2 graceful reload
+- **Automatic Rollback:** Instant recovery on health check failure
+- **Deployment Locking:** Prevents concurrent deployments
+- **SSH Security:** Proper host verification, ssh-keyscan
+- **Health Validation:** Retries with exponential backoff
+- **Discord Notifications:** Real-time status updates
 
-See [CI/CD Setup Guide](docs/CICD_SETUP.md) for configuration details.
+#### Required Secrets
+
+- `VPS_SSH_KEY` - SSH private key for VPS
+- `VPS_HOST` - VPS hostname (supports dynamic DNS)
+- `VPS_USER` - VPS username
+- `DISCORD_WEBHOOK_URL` - Discord webhook for notifications
+- `PAT_TOKEN` (optional) - Personal Access Token for releases
+- `CODECOV_TOKEN` (optional) - Codecov token
+
+See [CI/CD Testing Checklist](docs/CICD_TESTING_CHECKLIST.md) for end-to-end testing guide.
 
 ## Configuration
 

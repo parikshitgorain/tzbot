@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 env:
   NODE_VERSION: '20'
@@ -19,19 +18,18 @@ concurrency:
 
 jobs:
   # ============================================================================
-  # STAGE 1: VALIDATE RELEASE BRANCH
+  # STAGE 1: VALIDATE RELEASE
   # ============================================================================
   
-  validate-release:
+  validate:
     name: Validate Release Branch
     runs-on: ubuntu-latest
     outputs:
       is_valid: ${{ steps.validate.outputs.is_valid }}
-      version: ${{ steps.get-version.outputs.version }}
-      has_dev_files: ${{ steps.check-dev-files.outputs.has_dev_files }}
+      version: ${{ steps.version.outputs.version }}
     
     steps:
-      - name: Checkout release branch
+      - name: Checkout release
         uses: actions/checkout@v4
         with:
           ref: release
@@ -40,8 +38,6 @@ jobs:
       - name: Validate branch
         id: validate
         run: |
-          echo "🔍 Validating release branch..."
-          
           if [ "${{ github.ref_name }}" != "release" ]; then
             echo "❌ Not on release branch"
             echo "is_valid=false" >> $GITHUB_OUTPUT
@@ -49,102 +45,55 @@ jobs:
           fi
           
           COMMIT_MSG=$(git log -1 --pretty=%B)
-          if echo "$COMMIT_MSG" | grep -qiE '\[(skip ci|skip release)\]'; then
-            echo "ℹ️ Skipping release due to commit message"
+          if echo "$COMMIT_MSG" | grep -qiE '\[skip (ci|release)\]'; then
+            echo "ℹ️ Skipping release"
             echo "is_valid=false" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          echo "✅ Release branch validation passed"
+          echo "✅ Validation passed"
           echo "is_valid=true" >> $GITHUB_OUTPUT
       
-      - name: Get version from package.json
-        id: get-version
+      - name: Get version
+        id: version
         run: |
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Current version: $VERSION"
-      
-      - name: Check if version has -dev suffix
-        run: |
-          VERSION="${{ steps.get-version.outputs.version }}"
-          if [[ "$VERSION" == *"-dev."* ]]; then
-            echo "❌ Error: Release branch contains dev version: $VERSION"
-            echo "Release branch must have clean semantic versions only"
-            exit 1
-          fi
-          echo "✅ Version is clean: $VERSION"
+          echo "Version: $VERSION"
       
       - name: Check for dev artifacts
-        id: check-dev-files
         run: |
-          echo "🔍 Checking for dev artifacts in release..."
+          echo "🔍 Checking for dev artifacts..."
           
-          DEV_FILES_FOUND=false
-          DEV_FILES_LIST=""
-          
-          if [ -d "tests/" ]; then
-            echo "❌ tests/ directory found"
-            DEV_FILES_FOUND=true
-            DEV_FILES_LIST="${DEV_FILES_LIST}- tests/ directory\n"
-          fi
-          
-          if [ -f "vitest.config.ts" ] || [ -f "vitest.config.js" ]; then
-            echo "❌ vitest config found"
-            DEV_FILES_FOUND=true
-            DEV_FILES_LIST="${DEV_FILES_LIST}- vitest.config.*\n"
-          fi
-          
-          if [ -f "eslint.config.js" ]; then
-            echo "❌ eslint config found"
-            DEV_FILES_FOUND=true
-            DEV_FILES_LIST="${DEV_FILES_LIST}- eslint.config.js\n"
-          fi
-          
-          if [ -d ".kiro/" ]; then
-            echo "❌ .kiro/ directory found"
-            DEV_FILES_FOUND=true
-            DEV_FILES_LIST="${DEV_FILES_LIST}- .kiro/ directory\n"
-          fi
-          
-          TEST_FILES=$(find . -name "*.test.ts" -o -name "*.test.js" -o -name "*.spec.ts" -o -name "*.spec.js" 2>/dev/null | wc -l)
-          if [ "$TEST_FILES" -gt 0 ]; then
-            echo "❌ Found $TEST_FILES test files"
-            DEV_FILES_FOUND=true
-            DEV_FILES_LIST="${DEV_FILES_LIST}- $TEST_FILES test files\n"
-          fi
-          
-          if [ "$DEV_FILES_FOUND" = true ]; then
-            echo "has_dev_files=true" >> $GITHUB_OUTPUT
-            echo "❌ ERROR: Dev artifacts detected in release branch!"
-            echo "Release branch must contain ONLY production-ready files."
-            echo ""
-            echo "Dev files found:"
-            echo -e "$DEV_FILES_LIST"
-            echo ""
-            echo "Failing workflow to prevent release with dev files."
+          if [ -d "tests/" ] || [ -f "vitest.config.ts" ] || [ -f "eslint.config.js" ]; then
+            echo "❌ Dev artifacts found in release branch!"
             exit 1
-          else
-            echo "has_dev_files=false" >> $GITHUB_OUTPUT
-            echo "✅ Release branch is clean"
           fi
+          
+          TEST_FILES=$(find . -name "*.test.*" -o -name "*.spec.*" 2>/dev/null | wc -l)
+          if [ "$TEST_FILES" -gt 0 ]; then
+            echo "❌ Found $TEST_FILES test files!"
+            exit 1
+          fi
+          
+          echo "✅ Release branch is clean"
 
   # ============================================================================
   # STAGE 2: SEMANTIC VERSIONING
   # ============================================================================
   
-  semantic-version:
+  version:
     name: Generate Semantic Version
     runs-on: ubuntu-latest
-    needs: validate-release
-    if: needs.validate-release.outputs.is_valid == 'true'
+    needs: validate
+    if: needs.validate.outputs.is_valid == 'true'
     outputs:
-      new_version: ${{ steps.bump-version.outputs.new_version }}
-      should_release: ${{ steps.check-changes.outputs.should_release }}
-      version_tag: ${{ steps.bump-version.outputs.version_tag }}
+      new_version: ${{ steps.bump.outputs.new_version }}
+      version_tag: ${{ steps.bump.outputs.version_tag }}
+      should_release: ${{ steps.check.outputs.should_release }}
     
     steps:
-      - name: Checkout release branch
+      - name: Checkout release
         uses: actions/checkout@v4
         with:
           ref: release
@@ -161,36 +110,35 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
       
-      - name: Check for changes since last release
-        id: check-changes
+      - name: Check for changes
+        id: check
         run: |
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           
           if [ -z "$LAST_TAG" ]; then
-            echo "No previous tags found, this is the first release"
+            echo "No previous tags, first release"
             echo "should_release=true" >> $GITHUB_OUTPUT
             echo "last_tag=" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          echo "Last tag: $LAST_TAG"
-          echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
+          COMMITS_SINCE=$(git rev-list ${LAST_TAG}..HEAD --count)
           
-          COMMITS_SINCE_TAG=$(git rev-list ${LAST_TAG}..HEAD --count)
-          
-          if [ "$COMMITS_SINCE_TAG" -eq 0 ]; then
-            echo "No new commits since last tag $LAST_TAG"
+          if [ "$COMMITS_SINCE" -eq 0 ]; then
+            echo "No new commits since $LAST_TAG"
             echo "should_release=false" >> $GITHUB_OUTPUT
           else
-            echo "Found $COMMITS_SINCE_TAG commits since $LAST_TAG"
+            echo "Found $COMMITS_SINCE commits since $LAST_TAG"
             echo "should_release=true" >> $GITHUB_OUTPUT
           fi
+          
+          echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
       
-      - name: Analyze commit messages for version bump
-        id: analyze-commits
-        if: steps.check-changes.outputs.should_release == 'true'
+      - name: Analyze commits
+        id: analyze
+        if: steps.check.outputs.should_release == 'true'
         run: |
-          LAST_TAG="${{ steps.check-changes.outputs.last_tag }}"
+          LAST_TAG="${{ steps.check.outputs.last_tag }}"
           
           if [ -z "$LAST_TAG" ]; then
             COMMITS=$(git log --pretty=format:"%s" HEAD)
@@ -198,37 +146,22 @@ jobs:
             COMMITS=$(git log --pretty=format:"%s" ${LAST_TAG}..HEAD)
           fi
           
-          echo "Analyzing commits:"
-          echo "$COMMITS"
-          echo ""
-          
           BUMP_TYPE="patch"
           
           if echo "$COMMITS" | grep -qiE "^(feat|fix|refactor|perf)(\(.+\))?!:|^BREAKING CHANGE:"; then
             BUMP_TYPE="major"
-            echo "🔴 Breaking changes detected → MAJOR version bump"
-          elif echo "$COMMITS" | grep -qiE "^(feat|feature)(\(.+\))?:"; then
+          elif echo "$COMMITS" | grep -qiE "^feat(\(.+\))?:"; then
             BUMP_TYPE="minor"
-            echo "🟡 New features detected → MINOR version bump"
-          elif echo "$COMMITS" | grep -qiE "^(fix|bugfix|perf|refactor|chore)(\(.+\))?:"; then
-            BUMP_TYPE="patch"
-            echo "🟢 Fixes/improvements detected → PATCH version bump"
-          else
-            BUMP_TYPE="patch"
-            echo "ℹ️ No conventional commits found → defaulting to PATCH version bump"
           fi
           
           echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+          echo "Bump type: $BUMP_TYPE"
       
       - name: Bump version
-        id: bump-version
-        if: steps.check-changes.outputs.should_release == 'true'
+        id: bump
+        if: steps.check.outputs.should_release == 'true'
         run: |
-          CURRENT_VERSION="${{ needs.validate-release.outputs.version }}"
-          BUMP_TYPE="${{ steps.analyze-commits.outputs.bump_type }}"
-          
-          echo "Current version: $CURRENT_VERSION"
-          echo "Bump type: $BUMP_TYPE"
+          BUMP_TYPE="${{ steps.analyze.outputs.bump_type }}"
           
           npm version $BUMP_TYPE --no-git-tag-version
           
@@ -237,34 +170,29 @@ jobs:
           
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
-          echo "New version: $NEW_VERSION"
+          echo "New version: $VERSION_TAG"
           
           if git rev-parse "$VERSION_TAG" >/dev/null 2>&1; then
-            echo "❌ Error: Tag $VERSION_TAG already exists!"
-            echo "This indicates a duplicate release attempt."
-            echo "Current HEAD: $(git rev-parse HEAD)"
-            echo "Tag points to: $(git rev-parse $VERSION_TAG)"
+            echo "❌ Tag $VERSION_TAG already exists!"
             exit 1
           fi
-          
-          echo "✅ Tag $VERSION_TAG is unique"
           
           git add package.json package-lock.json
           git commit -m "chore(release): bump version to $NEW_VERSION [skip ci]"
           git push origin release
 
   # ============================================================================
-  # STAGE 3: CREATE GIT TAG & GITHUB RELEASE
+  # STAGE 3: CREATE RELEASE
   # ============================================================================
   
-  create-release:
+  release:
     name: Create Git Tag & GitHub Release
     runs-on: ubuntu-latest
-    needs: [validate-release, semantic-version]
-    if: needs.semantic-version.outputs.should_release == 'true'
+    needs: [validate, version]
+    if: needs.version.outputs.should_release == 'true'
     
     steps:
-      - name: Checkout release branch
+      - name: Checkout release
         uses: actions/checkout@v4
         with:
           ref: release
@@ -279,38 +207,23 @@ jobs:
       - name: Pull latest changes
         run: git pull origin release
       
-      - name: Create Git tag with guard
+      - name: Create Git tag
         run: |
-          VERSION="${{ needs.semantic-version.outputs.new_version }}"
-          TAG_NAME="${{ needs.semantic-version.outputs.version_tag }}"
-          
-          echo "Creating tag: $TAG_NAME"
+          TAG_NAME="${{ needs.version.outputs.version_tag }}"
           
           if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-            echo "⚠️ Tag $TAG_NAME already exists, skipping tag creation"
-            echo "Existing tag points to: $(git rev-parse $TAG_NAME)"
-            echo "Current HEAD: $(git rev-parse HEAD)"
+            echo "⚠️ Tag $TAG_NAME already exists"
           else
-            git tag -a "$TAG_NAME" -m "Release $TAG_NAME
-          
-          Automated release created by GitHub Actions
-          Version: $VERSION
-          Commit: ${GITHUB_SHA:0:7}
-          Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            
+            git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
             git push origin "$TAG_NAME"
-            echo "✅ Tag created and pushed: $TAG_NAME"
+            echo "✅ Tag created: $TAG_NAME"
           fi
       
       - name: Generate changelog
         id: changelog
         run: |
-          VERSION="${{ needs.semantic-version.outputs.new_version }}"
-          TAG_NAME="${{ needs.semantic-version.outputs.version_tag }}"
-          
+          TAG_NAME="${{ needs.version.outputs.version_tag }}"
           PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          
-          echo "Generating changelog from $PREVIOUS_TAG to $TAG_NAME"
           
           if [ -z "$PREVIOUS_TAG" ]; then
             CHANGELOG=$(git log --pretty=format:"- %s (%h)" HEAD)
@@ -325,29 +238,10 @@ jobs:
           
           CHANGELOG_CONTENT="## What Changed\n\n"
           
-          if [ -n "$BREAKING" ]; then
-            CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### ⚠️ BREAKING CHANGES\n${BREAKING}\n\n"
-          fi
-          
-          if [ -n "$FEATURES" ]; then
-            CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### ✨ Features\n${FEATURES}\n\n"
-          fi
-          
-          if [ -n "$FIXES" ]; then
-            CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### 🐛 Bug Fixes\n${FIXES}\n\n"
-          fi
-          
-          if [ -n "$OTHERS" ]; then
-            CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### 📝 Other Changes\n${OTHERS}\n\n"
-          fi
-          
-          CHANGELOG_CONTENT="${CHANGELOG_CONTENT}---\n\n"
-          CHANGELOG_CONTENT="${CHANGELOG_CONTENT}**Full Changelog**: "
-          if [ -n "$PREVIOUS_TAG" ]; then
-            CHANGELOG_CONTENT="${CHANGELOG_CONTENT}[\`${PREVIOUS_TAG}...${TAG_NAME}\`](${{ github.server_url }}/${{ github.repository }}/compare/${PREVIOUS_TAG}...${TAG_NAME})"
-          else
-            CHANGELOG_CONTENT="${CHANGELOG_CONTENT}Initial release"
-          fi
+          [ -n "$BREAKING" ] && CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### ⚠️ BREAKING CHANGES\n${BREAKING}\n\n"
+          [ -n "$FEATURES" ] && CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### ✨ Features\n${FEATURES}\n\n"
+          [ -n "$FIXES" ] && CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### 🐛 Bug Fixes\n${FIXES}\n\n"
+          [ -n "$OTHERS" ] && CHANGELOG_CONTENT="${CHANGELOG_CONTENT}### 📝 Other Changes\n${OTHERS}\n\n"
           
           echo -e "$CHANGELOG_CONTENT" > /tmp/changelog.md
           
@@ -356,8 +250,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ needs.semantic-version.outputs.version_tag }}
-          name: Release ${{ needs.semantic-version.outputs.version_tag }}
+          tag_name: ${{ needs.version.outputs.version_tag }}
+          name: Release ${{ needs.version.outputs.version_tag }}
           body_path: ${{ steps.changelog.outputs.changelog_file }}
           draft: false
           prerelease: false
@@ -366,74 +260,35 @@ jobs:
       - name: Send Discord notification
         if: always()
         run: |
-          VERSION="${{ needs.semantic-version.outputs.new_version }}"
-          TAG_NAME="${{ needs.semantic-version.outputs.version_tag }}"
+          TAG_NAME="${{ needs.version.outputs.version_tag }}"
           
           if [ "${{ job.status }}" = "success" ]; then
             COLOR=5814783
-            EMOJI="🎉"
-            TITLE="New Release: $TAG_NAME"
-            STATUS_TEXT="✅ Successfully created"
+            TITLE="🎉 New Release: $TAG_NAME"
+            STATUS="✅ Successfully created"
           else
             COLOR=15158332
-            EMOJI="❌"
-            TITLE="Release Failed: $TAG_NAME"
-            STATUS_TEXT="❌ Failed to create"
+            TITLE="❌ Release Failed: $TAG_NAME"
+            STATUS="❌ Failed to create"
           fi
           
-          CHANGELOG_SUMMARY=$(head -n 15 /tmp/changelog.md 2>/dev/null | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g' || echo "No changelog available")
+          CHANGELOG=$(head -n 10 /tmp/changelog.md 2>/dev/null | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g' || echo "No changelog")
           
           curl -H "Content-Type: application/json" -X POST \
-            -d "{
-              \"embeds\": [{
-                \"title\": \"${EMOJI} ${TITLE}\",
-                \"description\": \"${CHANGELOG_SUMMARY}\",
-                \"color\": ${COLOR},
-                \"fields\": [
-                  {\"name\": \"Version\", \"value\": \"\`${TAG_NAME}\`\", \"inline\": true},
-                  {\"name\": \"Branch\", \"value\": \"\`release\`\", \"inline\": true},
-                  {\"name\": \"Commit\", \"value\": \"\`${GITHUB_SHA:0:7}\`\", \"inline\": true},
-                  {\"name\": \"Status\", \"value\": \"${STATUS_TEXT}\", \"inline\": true},
-                  {\"name\": \"Release Page\", \"value\": \"[View Release](${{ github.server_url }}/${{ github.repository }}/releases/tag/${TAG_NAME})\", \"inline\": false},
-                  {\"name\": \"Workflow\", \"value\": \"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": false}
-                ],
-                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
-              }]
-            }" \
-            "${{ secrets.DISCORD_WEBHOOK_URL }}" || echo "Discord notification failed"
+            -d "{\"embeds\":[{\"title\":\"${TITLE}\",\"description\":\"${CHANGELOG}\",\"color\":${COLOR},\"fields\":[{\"name\":\"Version\",\"value\":\"\`${TAG_NAME}\`\"},{\"name\":\"Status\",\"value\":\"${STATUS}\"},{\"name\":\"Release\",\"value\":\"[View Release](${{ github.server_url }}/${{ github.repository }}/releases/tag/${TAG_NAME})\"}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
         continue-on-error: true
-      
-      - name: Create release summary
-        run: |
-          VERSION="${{ needs.semantic-version.outputs.new_version }}"
-          TAG_NAME="${{ needs.semantic-version.outputs.version_tag }}"
-          
-          echo "## 🎉 Release $TAG_NAME Created" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** \`$TAG_NAME\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** release" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** \`${GITHUB_SHA:0:7}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Created:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📋 Changelog" >> $GITHUB_STEP_SUMMARY
-          cat /tmp/changelog.md >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🚀 **Next:** CD workflow will deploy to VPS" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
   # NO RELEASE NEEDED
   # ============================================================================
   
-  skip-release:
+  skip:
     name: Skip Release (No Changes)
     runs-on: ubuntu-latest
-    needs: semantic-version
-    if: needs.semantic-version.outputs.should_release == 'false'
+    needs: version
+    if: needs.version.outputs.should_release == 'false'
     
     steps:
-      - name: Log skip reason
-        run: |
-          echo "## ℹ️ Release Skipped" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "No new commits since last release." >> $GITHUB_STEP_SUMMARY
-          echo "No version bump or release creation needed." >> $GITHUB_STEP_SUMMARY
+      - name: Log skip
+        run: echo "No new commits since last release"

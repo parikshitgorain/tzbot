@@ -1,6 +1,142 @@
 # Deployment Scripts
 
-This directory contains utility scripts for VPS setup, monitoring, and manual operations.
+This directory contains production-grade deployment scripts used by GitHub Actions workflows and manual operations.
+
+## CI/CD Scripts (Used by Workflows)
+
+### prepare_clean_release.sh
+
+**Purpose:** Remove dev/test artifacts and create clean production build.
+
+**Usage:**
+```bash
+./prepare_clean_release.sh <output_dir>
+```
+
+**Features:**
+- Copies only production files (dist, package.json, ecosystem config, etc.)
+- Removes all test files (*.test.*, *.spec.*, *.mock.*)
+- Removes dev directories (tests/, .kiro/, coverage/, etc.)
+- Removes dev config files (vitest.config.*, eslint.config.js, etc.)
+- Removes VCS files (.git, .github, .gitignore)
+- Verifies production build integrity
+- Safety checks for remaining dev artifacts
+
+**Called by:** `ci-development.yml` workflow
+
+---
+
+### promote_to_release.sh
+
+**Purpose:** Promote clean build to release branch with safety checks.
+
+**Usage:**
+```bash
+./promote_to_release.sh <clean_build_dir> <source_sha>
+```
+
+**Features:**
+- Checks out or creates release branch
+- Replaces release branch content with clean build
+- Runs safety checks for dev artifacts
+- Cleans version (removes -dev suffix)
+- Commits and pushes to release branch
+- Prevents untracked files and test artifacts
+
+**Called by:** `ci-development.yml` workflow
+
+---
+
+### setup_ssh.sh
+
+**Purpose:** Setup secure SSH connection to VPS with proper host key verification.
+
+**Usage:**
+```bash
+./setup_ssh.sh <ssh_key> <vps_host>
+```
+
+**Features:**
+- Creates SSH directory with proper permissions
+- Writes SSH key securely (600 permissions)
+- Resolves hostname to IP (supports dynamic DNS)
+- Adds host keys using ssh-keyscan (no StrictHostKeyChecking=no)
+- Outputs VPS IP for workflow use
+
+**Called by:** `cd-production.yml` workflow
+
+---
+
+### deploy_release.sh
+
+**Purpose:** Atomic deployment to VPS with zero-downtime.
+
+**Usage:**
+```bash
+./deploy_release.sh
+```
+
+**Features:**
+- Creates timestamped release directory
+- Extracts deployment package
+- Creates symlinks to shared resources (logs, data, .env)
+- Installs production dependencies
+- Atomic symlink switch (current → new release)
+- Zero-downtime PM2 reload
+- Cleans old releases (keeps last 5)
+
+**Called by:** `cd-production.yml` workflow (executed on VPS)
+
+---
+
+### rollback.sh
+
+**Purpose:** Rollback to previous release on deployment failure.
+
+**Usage:**
+```bash
+# Rollback to previous release
+./rollback.sh
+
+# Rollback to specific release
+./rollback.sh release-20260224-120000
+```
+
+**Features:**
+- Lists available releases
+- Validates target release
+- Atomic symlink switch to previous release
+- Zero-downtime PM2 reload
+- Shows version information
+
+**Called by:** `cd-production.yml` workflow on health check failure
+
+---
+
+### health_check.sh
+
+**Purpose:** Health check with retries and exponential backoff.
+
+**Usage:**
+```bash
+# Default: 5 attempts, 5s initial delay
+./health_check.sh
+
+# Custom: 3 attempts, 10s initial delay
+./health_check.sh 3 10
+```
+
+**Features:**
+- Checks PM2 process status
+- Validates process is online
+- Checks restart count (fails if > 3)
+- Verifies uptime (must be stable for 10s)
+- Exponential backoff between retries
+- Detailed status reporting
+
+**Called by:** `cd-production.yml` workflow
+
+---
 
 ## Active Scripts
 

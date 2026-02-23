@@ -1,485 +1,422 @@
 # CI/CD Quick Reference
 
-## 🚀 Quick Start
+Quick commands and workflows for the CI/CD system.
 
-### For Developers
+## Workflows Overview
+
+| Workflow | Trigger | Purpose | Duration |
+|----------|---------|---------|----------|
+| `ci-development.yml` | Push/PR to `development` | Quality gates + auto-promote | 5-10 min |
+| `release-versioning.yml` | Push to `release` | Create version tag + release | 2-3 min |
+| `cd-production.yml` | Push to `release` or tag `v*` | Deploy to VPS | 3-5 min |
+
+## Common Tasks
+
+### Deploy a Feature
 
 ```bash
 # 1. Create feature branch
 git checkout development
-git pull origin development
 git checkout -b feature/my-feature
 
-# 2. Make changes and test
-npm run lint
-npm run test:unit
-npm run build
+# 2. Make changes
+# ... edit files ...
 
-# 3. Commit with conventional format
-git commit -m "feat: add new feature"
+# 3. Commit with conventional commit
+git add .
+git commit -m "feat: add my feature"
 
-# 4. Push to development
+# 4. Push and create PR
 git push origin feature/my-feature
+# Create PR on GitHub
 
-# 5. Create PR to development
-# → CI runs automatically
-# → After merge: auto-promotes to release
-# → Auto-deploys to VPS
+# 5. Merge PR
+# CI runs automatically
+
+# 6. Wait for auto-promotion
+# Release versioning runs automatically
+
+# 7. Wait for deployment
+# CD deploys to VPS automatically
+
+# Total time: ~10-15 minutes
 ```
 
----
-
-## 📊 Pipeline Overview
-
-```
-development → CI → Clean Build → release → Versioning → CD → VPS
-   (push)    (test)  (remove dev)  (auto)   (tag+release) (deploy)
-```
-
-**Total Time:** ~10-15 minutes from push to production
-
----
-
-## 🔄 Workflows
-
-### 1. CI Workflow (Development)
-**Trigger:** Push/PR to `development`  
-**Duration:** 5-10 minutes  
-**File:** `.github/workflows/ci-development.yml`
-
-**Stages:**
-1. ✅ Lint & Type Check
-2. ✅ Security Scan (npm audit)
-3. ✅ Tests (unit + property-based)
-4. ✅ Build Verification
-5. ✅ Prepare Clean Build (remove dev files)
-6. ✅ Auto-Promote to Release
-
-**Output:** Clean production code in `release` branch
-
----
-
-### 2. Release Workflow (Versioning)
-**Trigger:** Push to `release`  
-**Duration:** 1-2 minutes  
-**File:** `.github/workflows/release-versioning.yml`
-
-**Stages:**
-1. ✅ Validate Release Branch
-2. ✅ Semantic Version Bump
-3. ✅ Create Git Tag
-4. ✅ Create GitHub Release
-
-**Output:** Git tag (v1.2.3) + GitHub Release
-
----
-
-### 3. CD Workflow (Deployment)
-**Trigger:** Push to `release` or new release  
-**Duration:** 2-3 minutes  
-**File:** `.github/workflows/cd-production.yml`
-
-**Stages:**
-1. ✅ Validate Deployment
-2. ✅ Prepare Deployment
-3. ✅ Deploy to VPS
-4. ✅ Health Checks
-5. ✅ Success or Rollback
-
-**Output:** Live application on VPS
-
----
-
-## 📝 Commit Message Format
-
-### Conventional Commits
-
-```
-<type>(<scope>): <description>
-```
-
-### Types & Version Bumps
-
-| Type | Description | Version Bump | Example |
-|------|-------------|--------------|---------|
-| `feat:` | New feature | Minor (1.0.0 → 1.1.0) | `feat: add user auth` |
-| `fix:` | Bug fix | Patch (1.0.0 → 1.0.1) | `fix: resolve timeout` |
-| `perf:` | Performance | Patch (1.0.0 → 1.0.1) | `perf: optimize queries` |
-| `refactor:` | Refactoring | Patch (1.0.0 → 1.0.1) | `refactor: clean code` |
-| `feat!:` | Breaking change | Major (1.0.0 → 2.0.0) | `feat!: redesign API` |
-| `docs:` | Documentation | None | `docs: update guide` |
-| `chore:` | Maintenance | None | `chore: update deps` |
-| `test:` | Tests | None | `test: add unit tests` |
-
-### Examples
+### Check Deployment Status
 
 ```bash
-# Minor version bump (new feature)
-git commit -m "feat: add Discord slash commands"
-git commit -m "feat(auth): implement OAuth login"
+# View GitHub Actions
+# Go to: https://github.com/YOUR_REPO/actions
 
-# Patch version bump (bug fix)
-git commit -m "fix: resolve database connection timeout"
-git commit -m "fix(api): handle null responses"
+# Check Discord notifications
+# Look for deployment status messages
 
-# Major version bump (breaking change)
-git commit -m "feat!: redesign API endpoints"
-git commit -m "BREAKING CHANGE: remove legacy endpoints"
-
-# No version bump
-git commit -m "docs: update deployment guide"
-git commit -m "chore: update dependencies"
+# SSH to VPS
+ssh user@vps-host
+pm2 list
+pm2 logs tzbot --lines 20
 ```
-
----
-
-## 🌿 Branch Strategy
-
-### Development Branch
-- **Purpose:** Active development
-- **Contains:** Source code, tests, dev configs
-- **Push:** Triggers CI pipeline
-- **Protection:** Require PR reviews (recommended)
-
-### Release Branch
-- **Purpose:** Production-ready code only
-- **Contains:** Built code, no dev files
-- **Push:** Triggers versioning + deployment
-- **Protection:** No direct pushes (CI only)
-
----
-
-## 🔐 Required Secrets
-
-### VPS Connection
-```
-VPS_HOSTNAME
-VPS_USER
-VPS_SSH_KEY
-```
-
-### Discord
-```
-DISCORD_TOKEN
-DISCORD_CLIENT_ID
-DISCORD_GUILD_ID
-DISCORD_WEBHOOK_URL
-SUBSCRIBER_ROLE_ID
-VIP_ROLE_ID
-MODERATOR_ROLE_ID
-NOTIFICATION_CHANNEL_ID
-FALLBACK_CHANNEL_ID
-PRIVATE_ANNOUNCEMENT_CHANNEL_ID
-PUBLIC_ANNOUNCEMENT_CHANNEL_IDS
-```
-
-### Database & Cache
-```
-DATABASE_URL
-REDIS_URL
-REDIS_PASSWORD (optional)
-```
-
-### CI/CD
-```
-PAT_TOKEN (repo + workflow scopes)
-CODECOV_TOKEN (optional)
-```
-
----
-
-## 🔄 Rollback
-
-### Automatic Rollback
-- **Trigger:** Health checks fail after deployment
-- **Action:** Restores previous version automatically
-- **Time:** ~40 seconds
-- **Notification:** Discord alert sent
 
 ### Manual Rollback
 
 ```bash
-# SSH into VPS
-ssh user@vps-hostname
+# SSH to VPS
+ssh user@vps-host
 
-# Rollback to previous version
+# List releases
+ls -lt /var/www/tzbot/releases/
+
+# Rollback to previous
 cd /var/www/tzbot
-export APP_NAME=tzbot
-export DEPLOY_BASE=/var/www/tzbot
-export SERVICE_NAME=tzbot
-bash deployment/scripts/rollback.sh previous
+bash deployment/scripts/rollback.sh
 
-# Rollback to specific commit
-bash deployment/scripts/rollback.sh abc1234
+# Or rollback to specific release
+bash deployment/scripts/rollback.sh release-20260224-120000
 
 # Verify
-pm2 status
-pm2 logs tzbot --lines 50
+pm2 list
+cat current/package.json | grep version
 ```
 
----
+### View Logs
 
-## 🐛 Troubleshooting
+```bash
+# SSH to VPS
+ssh user@vps-host
+
+# PM2 logs
+pm2 logs tzbot
+pm2 logs tzbot --lines 100
+pm2 logs tzbot --err  # Errors only
+
+# Application logs
+tail -f /var/www/tzbot/current/logs/error.log
+tail -f /var/www/tzbot/current/logs/tzbot-*.log
+
+# Monitoring logs
+tail -f /var/log/tzbot-monitor.log
+```
+
+### Check Health
+
+```bash
+# SSH to VPS
+ssh user@vps-host
+
+# PM2 status
+pm2 list
+pm2 describe tzbot
+
+# Manual health check
+cd /var/www/tzbot
+bash deployment/scripts/health_check.sh
+
+# Check monitoring
+crontab -l | grep vps-monitor
+```
+
+## Commit Message Format
+
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+```bash
+# Patch version bump (v1.0.0 → v1.0.1)
+git commit -m "fix: resolve login bug"
+git commit -m "perf: improve query performance"
+
+# Minor version bump (v1.0.0 → v1.1.0)
+git commit -m "feat: add new feature"
+
+# Major version bump (v1.0.0 → v2.0.0)
+git commit -m "feat!: breaking API change"
+git commit -m "feat: breaking change
+
+BREAKING CHANGE: API endpoint changed"
+
+# No version bump
+git commit -m "docs: update README"
+git commit -m "chore: update dependencies"
+```
+
+## Workflow Commands
+
+### Trigger Workflows Manually
+
+```bash
+# Go to GitHub Actions
+# Select workflow
+# Click "Run workflow"
+# Choose branch
+# Click "Run workflow"
+```
+
+### Cancel Running Workflow
+
+```bash
+# Go to GitHub Actions
+# Click on running workflow
+# Click "Cancel workflow"
+```
+
+### Re-run Failed Workflow
+
+```bash
+# Go to GitHub Actions
+# Click on failed workflow
+# Click "Re-run jobs"
+# Select "Re-run failed jobs" or "Re-run all jobs"
+```
+
+## Scripts Reference
+
+### CI Scripts
+
+```bash
+# Prepare clean release (local testing)
+deployment/scripts/prepare_clean_release.sh /tmp/clean-build
+
+# Promote to release (local testing)
+deployment/scripts/promote_to_release.sh /tmp/clean-build abc1234
+```
+
+### Deployment Scripts
+
+```bash
+# Setup SSH (called by workflow)
+deployment/scripts/setup_ssh.sh "$SSH_KEY" "$VPS_HOST"
+
+# Deploy release (runs on VPS)
+deployment/scripts/deploy_release.sh
+
+# Health check (runs on VPS)
+deployment/scripts/health_check.sh 5 5  # 5 attempts, 5s initial delay
+
+# Rollback (runs on VPS)
+deployment/scripts/rollback.sh  # Previous release
+deployment/scripts/rollback.sh release-20260224-120000  # Specific release
+```
+
+## Troubleshooting
 
 ### CI Pipeline Fails
 
-**Tests failing:**
 ```bash
+# Check workflow logs
+# Go to: https://github.com/YOUR_REPO/actions
+
+# Run checks locally
+npm run lint
+npm run typecheck
 npm run test:unit
+npm audit
+
 # Fix issues and push again
 ```
 
-**Security scan failing:**
-```bash
-npm audit
-npm audit fix
-# Push updated package-lock.json
-```
-
-**Build failing:**
-```bash
-npm run build
-npx tsc --noEmit
-# Fix TypeScript errors
-```
-
----
-
 ### Deployment Fails
 
-**SSH connection failed:**
-1. Check `VPS_HOSTNAME` secret
-2. Check `VPS_SSH_KEY` includes full key with headers
-3. Test manually: `ssh -i key user@host`
-
-**Health checks failing:**
 ```bash
-ssh user@vps
-pm2 logs tzbot --err
-tail -f /var/www/tzbot/current/logs/tzbot.log
-# Fix issues and re-deploy
+# Check workflow logs
+# Go to: https://github.com/YOUR_REPO/actions
+
+# SSH to VPS and check
+ssh user@vps-host
+pm2 list
+pm2 logs tzbot --err --lines 50
+
+# Manual rollback if needed
+cd /var/www/tzbot
+bash deployment/scripts/rollback.sh
 ```
 
-**Environment variables missing:**
-1. Check all secrets are set in GitHub
-2. Verify: `cat /var/www/tzbot/shared/.env`
-3. Re-run deployment
-
----
-
-### Bot Offline
+### Health Check Fails
 
 ```bash
-# SSH into VPS
-ssh user@vps
+# SSH to VPS
+ssh user@vps-host
 
 # Check PM2 status
-pm2 status
+pm2 list
+pm2 describe tzbot
 
 # Check logs
-pm2 logs tzbot --lines 50
+pm2 logs tzbot --err --lines 100
 
 # Restart if needed
 pm2 restart tzbot
 
-# Check .env exists
-cat /var/www/tzbot/shared/.env
-
-# Check database connectivity
-psql $DATABASE_URL -c "SELECT 1"
+# Or rollback
+cd /var/www/tzbot
+bash deployment/scripts/rollback.sh
 ```
 
----
+## Monitoring
 
-## 📊 Monitoring
+### Check Monitoring Status
 
-### GitHub Actions
-- Go to **Actions** tab
-- Monitor workflow progress
-- Check logs for failures
+```bash
+# SSH to VPS
+ssh user@vps-host
+
+# Check cron job
+crontab -l | grep vps-monitor
+
+# Check monitoring script
+ls -la /var/www/tzbot/deployment/scripts/vps-monitor.sh
+
+# View monitoring logs
+tail -f /var/log/tzbot-monitor.log
+
+# Test monitoring
+/var/www/tzbot/deployment/scripts/vps-monitor.sh
+```
 
 ### Discord Notifications
-- 🚀 Deployment starting
-- ✅ Deployment successful
-- ❌ Deployment failed (with rollback)
-- 🎉 New release created
 
-### VPS Status
+Expected notifications:
+
+- ✅ CI pipeline success/failure
+- ✅ Promotion to release
+- ✅ New release created (with version + changelog)
+- ✅ Deployment start
+- ✅ Deployment success/failure
+- ✅ Automatic rollback (if health check fails)
+- ✅ VPS monitoring alerts (crashes, high restarts, memory)
+
+## VPS Management
+
+### Check Current Release
+
 ```bash
-# Check PM2 status
-pm2 status
-
-# View logs
-pm2 logs tzbot
-
-# View recent logs
-pm2 logs tzbot --lines 100
-
-# Monitor in real-time
-pm2 logs tzbot --lines 0
-```
-
----
-
-## ⚡ Common Commands
-
-### Local Development
-```bash
-# Install dependencies
-npm install
-
-# Run linter
-npm run lint
-
-# Fix lint issues
-npm run lint:fix
-
-# Run tests
-npm run test:unit
-
-# Run all tests
-npm test
-
-# Build
-npm run build
-
-# Type check
-npm run typecheck
-
-# Run locally
-npm run dev
-```
-
-### Git Operations
-```bash
-# Update development
-git checkout development
-git pull origin development
-
-# Create feature branch
-git checkout -b feature/my-feature
-
-# Commit with conventional format
-git commit -m "feat: add feature"
-
-# Push
-git push origin feature/my-feature
-
-# View commit history
-git log --oneline --graph
-
-# View tags
-git tag -l
-```
-
-### VPS Operations
-```bash
-# SSH into VPS
-ssh user@vps-hostname
-
-# Check PM2 status
-pm2 status
-
-# View logs
-pm2 logs tzbot
-
-# Restart bot
-pm2 restart tzbot
-
-# Stop bot
-pm2 stop tzbot
-
-# Start bot
-pm2 start tzbot
-
-# View releases
-ls -la /var/www/tzbot/releases/
-
-# Check current release
+ssh user@vps-host
 ls -la /var/www/tzbot/current
-
-# View environment
-cat /var/www/tzbot/shared/.env
+cat /var/www/tzbot/current/package.json | grep version
 ```
 
----
+### List All Releases
 
-## 📈 Success Metrics
-
-### CI Pipeline
-- ✅ All tests pass
-- ✅ No security vulnerabilities
-- ✅ Build successful
-- ✅ Clean build created
-- ✅ Auto-promoted to release
-
-### Deployment
-- ✅ SSH connection successful
-- ✅ Deployment script completed
-- ✅ PM2 process running
-- ✅ Health checks passed
-- ✅ Discord notification sent
-
-### Application
-- ✅ Bot online in Discord
-- ✅ Commands responding
-- ✅ No errors in logs
-- ✅ Database connected
-- ✅ Redis connected
-
----
-
-## 🆘 Emergency Procedures
-
-### Stop All Deployments
-1. Go to GitHub Actions
-2. Click on running workflow
-3. Click "Cancel workflow"
-
-### Emergency Rollback
 ```bash
-ssh user@vps
-cd /var/www/tzbot
-bash deployment/scripts/rollback.sh previous
+ssh user@vps-host
+ls -lt /var/www/tzbot/releases/
 ```
 
-### Emergency Bot Restart
+### Clean Old Releases
+
 ```bash
-ssh user@vps
+# Automatic: Keeps last 5 releases
+# Manual cleanup:
+ssh user@vps-host
+cd /var/www/tzbot/releases
+ls -t | tail -n +6 | xargs rm -rf
+```
+
+### Update Environment Variables
+
+```bash
+ssh user@vps-host
+nano /var/www/tzbot/shared/.env
+# Edit variables
+# Save and exit
+
+# Restart application
 pm2 restart tzbot
 ```
 
-### Check System Health
+## Secrets Management
+
+### Required Secrets
+
+Configure in GitHub Settings → Secrets:
+
+- `VPS_SSH_KEY` - SSH private key
+- `VPS_HOST` - VPS hostname
+- `VPS_USER` - VPS username
+- `DISCORD_WEBHOOK_URL` - Discord webhook
+- `PAT_TOKEN` (optional) - GitHub PAT
+- `CODECOV_TOKEN` (optional) - Codecov token
+
+### Update Secrets
+
 ```bash
-ssh user@vps
-pm2 status
-pm2 logs tzbot --err --lines 50
-df -h  # Check disk space
-free -h  # Check memory
-top  # Check CPU usage
+# Go to GitHub repository
+# Settings → Secrets and variables → Actions
+# Click on secret name
+# Click "Update secret"
+# Enter new value
+# Click "Update secret"
 ```
 
+## Branch Protection
+
+### Recommended Settings
+
+```bash
+# Go to: Settings → Branches → Add rule
+# Branch name pattern: development
+
+# Enable:
+☑ Require pull request reviews (1 approval)
+☑ Require status checks to pass
+  ☑ lint
+  ☑ security
+  ☑ test
+  ☑ build
+☑ Require branches to be up to date
+☑ Require conversation resolution
+☑ Do not allow bypassing the above settings
+```
+
+## Performance
+
+### Workflow Durations
+
+| Stage | Duration | Can Fail |
+|-------|----------|----------|
+| Lint & Type Check | 1-2 min | Yes |
+| Security Scan | 1-2 min | Yes |
+| Tests | 2-3 min | Yes |
+| Build | 1-2 min | Yes |
+| Prepare Release | 1 min | No |
+| Auto-Promote | 1 min | No |
+| Release Versioning | 2 min | No |
+| Deployment | 3-5 min | Yes (with rollback) |
+
+### Optimization Tips
+
+```bash
+# Use npm ci instead of npm install (faster, deterministic)
+npm ci
+
+# Cache dependencies (already configured in workflows)
+# uses: actions/setup-node@v4
+#   with:
+#     cache: 'npm'
+
+# Run tests in parallel (already configured)
+# vitest runs tests in parallel by default
+```
+
+## Support
+
+### Documentation
+
+- [CI/CD Testing Checklist](./CICD_TESTING_CHECKLIST.md)
+- [CI/CD Architecture](./CICD_ARCHITECTURE.md)
+- [Deployment Guide](./DEPLOYMENT.md)
+- [Troubleshooting Guide](./TROUBLESHOOTING.md)
+- [VPS Monitoring](./VPS_MONITORING.md)
+
+### Getting Help
+
+1. Check workflow logs in GitHub Actions
+2. Check Discord notifications
+3. SSH to VPS and check PM2 logs
+4. Review documentation
+5. Open GitHub issue
+
 ---
 
-## 📚 Documentation
-
-- **Complete Guide:** `docs/CICD_COMPLETE_GUIDE.md`
-- **Quick Reference:** `docs/CICD_QUICK_REFERENCE.md` (this file)
-- **Deployment Guide:** `docs/DEPLOYMENT.md`
-- **Troubleshooting:** `docs/TROUBLESHOOTING.md`
-
----
-
-## 🎯 Key Takeaways
-
-1. **Push to `development`** → Everything else is automatic
-2. **Use conventional commits** → Automatic versioning
-3. **CI validates everything** → Only clean code reaches production
-4. **Automatic rollback** → Failed deployments revert automatically
-5. **Discord notifications** → Stay informed of all deployments
-6. **Zero manual steps** → Fully automated pipeline
-
----
-
-**Last Updated:** 2024  
-**Version:** 1.0.0
+**Quick Links:**
+- [GitHub Actions](https://github.com/YOUR_REPO/actions)
+- [Releases](https://github.com/YOUR_REPO/releases)
+- [Deployments](https://github.com/YOUR_REPO/deployments)
