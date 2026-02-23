@@ -81,7 +81,7 @@ echo -e "${GREEN}✅ Directory structure created${NC}"
 
 # 3. Set up PM2 ecosystem file
 echo -e "\n${GREEN}⚙️  Creating PM2 ecosystem file...${NC}"
-cat > "$DEPLOY_BASE/ecosystem.config.js" << 'EOF'
+cat > "$DEPLOY_BASE/ecosystem.config.cjs" << 'EOF'
 module.exports = {
   apps: [{
     name: 'tzbot',
