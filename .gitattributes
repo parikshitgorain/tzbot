@@ -1,0 +1,26 @@
+# Git attributes for release branch filtering
+
+# Development-only files (exclude from release branch)
+tests/** export-ignore
+.kiro/specs/** export-ignore
+.agents/** export-ignore
+vitest.config.* export-ignore
+tsconfig.test.json export-ignore
+.eslintrc.* export-ignore
+.prettierrc* export-ignore
+eslint.config.js export-ignore
+skills-lock.json export-ignore
+*.test.ts export-ignore
+*.test.js export-ignore
+*.example.ts export-ignore
+*.example.js export-ignore
+
+# Development scripts (exclude from release)
+scripts/clear-commands.ts export-ignore
+scripts/register-commands-to-guild.ts export-ignore
+scripts/setup-test-db.ts export-ignore
+
+# Documentation that's not needed in production
+*.md export-ignore
+!README.md export-ignore
+!CHANGELOG.md export-ignore
