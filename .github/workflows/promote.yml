@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
       
       - name: Configure Git
         run: |
@@ -54,10 +54,29 @@ jobs:
       - name: Merge source branch
         run: |
           echo "Merging ${{ inputs.source_branch }} into ${{ inputs.target_branch }}"
-          git merge --no-ff ${{ inputs.source_branch }} \
+          
+          if git merge --no-ff ${{ inputs.source_branch }} \
             -m "Merge ${{ inputs.source_branch }} into ${{ inputs.target_branch }}" \
             -m "Promoted commit: ${{ inputs.commit_sha }}" \
-            -m "Author: ${{ inputs.commit_author }}"
+            -m "Author: ${{ inputs.commit_author }}"; then
+            echo "✅ Merge successful"
+          else
+            echo "⚠️ Merge conflicts detected, resolving..."
+            
+            # For package.json and package-lock.json conflicts, use Development version
+            # (will be cleaned in next step)
+            git checkout --theirs package.json package-lock.json || true
+            
+            # For other conflicts, prefer Development version
+            git checkout --theirs -- . || true
+            
+            # Stage resolved files
+            git add -A
+            
+            # Complete the merge
+            git commit --no-edit
+            echo "✅ Conflicts resolved"
+          fi
       
       - name: Clean version for release
         if: inputs.target_branch == 'release'
@@ -113,34 +132,12 @@ jobs:
         run: |
           git push origin ${{ inputs.target_branch }}
           echo "✅ Pushed to ${{ inputs.target_branch }}"
-      
-      - name: Trigger deployment
-        if: inputs.target_branch == 'release'
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            console.log('🚀 Triggering deployment workflow...');
-            
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'cd-release.yml',
-              ref: 'release',
-              inputs: {
-                environment: 'production',
-                commit_sha: '${{ inputs.commit_sha }}',
-                commit_author: '${{ inputs.commit_author }}',
-                source_branch: '${{ inputs.source_branch }}'
-              }
-            });
-            
-            console.log('✅ Deployment workflow triggered');
+          echo "🚀 CD workflow will trigger automatically from push"
       
       - name: Send notification
         run: |
           VERSION=$(node -p "require('./package.json').version")
           curl -H "Content-Type: application/json" -X POST \
-            -d "{\"embeds\":[{\"title\":\"✅ Promoted to Release\",\"description\":\"**Version:** \`v$VERSION\`\\n**Commit:** \`${{ inputs.commit_sha }}\`\\n**Author:** ${{ inputs.commit_author }}\\n\\n🚀 Deployment triggered\",\"color\":3066993}]}" \
+            -d "{\"embeds\":[{\"title\":\"✅ Promoted to Release\",\"description\":\"**Version:** \`v$VERSION\`\\n**Commit:** \`${{ inputs.commit_sha }}\`\\n**Author:** ${{ inputs.commit_author }}\\n\\n🚀 Deployment starting automatically\",\"color\":3066993}]}" \
             "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
         continue-on-error: true
