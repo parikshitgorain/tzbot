@@ -173,9 +173,11 @@ jobs:
           echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
           echo "New version: $VERSION_TAG"
           
+          # Check if tag already exists (skip if it does)
           if git rev-parse "$VERSION_TAG" >/dev/null 2>&1; then
-            echo "❌ Tag $VERSION_TAG already exists!"
-            exit 1
+            echo "⚠️ Tag $VERSION_TAG already exists, skipping version bump"
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
           
           git add package.json package-lock.json
