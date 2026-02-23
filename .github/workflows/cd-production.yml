@@ -152,15 +152,23 @@ jobs:
       
       - name: Setup SSH
         run: |
-          if [ ! -f deployment/scripts/setup_ssh.sh ]; then
-            echo "❌ setup_ssh.sh not found!"
-            echo "Current directory: $(pwd)"
-            echo "Files in deployment/scripts:"
-            ls -la deployment/scripts/ || echo "Directory doesn't exist"
+          if [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
+            echo "❌ VPS_SSH_KEY secret is not set or empty"
             exit 1
           fi
+          
+          if [ -z "${{ secrets.VPS_HOSTNAME }}" ]; then
+            echo "❌ VPS_HOSTNAME secret is not set or empty"
+            exit 1
+          fi
+          
+          if [ ! -f deployment/scripts/setup_ssh.sh ]; then
+            echo "❌ setup_ssh.sh not found!"
+            exit 1
+          fi
+          
           chmod +x deployment/scripts/setup_ssh.sh
-          deployment/scripts/setup_ssh.sh "${{ secrets.VPS_SSH_KEY }}" "${{ secrets.VPS_HOST }}"
+          deployment/scripts/setup_ssh.sh "${{ secrets.VPS_SSH_KEY }}" "${{ secrets.VPS_HOSTNAME }}"
       
       - name: Create deployment package
         run: |
@@ -183,7 +191,7 @@ jobs:
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             -o ConnectTimeout=30 \
             deployment-package.tar.gz \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/deployment-package.tar.gz
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deployment-package.tar.gz
           echo "✅ Package uploaded"
       
       - name: Deploy on VPS
@@ -195,7 +203,7 @@ jobs:
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             deployment/scripts/deploy_release.sh \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/deploy_release.sh
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deploy_release.sh
           
           # Execute deployment
           ssh -i ~/.ssh/deploy_key \
@@ -203,7 +211,7 @@ jobs:
             -o ConnectTimeout=30 \
             -o ServerAliveInterval=15 \
             -o ServerAliveCountMax=3 \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "bash /tmp/deploy_release.sh && rm /tmp/deploy_release.sh"
           
           echo "✅ Deployment completed"
@@ -215,11 +223,11 @@ jobs:
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             deployment/scripts/install-monitoring.sh \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/install-monitoring.sh
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/install-monitoring.sh
           
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "bash /tmp/install-monitoring.sh && rm /tmp/install-monitoring.sh"
         continue-on-error: true
       
@@ -238,12 +246,12 @@ jobs:
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             deployment/scripts/health_check.sh \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/health_check.sh
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/health_check.sh
           
           # Run health checks
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "bash /tmp/health_check.sh 5 5 && rm /tmp/health_check.sh"
       
       - name: Rollback on failure
@@ -256,12 +264,12 @@ jobs:
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             deployment/scripts/rollback.sh \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/rollback.sh
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/rollback.sh
           
           # Execute rollback
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "bash /tmp/rollback.sh && rm /tmp/rollback.sh"
           
           echo "✅ Rollback completed"
@@ -281,7 +289,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           deployment-id: ${{ needs.create-deployment.outputs.deployment_id }}
           state: 'success'
-          environment-url: 'https://${{ secrets.VPS_HOST }}'
+          environment-url: 'https://${{ secrets.VPS_HOSTNAME }}'
       
       - name: Update deployment status - Failure
         if: failure()
