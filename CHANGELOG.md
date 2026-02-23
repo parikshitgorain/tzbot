@@ -1,3 +1,11 @@
+## [1.0.0-dev.5](https://github.com/parikshitgorain/tzbot/compare/v1.0.0-dev.4...v1.0.0-dev.5) (2026-02-23)
+
+### 🐛 Bug Fixes
+
+* fix PM2 ESM ecosystem config, add tests, improve monitoring intervals ([a31e4a3](https://github.com/parikshitgorain/tzbot/commit/a31e4a3ddea7a2159810a16e5c69bcf363b8f7ce))
+* skip integration tests in CI that require real external services ([2913d6b](https://github.com/parikshitgorain/tzbot/commit/2913d6b4210a7bc16220e2c10a58ae85a90cdf2f))
+* update ecosystem.config.cjs reference in docs and vps-setup ([db9315a](https://github.com/parikshitgorain/tzbot/commit/db9315a7ac140d1526c4d51ab3309757cd51a4dc))
+
 ## [1.0.0-dev.4](https://github.com/parikshitgorain/tzbot/compare/v1.0.0-dev.3...v1.0.0-dev.4) (2026-02-23)
 
 ### 🐛 Bug Fixes
