@@ -210,7 +210,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: prepare-release
     if: github.event_name == 'push' && (github.ref == 'refs/heads/Development' || github.ref == 'refs/heads/development')
-    environment: release-promotion
     
     steps:
       - name: Checkout repository
