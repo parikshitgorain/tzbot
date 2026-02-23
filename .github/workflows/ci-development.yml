@@ -208,8 +208,12 @@ jobs:
   auto-promote:
     name: Auto-Promote to Release
     runs-on: ubuntu-latest
-    needs: prepare-release
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/Development' || github.ref == 'refs/heads/development')
+    needs: [prepare-release]
+    if: |
+      always() &&
+      needs.prepare-release.result == 'success' &&
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/Development' || github.ref == 'refs/heads/development')
     
     steps:
       - name: Checkout repository
@@ -260,7 +264,7 @@ jobs:
   summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [lint, security, test, build]
+    needs: [lint, security, test, build, prepare-release, auto-promote]
     if: always()
     
     steps:
@@ -279,7 +283,16 @@ jobs:
             EMOJI="❌"
           fi
           
+          PROMOTE_STATUS=""
+          if [ "${{ needs.auto-promote.result }}" = "success" ]; then
+            PROMOTE_STATUS="\\n✅ Auto-promoted to release"
+          elif [ "${{ needs.auto-promote.result }}" = "failure" ]; then
+            PROMOTE_STATUS="\\n❌ Auto-promotion failed"
+          elif [ "${{ needs.auto-promote.result }}" = "skipped" ]; then
+            PROMOTE_STATUS="\\n⏭️ Auto-promotion skipped"
+          fi
+          
           curl -H "Content-Type: application/json" -X POST \
-            -d "{\"embeds\":[{\"title\":\"${EMOJI} CI Pipeline ${STATUS}\",\"description\":\"Branch: development\",\"color\":${COLOR},\"fields\":[{\"name\":\"Commit\",\"value\":\"\`${GITHUB_SHA:0:7}\`\"},{\"name\":\"Author\",\"value\":\"${{ github.actor }}\"},{\"name\":\"Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            -d "{\"embeds\":[{\"title\":\"${EMOJI} CI Pipeline ${STATUS}\",\"description\":\"Branch: development${PROMOTE_STATUS}\",\"color\":${COLOR},\"fields\":[{\"name\":\"Commit\",\"value\":\"\`${GITHUB_SHA:0:7}\`\"},{\"name\":\"Author\",\"value\":\"${{ github.actor }}\"},{\"name\":\"Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
             "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
         continue-on-error: true
