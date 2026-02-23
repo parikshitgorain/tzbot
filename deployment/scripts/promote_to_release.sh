@@ -90,9 +90,7 @@ else
 
 - Source commit: $SHORT_SHA
 - Version: $CLEAN_VERSION
-- Build date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-[skip ci]"
+- Build date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 fi
 
 # Push to release branch
