@@ -250,6 +250,7 @@ export class NotificationManager {
       event,
       embedData,
       attempts: 0,
+      lastAttempt: new Date(),
       createdAt: new Date(),
     };
 
