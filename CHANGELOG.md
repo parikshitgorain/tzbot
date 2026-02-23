@@ -1,3 +1,14 @@
+## [1.0.0-dev.6](https://github.com/parikshitgorain/tzbot/compare/v1.0.0-dev.5...v1.0.0-dev.6) (2026-02-23)
+
+### ✨ Features
+
+* add 25 test files for 80%+ coverage across all metrics (438 tests) ([979bc45](https://github.com/parikshitgorain/tzbot/commit/979bc458272663032aa80f30f051e7fe81d279fb))
+
+### 🐛 Bug Fixes
+
+* Add ESLint flat config for ESLint v10 compatibility ([c10bf61](https://github.com/parikshitgorain/tzbot/commit/c10bf619d1c215865c3827b501e44e02c28c399a))
+* Create test infrastructure and unit tests to resolve failing CI check ([4e4e6fc](https://github.com/parikshitgorain/tzbot/commit/4e4e6fc3670c4f72d57ca798bbe140eae7d3ec19))
+
 ## [1.0.0-dev.5](https://github.com/parikshitgorain/tzbot/compare/v1.0.0-dev.4...v1.0.0-dev.5) (2026-02-23)
 
 ### 🐛 Bug Fixes
