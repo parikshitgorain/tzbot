@@ -5,12 +5,7 @@ const validConfig = {
   discordToken: 'test_token',
   guildId: '123456789',
   clientId: '123456789',
-  subscriberRoleId: '123456789',
-  vipRoleId: '123456789',
-  moderatorRoleId: '123456789',
-  notificationChannelId: '123456789',
   databaseUrl: 'postgresql://localhost/test',
-  redisUrl: 'redis://localhost:6379',
   spamThreshold: {
     identicalMessages: 5,
     identicalWindow: 10,
@@ -42,11 +37,6 @@ describe('validateConfig()', () => {
     it('throws when databaseUrl is missing', () => {
       const cfg = { ...validConfig, databaseUrl: undefined };
       expect(() => validateConfig(cfg)).toThrow(/databaseUrl|Database URL/i);
-    });
-
-    it('throws when redisUrl is missing', () => {
-      const cfg = { ...validConfig, redisUrl: undefined };
-      expect(() => validateConfig(cfg)).toThrow(/redisUrl|Redis URL/i);
     });
   });
 
@@ -90,6 +80,21 @@ describe('validateConfig()', () => {
       expect(() => validateConfig(cfg)).not.toThrow();
     });
 
+    it('does not require redisUrl', () => {
+      const cfg = { ...validConfig };
+      expect(() => validateConfig(cfg)).not.toThrow();
+    });
+
+    it('does not require role IDs', () => {
+      const cfg = { ...validConfig };
+      expect(() => validateConfig(cfg)).not.toThrow();
+    });
+
+    it('does not require notificationChannelId', () => {
+      const cfg = { ...validConfig };
+      expect(() => validateConfig(cfg)).not.toThrow();
+    });
+
     it('accepts kickApiKey when provided', () => {
       const cfg = { ...validConfig, kickApiKey: 'some-kick-key' };
       const result = validateConfig(cfg);
@@ -100,6 +105,25 @@ describe('validateConfig()', () => {
       const cfg = { ...validConfig, fallbackChannelId: '987654321' };
       const result = validateConfig(cfg);
       expect(result.fallbackChannelId).toBe('987654321');
+    });
+
+    it('accepts redisUrl when provided', () => {
+      const cfg = { ...validConfig, redisUrl: 'redis://localhost:6379' };
+      const result = validateConfig(cfg);
+      expect(result.redisUrl).toBe('redis://localhost:6379');
+    });
+
+    it('accepts role IDs when provided', () => {
+      const cfg = {
+        ...validConfig,
+        subscriberRoleId: '123456789',
+        vipRoleId: '987654321',
+        moderatorRoleId: '555555555',
+      };
+      const result = validateConfig(cfg);
+      expect(result.subscriberRoleId).toBe('123456789');
+      expect(result.vipRoleId).toBe('987654321');
+      expect(result.moderatorRoleId).toBe('555555555');
     });
   });
 });

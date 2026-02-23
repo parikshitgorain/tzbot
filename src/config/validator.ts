@@ -19,13 +19,13 @@ const configSchema = z.object({
   guildId: z.string().trim().min(1, 'Guild ID is required'),
   clientId: z.string().trim().min(1, 'Client ID is required'),
 
-  // Role mappings (required)
-  subscriberRoleId: z.string().trim().min(1, 'Subscriber role ID is required'),
-  vipRoleId: z.string().trim().min(1, 'VIP role ID is required'),
-  moderatorRoleId: z.string().trim().min(1, 'Moderator role ID is required'),
+  // Role mappings (optional - features disabled if not set)
+  subscriberRoleId: z.string().trim().optional(),
+  vipRoleId: z.string().trim().optional(),
+  moderatorRoleId: z.string().trim().optional(),
 
-  // Notification settings (required)
-  notificationChannelId: z.string().trim().min(1, 'Notification channel ID is required'),
+  // Notification settings (optional - logging disabled if not set)
+  notificationChannelId: z.string().trim().optional(),
   fallbackChannelId: z.string().optional(),
 
   // Announcement relay (optional)
@@ -43,8 +43,8 @@ const configSchema = z.object({
   databaseUrl: z.string().trim().min(1, 'Database URL is required'),
   databaseMaxConnections: z.number().min(1).max(100).default(20),
 
-  // Redis settings (required)
-  redisUrl: z.string().trim().min(1, 'Redis URL is required'),
+  // Redis settings (optional - caching disabled if not set)
+  redisUrl: z.string().trim().optional(),
   redisPassword: z.string().optional(),
 
   // Moderation settings

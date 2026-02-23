@@ -17,13 +17,13 @@ export interface BotConfig {
   guildId: string;
   clientId: string;
 
-  // Role mappings
-  subscriberRoleId: string;
-  vipRoleId: string;
-  moderatorRoleId: string;
+  // Role mappings (optional - features disabled if not set)
+  subscriberRoleId?: string;
+  vipRoleId?: string;
+  moderatorRoleId?: string;
 
-  // Notification settings
-  notificationChannelId: string;
+  // Notification settings (optional - logging disabled if not set)
+  notificationChannelId?: string;
   fallbackChannelId?: string;
 
   // Announcement relay
@@ -41,8 +41,8 @@ export interface BotConfig {
   databaseUrl: string;
   databaseMaxConnections: number;
 
-  // Redis settings
-  redisUrl: string;
+  // Redis settings (optional - caching disabled if not set)
+  redisUrl?: string;
   redisPassword?: string;
 
   // Moderation settings

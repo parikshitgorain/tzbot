@@ -541,6 +541,12 @@ class TZBotApplication {
    * Initialize Redis cache
    */
   private async initializeRedis(): Promise<void> {
+    // Skip Redis if not configured
+    if (!config.redisUrl) {
+      logger.info('Redis URL not configured - caching disabled');
+      return;
+    }
+
     logger.info('Initializing Redis cache...');
 
     try {
@@ -803,7 +809,7 @@ class TZBotApplication {
     this.webhookHandler = new KickWebhookHandler({
       webhookSecret: config.kickWebhookSecret || '',
       notificationManager: this.notificationManager,
-      notificationChannelId: config.notificationChannelId,
+      notificationChannelId: config.notificationChannelId || '',
     });
 
     // Webhook server
