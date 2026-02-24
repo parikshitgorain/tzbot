@@ -38,6 +38,8 @@ export declare class GiveawayManager {
     private discordClient;
     private giveawayRepository;
     private activeGiveaways;
+    private countdownIntervals;
+    private lastUpdateTime;
     private confirmationSystem;
     private configManager;
     constructor(discordClient: IDiscordClient, giveawayRepository: GiveawayRepository);
@@ -81,6 +83,19 @@ export declare class GiveawayManager {
      * Schedule giveaway end event
      */
     private scheduleGiveawayEnd;
+    /**
+     * Start smart countdown that updates every second but respects rate limits
+     * Strategy: Only update if at least 1 second has passed since last update
+     */
+    private startSmartCountdown;
+    /**
+     * Stop smart countdown
+     */
+    private stopSmartCountdown;
+    /**
+     * Update countdown in message
+     */
+    private updateCountdown;
     /**
      * End a giveaway and select winners
      */

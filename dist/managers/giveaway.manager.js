@@ -16,6 +16,8 @@ export class GiveawayManager {
     discordClient;
     giveawayRepository;
     activeGiveaways = new Map();
+    countdownIntervals = new Map();
+    lastUpdateTime = new Map();
     confirmationSystem = null;
     configManager = null;
     constructor(discordClient, giveawayRepository) {
@@ -101,6 +103,8 @@ export class GiveawayManager {
             await this.giveawayRepository.save(giveaway);
             // Schedule giveaway end
             this.scheduleGiveawayEnd(giveaway, options.guildId);
+            // Start countdown updates (smart rate limiting)
+            this.startSmartCountdown(giveaway);
             logger.info('Giveaway created', {
                 giveawayId,
                 title: options.title,
@@ -418,6 +422,104 @@ export class GiveawayManager {
         });
     }
     /**
+     * Start smart countdown that updates every second but respects rate limits
+     * Strategy: Only update if at least 1 second has passed since last update
+     */
+    startSmartCountdown(giveaway) {
+        this.stopSmartCountdown(giveaway.id);
+        const interval = setInterval(async () => {
+            try {
+                const now = Date.now();
+                const timeRemaining = giveaway.endsAt.getTime() - now;
+                // Stop if ended
+                if (timeRemaining <= 0) {
+                    this.stopSmartCountdown(giveaway.id);
+                    return;
+                }
+                // Check if we should update (avoid rate limits)
+                const lastUpdate = this.lastUpdateTime.get(giveaway.id) || 0;
+                const timeSinceUpdate = now - lastUpdate;
+                // Only update if at least 1 second passed
+                if (timeSinceUpdate < 1000) {
+                    return;
+                }
+                // Get entry count from cache
+                let entryCount = 0;
+                try {
+                    const countKey = `giveaway:entries:count:${giveaway.id}`;
+                    const cached = await redisClient.get(countKey);
+                    entryCount = cached ? parseInt(cached, 10) : 0;
+                }
+                catch {
+                    const entries = await this.giveawayRepository.getEntries(giveaway.id);
+                    entryCount = entries.length;
+                }
+                // Update message
+                await this.updateCountdown(giveaway, entryCount, timeRemaining);
+                this.lastUpdateTime.set(giveaway.id, now);
+            }
+            catch (error) {
+                // Silently handle errors
+                if (error instanceof Error && error.message.includes('rate limit')) {
+                    logger.debug('Rate limited, skipping update', { giveawayId: giveaway.id });
+                }
+            }
+        }, 1000); // Check every second
+        this.countdownIntervals.set(giveaway.id, interval);
+    }
+    /**
+     * Stop smart countdown
+     */
+    stopSmartCountdown(giveawayId) {
+        const interval = this.countdownIntervals.get(giveawayId);
+        if (interval) {
+            clearInterval(interval);
+            this.countdownIntervals.delete(giveawayId);
+            this.lastUpdateTime.delete(giveawayId);
+        }
+    }
+    /**
+     * Update countdown in message
+     */
+    async updateCountdown(giveaway, entryCount, timeRemainingMs) {
+        const message = await this.discordClient.getMessage(giveaway.channelId, giveaway.messageId);
+        if (message.embeds.length === 0)
+            return;
+        const embed = EmbedBuilder.from(message.embeds[0]);
+        // Format countdown
+        const totalSeconds = Math.floor(timeRemainingMs / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        let countdown = '';
+        if (hours > 0) {
+            countdown = `${hours}h ${minutes}m ${seconds}s`;
+        }
+        else if (minutes > 0) {
+            countdown = `${minutes}m ${seconds}s`;
+        }
+        else {
+            countdown = `${seconds}s`;
+        }
+        // Update description with countdown
+        const timestamp = Math.floor(giveaway.endsAt.getTime() / 1000);
+        let embedDescription = `${giveaway.description}\n\n`;
+        embedDescription += `✨ **Click the button below to enter!**\n\n`;
+        embedDescription += `⏰ **Ends:** in ${countdown} (<t:${timestamp}:f>)\n`;
+        if (giveaway.hostedBy) {
+            embedDescription += `🎤 **Hosted by** <@${giveaway.hostedBy}>\n`;
+        }
+        embed.setDescription(embedDescription);
+        // Update entries field
+        const fields = embed.data.fields || [];
+        const entriesIndex = fields.findIndex(f => f.name === 'Entries');
+        if (entriesIndex !== -1) {
+            fields[entriesIndex].value = `👥 ${entryCount}`;
+            embed.setFields(fields);
+        }
+        await message.edit({ embeds: [embed] });
+    }
+    /**
      * End a giveaway and select winners
      */
     async endGiveaway(giveawayId, guildId) {
@@ -434,6 +536,8 @@ export class GiveawayManager {
             }
             // Update status to ended
             await this.giveawayRepository.updateStatus(giveawayId, GiveawayStatus.ENDED);
+            // Stop countdown
+            this.stopSmartCountdown(giveawayId);
             // Get all entries from Redis first (where they were stored during giveaway)
             let entries = [];
             try {
@@ -814,6 +918,7 @@ export class GiveawayManager {
             });
             for (const giveaway of activeGiveaways) {
                 this.scheduleGiveawayEnd(giveaway, guildId);
+                this.startSmartCountdown(giveaway);
             }
             logger.info('Active giveaways recovered', {
                 count: activeGiveaways.length,
@@ -836,6 +941,8 @@ export class GiveawayManager {
                 clearTimeout(timeout);
                 this.activeGiveaways.delete(giveawayId);
             }
+            // Stop countdown
+            this.stopSmartCountdown(giveawayId);
             // Get giveaway
             const giveaway = await this.giveawayRepository.get(giveawayId);
             if (giveaway) {
