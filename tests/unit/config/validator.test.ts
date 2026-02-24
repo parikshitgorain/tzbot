@@ -126,4 +126,161 @@ describe('validateConfig()', () => {
       expect(result.moderatorRoleId).toBe('555555555');
     });
   });
+
+  describe('error handling', () => {
+    it('throws with formatted error message for multiple validation errors', () => {
+      const cfg = {
+        discordToken: '',
+        guildId: '',
+        clientId: '',
+        databaseUrl: '',
+      };
+      expect(() => validateConfig(cfg)).toThrow(/Configuration validation failed/);
+      expect(() => validateConfig(cfg)).toThrow(/discordToken/);
+      expect(() => validateConfig(cfg)).toThrow(/guildId/);
+    });
+
+    it('re-throws non-Zod errors', () => {
+      const cfg = null;
+      expect(() => validateConfig(cfg)).toThrow();
+    });
+
+    it('includes helpful message about checking .env file', () => {
+      const cfg = { discordToken: '' };
+      expect(() => validateConfig(cfg)).toThrow(/check your \.env file/i);
+    });
+  });
+
+  describe('numeric constraints', () => {
+    it('enforces minimum value for databaseMaxConnections', () => {
+      const cfg = { ...validConfig, databaseMaxConnections: 0 };
+      expect(() => validateConfig(cfg)).toThrow();
+    });
+
+    it('enforces maximum value for databaseMaxConnections', () => {
+      const cfg = { ...validConfig, databaseMaxConnections: 101 };
+      expect(() => validateConfig(cfg)).toThrow();
+    });
+
+    it('enforces minimum value for webhookPort', () => {
+      const cfg = { ...validConfig, webhookPort: 0 };
+      expect(() => validateConfig(cfg)).toThrow();
+    });
+
+    it('enforces maximum value for webhookPort', () => {
+      const cfg = { ...validConfig, webhookPort: 65536 };
+      expect(() => validateConfig(cfg)).toThrow();
+    });
+
+    it('enforces minimum value for chatRainMinDelay', () => {
+      const cfg = { ...validConfig, chatRainMinDelay: 59 };
+      expect(() => validateConfig(cfg)).toThrow();
+    });
+
+    it('enforces minimum value for chatRainActiveWindow', () => {
+      const cfg = { ...validConfig, chatRainActiveWindow: 59 };
+      expect(() => validateConfig(cfg)).toThrow();
+    });
+
+    it('enforces minimum value for chatRainMinMessages', () => {
+      const cfg = { ...validConfig, chatRainMinMessages: 0 };
+      expect(() => validateConfig(cfg)).toThrow();
+    });
+
+    it('enforces minimum value for maxMessagesPerSecond', () => {
+      const cfg = { ...validConfig, maxMessagesPerSecond: 0 };
+      expect(() => validateConfig(cfg)).toThrow();
+    });
+  });
+
+  describe('enum validations', () => {
+    it('accepts valid aiProvider values', () => {
+      const cfg1 = { ...validConfig, aiProvider: 'local' };
+      const cfg2 = { ...validConfig, aiProvider: 'openai' };
+      const cfg3 = { ...validConfig, aiProvider: 'anthropic' };
+      
+      expect(validateConfig(cfg1).aiProvider).toBe('local');
+      expect(validateConfig(cfg2).aiProvider).toBe('openai');
+      expect(validateConfig(cfg3).aiProvider).toBe('anthropic');
+    });
+
+    it('rejects invalid aiProvider values', () => {
+      const cfg = { ...validConfig, aiProvider: 'invalid' };
+      expect(() => validateConfig(cfg)).toThrow();
+    });
+
+    it('accepts valid nodeEnv values', () => {
+      const cfg1 = { ...validConfig, nodeEnv: 'development' };
+      const cfg2 = { ...validConfig, nodeEnv: 'production' };
+      const cfg3 = { ...validConfig, nodeEnv: 'test' };
+      
+      expect(validateConfig(cfg1).nodeEnv).toBe('development');
+      expect(validateConfig(cfg2).nodeEnv).toBe('production');
+      expect(validateConfig(cfg3).nodeEnv).toBe('test');
+    });
+
+    it('rejects invalid nodeEnv values', () => {
+      const cfg = { ...validConfig, nodeEnv: 'staging' };
+      expect(() => validateConfig(cfg)).toThrow();
+    });
+
+    it('accepts valid logLevel values', () => {
+      const cfg1 = { ...validConfig, logLevel: 'error' };
+      const cfg2 = { ...validConfig, logLevel: 'warn' };
+      const cfg3 = { ...validConfig, logLevel: 'info' };
+      const cfg4 = { ...validConfig, logLevel: 'debug' };
+      
+      expect(validateConfig(cfg1).logLevel).toBe('error');
+      expect(validateConfig(cfg2).logLevel).toBe('warn');
+      expect(validateConfig(cfg3).logLevel).toBe('info');
+      expect(validateConfig(cfg4).logLevel).toBe('debug');
+    });
+  });
+
+  describe('boolean fields', () => {
+    it('defaults boolean fields correctly', () => {
+      const result = validateConfig(validConfig);
+      expect(result.linkScanningEnabled).toBe(true);
+      expect(result.aiEnabled).toBe(false);
+      expect(result.chatRainEnabled).toBe(false);
+      expect(result.cacheEnabled).toBe(true);
+    });
+
+    it('accepts boolean overrides', () => {
+      const cfg = {
+        ...validConfig,
+        linkScanningEnabled: false,
+        aiEnabled: true,
+        chatRainEnabled: true,
+        cacheEnabled: false,
+      };
+      const result = validateConfig(cfg);
+      expect(result.linkScanningEnabled).toBe(false);
+      expect(result.aiEnabled).toBe(true);
+      expect(result.chatRainEnabled).toBe(true);
+      expect(result.cacheEnabled).toBe(false);
+    });
+  });
+
+  describe('array fields', () => {
+    it('defaults array fields to empty arrays', () => {
+      const result = validateConfig(validConfig);
+      expect(result.readOnlyChannels).toEqual([]);
+      expect(result.aiChannels).toEqual([]);
+      expect(result.publicAnnouncementChannelIds).toEqual([]);
+    });
+
+    it('accepts array values when provided', () => {
+      const cfg = {
+        ...validConfig,
+        readOnlyChannels: ['123', '456'],
+        aiChannels: ['789', '012'],
+        publicAnnouncementChannelIds: ['345', '678'],
+      };
+      const result = validateConfig(cfg);
+      expect(result.readOnlyChannels).toEqual(['123', '456']);
+      expect(result.aiChannels).toEqual(['789', '012']);
+      expect(result.publicAnnouncementChannelIds).toEqual(['345', '678']);
+    });
+  });
 });
