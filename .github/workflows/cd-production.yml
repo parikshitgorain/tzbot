@@ -206,6 +206,7 @@ jobs:
           echo "📤 Uploading deployment package..."
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
             -o ConnectTimeout=30 \
             deployment-package.tar.gz \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deployment-package.tar.gz
@@ -274,27 +275,42 @@ jobs:
         run: |
           echo "🔍 Verifying VPS environment..."
           
+          # Create verification script
+          cat > /tmp/verify-env.sh << 'SCRIPT_EOF'
+          #!/bin/bash
+          
+          # Verify .env file exists
+          if [ ! -f "/var/www/tzbot/shared/.env" ]; then
+            echo "❌ ERROR: .env file not found after update!"
+            exit 1
+          fi
+          
+          echo "✅ .env file verified"
+          
+          # Check if required commands are available
+          command -v node >/dev/null 2>&1 || { echo "❌ Node.js not installed"; exit 1; }
+          command -v npm >/dev/null 2>&1 || { echo "❌ npm not installed"; exit 1; }
+          command -v pm2 >/dev/null 2>&1 || { echo "❌ PM2 not installed"; exit 1; }
+          command -v jq >/dev/null 2>&1 || { echo "❌ jq not installed"; exit 1; }
+          
+          echo "✅ All required commands available"
+          echo "✅ VPS environment verified"
+          SCRIPT_EOF
+          
+          # Upload and execute script
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
+            /tmp/verify-env.sh \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/verify-env.sh
+          
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} << 'EOF'
-            
-            # Verify .env file exists
-            if [ ! -f "/var/www/tzbot/shared/.env" ]; then
-              echo "❌ ERROR: .env file not found after update!"
-              exit 1
-            fi
-            
-            echo "✅ .env file verified"
-            
-            # Check if required commands are available
-            command -v node >/dev/null 2>&1 || { echo "❌ Node.js not installed"; exit 1; }
-            command -v npm >/dev/null 2>&1 || { echo "❌ npm not installed"; exit 1; }
-            command -v pm2 >/dev/null 2>&1 || { echo "❌ PM2 not installed"; exit 1; }
-            command -v jq >/dev/null 2>&1 || { echo "❌ jq not installed"; exit 1; }
-            
-            echo "✅ All required commands available"
-            echo "✅ VPS environment verified"
-          EOF
+            -o LogLevel=ERROR \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
+            "bash /tmp/verify-env.sh && rm /tmp/verify-env.sh"
+          
+          rm -f /tmp/verify-env.sh
       
       - name: Deploy on VPS
         timeout-minutes: 10
@@ -304,12 +320,14 @@ jobs:
           # Copy deployment script
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
             deployment/scripts/deploy_release.sh \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deploy_release.sh
           
           # Execute deployment and capture output
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
             -o ConnectTimeout=30 \
             -o ServerAliveInterval=15 \
             -o ServerAliveCountMax=3 \
@@ -319,6 +337,7 @@ jobs:
               echo "📋 Fetching deployment logs..."
               ssh -i ~/.ssh/deploy_key \
                 -o UserKnownHostsFile=~/.ssh/known_hosts \
+                -o LogLevel=ERROR \
                 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
                 "cat /tmp/deploy.log 2>/dev/null || echo 'No deployment log found'"
               exit 1
@@ -332,11 +351,13 @@ jobs:
           echo "📊 Installing VPS monitoring..."
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
             deployment/scripts/install-monitoring.sh \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/install-monitoring.sh
           
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "bash /tmp/install-monitoring.sh && rm /tmp/install-monitoring.sh"
         continue-on-error: true
@@ -355,12 +376,14 @@ jobs:
           # Copy health check script
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
             deployment/scripts/health_check.sh \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/health_check.sh
           
           # Run health checks with more attempts and longer initial delay
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "bash /tmp/health_check.sh 10 10 && rm /tmp/health_check.sh"
       
@@ -416,23 +439,27 @@ jobs:
           # Copy rollback script
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
             deployment/scripts/rollback.sh \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/rollback.sh
           
           # Execute rollback and capture output
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "bash /tmp/rollback.sh && rm /tmp/rollback.sh"
           
           # Get rollback version info
           ROLLBACK_VERSION=$(ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "cat /tmp/rollback_version.txt 2>/dev/null || echo 'unknown'")
           
           ROLLBACK_RELEASE=$(ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "cat /tmp/rollback_release.txt 2>/dev/null || echo 'unknown'")
           
