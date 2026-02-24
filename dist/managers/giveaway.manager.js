@@ -134,22 +134,22 @@ export class GiveawayManager {
                 await this.handleViewParticipants(interaction);
                 return;
             }
+            // CRITICAL: Defer reply immediately to prevent timeout (Discord requires response within 3 seconds)
+            await interaction.deferReply({ ephemeral: true });
             // Extract giveaway ID from button custom ID
             const giveawayId = interaction.customId.replace('giveaway_enter_', '');
             // Get giveaway from database
             const giveaway = await this.giveawayRepository.get(giveawayId);
             if (!giveaway) {
-                await interaction.reply({
+                await interaction.editReply({
                     content: '❌ This giveaway no longer exists.',
-                    ephemeral: true,
                 });
                 return;
             }
             // Check if giveaway is still active
             if (giveaway.status !== 'active') {
-                await interaction.reply({
+                await interaction.editReply({
                     content: '❌ This giveaway has ended.',
-                    ephemeral: true,
                 });
                 return;
             }
@@ -157,9 +157,8 @@ export class GiveawayManager {
             const validation = await this.validateEntry(interaction.user.id, guildId, giveaway);
             if (!validation.allowed) {
                 // Requirement 9.2: Send ephemeral message explaining restriction
-                await interaction.reply({
+                await interaction.editReply({
                     content: `❌ ${validation.reason}`,
-                    ephemeral: true,
                 });
                 return;
             }
@@ -169,9 +168,8 @@ export class GiveawayManager {
             try {
                 const alreadyEntered = await redisClient.exists(entryKey);
                 if (alreadyEntered) {
-                    await interaction.reply({
+                    await interaction.editReply({
                         content: '✅ You have already entered this giveaway!',
-                        ephemeral: true,
                     });
                     return;
                 }
@@ -184,9 +182,8 @@ export class GiveawayManager {
                 });
                 const hasEntry = await this.giveawayRepository.hasEntry(giveawayId, interaction.user.id);
                 if (hasEntry) {
-                    await interaction.reply({
+                    await interaction.editReply({
                         content: '✅ You have already entered this giveaway!',
-                        ephemeral: true,
                     });
                     return;
                 }
@@ -208,11 +205,10 @@ export class GiveawayManager {
                 const countKey = `giveaway:entries:count:${giveawayId}`;
                 const entryCount = await redisClient.incr(countKey);
                 await redisClient.expire(countKey, 86400);
-                // Update giveaway message with new entry count
-                await this.updateGiveawayMessage(giveaway, entryCount);
-                await interaction.reply({
+                // Update giveaway message with new entry count (don't await to speed up response)
+                void this.updateGiveawayMessage(giveaway, entryCount);
+                await interaction.editReply({
                     content: '🎉 You have successfully entered the giveaway! Good luck!',
-                    ephemeral: true,
                 });
                 logger.info('Giveaway entry recorded in cache', {
                     giveawayId,
@@ -229,10 +225,9 @@ export class GiveawayManager {
                 });
                 await this.giveawayRepository.addEntry(giveawayId, interaction.user.id);
                 const entries = await this.giveawayRepository.getEntries(giveawayId);
-                await this.updateGiveawayMessage(giveaway, entries.length);
-                await interaction.reply({
+                void this.updateGiveawayMessage(giveaway, entries.length);
+                await interaction.editReply({
                     content: '🎉 You have successfully entered the giveaway! Good luck!',
-                    ephemeral: true,
                 });
             }
         }
@@ -241,10 +236,18 @@ export class GiveawayManager {
                 userId: interaction.user.id,
                 customId: interaction.customId,
             });
-            await interaction.reply({
-                content: '❌ An error occurred while entering the giveaway. Please try again.',
-                ephemeral: true,
-            });
+            // Check if we can still reply
+            if (interaction.deferred && !interaction.replied) {
+                await interaction.editReply({
+                    content: '❌ An error occurred while entering the giveaway. Please try again.',
+                });
+            }
+            else if (!interaction.replied) {
+                await interaction.reply({
+                    content: '❌ An error occurred while entering the giveaway. Please try again.',
+                    ephemeral: true,
+                });
+            }
         }
     }
     /**
