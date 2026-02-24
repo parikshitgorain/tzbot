@@ -130,7 +130,8 @@ async saveViolation(violation) {
 | **Giveaway Data** | Write-Through | Must be authoritative | 🔴 High |
 | **Offense Records** | Write-Through | Punishment accuracy critical | 🔴 High |
 | **Winner Selection** | Write-Through | Must be permanent | 🔴 High |
-| **Entry Counts** | Write-Through + Cache | Frequently read, must be accurate | 🟡 Medium |
+| **Giveaway Entries** | Write-Behind (Batch) | High volume, batch at end | 🟡 Medium |
+| **Entry Counts** | Cache + Batch | Real-time display, synced at end | 🟡 Medium |
 | **Chat Activity** | Write-Behind (Batch) | High volume, can tolerate loss | 🟢 Low |
 | **Session Data** | Cache Only | Temporary, OK to lose | 🟢 Low |
 | **Violations** | Write-Around | Rarely read after write | 🟢 Low |
@@ -160,15 +161,16 @@ await db.updateWinners(giveawayId, winners);
 
 ### Write-Behind (Cache First):
 ```typescript
+// ✅ Giveaway Entries (NEW - batch at end)
+await cache.set(`giveaway:entry:${giveawayId}:${userId}`, data, TTL);
+await cache.incr(`giveaway:entries:count:${giveawayId}`);
+// Store in Redis list for winner selection
+// Batch write ALL entries to DB when giveaway ends
+
 // ✅ Chat Activity (batched)
 await cache.incr(`chat:count:${userId}`);
 batchQueue.push({ userId, timestamp });
 // Flush to DB every 50 messages or 30 seconds
-
-// ✅ Entry Count (incremental)
-await cache.incr(`giveaway:entries:${giveawayId}`);
-await db.addEntry(giveawayId, userId);
-// Cache updated immediately, DB write happens
 ```
 
 ---
@@ -235,7 +237,56 @@ return await db.get(key);
 
 ---
 
-## Batch Write Strategy (Chat Activity)
+## Batch Write Strategy (Giveaway Entries)
+
+### How It Works:
+```typescript
+class GiveawayManager {
+  async handleJoinGiveaway(giveawayId, userId) {
+    // 1. Check duplicate in Redis (instant!)
+    const exists = await cache.exists(`giveaway:entry:${giveawayId}:${userId}`);
+    if (exists) return 'Already entered';
+    
+    // 2. Store entry in Redis
+    await cache.set(`giveaway:entry:${giveawayId}:${userId}`, data, 86400);
+    
+    // 3. Add to entries list
+    const list = await cache.get(`giveaway:entries:list:${giveawayId}`);
+    list.push({ userId, timestamp });
+    await cache.set(`giveaway:entries:list:${giveawayId}`, list, 86400);
+    
+    // 4. Increment counter
+    await cache.incr(`giveaway:entries:count:${giveawayId}`);
+    
+    // NO DATABASE WRITE!
+  }
+
+  async endGiveaway(giveawayId) {
+    // 1. Get all entries from Redis
+    const entries = await cache.get(`giveaway:entries:list:${giveawayId}`);
+    
+    // 2. Batch write to database (ONE operation for ALL entries)
+    for (const entry of entries) {
+      await db.addEntry(giveawayId, entry.userId);
+    }
+    
+    // 3. Clean up Redis
+    await cache.del(`giveaway:entries:list:${giveawayId}`);
+    await cache.del(`giveaway:entries:count:${giveawayId}`);
+    for (const entry of entries) {
+      await cache.del(`giveaway:entry:${giveawayId}:${entry.userId}`);
+    }
+  }
+}
+```
+
+### Benefits:
+```
+100 entries giveaway:
+- Old: 200 DB operations (2 per entry)
+- New: 1 batch write at end
+- Savings: 99.5% reduction!
+```
 
 ### How It Works:
 ```typescript

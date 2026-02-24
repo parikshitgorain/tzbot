@@ -566,8 +566,8 @@ export class GiveawayManager {
         const cachedEntries = await redisClient.get(entriesListKey);
         
         if (cachedEntries) {
-          const parsedEntries = JSON.parse(cachedEntries);
-          entries = parsedEntries.map((e: any) => ({
+          const parsedEntries = JSON.parse(cachedEntries) as Array<{ userId: string; timestamp: string }>;
+          entries = parsedEntries.map((e) => ({
             userId: e.userId,
             timestamp: new Date(e.timestamp),
           }));

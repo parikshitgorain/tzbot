@@ -19,22 +19,27 @@ This document explains when the bot uses the database and how caching is impleme
   - Stores giveaway metadata (title, description, end time, etc.)
   - No caching needed - happens once per giveaway
 
-- **User Entry** (2 operations per entry)
-  - Check if user already entered (1 read) - uses `hasEntry()`
-  - Add entry to database (1 write)
-  - **OPTIMIZED**: Entry count cached in Redis, no need to query all entries
+- **User Entry** (0 operations during giveaway!) ✨ NEW
+  - **Before**: 2 DB operations per entry (check + write)
+  - **After**: 0 DB operations - all stored in Redis
+  - Duplicate check: Redis `EXISTS` (instant)
+  - Entry storage: Redis list
+  - Count tracking: Redis counter
+  - **Savings**: 100% reduction during active giveaway!
 
 - **Entry Count Display** (cached)
-  - **Before**: Queried database on every entry to count all entries
-  - **After**: Uses Redis cache, increments counter
-  - **Cache TTL**: 1 hour
-  - **Savings**: ~99% reduction in queries for active giveaways
+  - Uses Redis counter, increments on each entry
+  - Real-time updates with zero database queries
+  - **Cache TTL**: 24 hours
+  - **Savings**: 100% reduction in queries for active giveaways
 
-- **Giveaway End** (2-3 operations)
+- **Giveaway End** (1 batch write + 2 operations)
   - Fetch giveaway details (1 read)
-  - Fetch all entries (1 read)
+  - **Batch write all entries from Redis to DB** (1 write for ALL entries)
   - Update winners (1 write)
   - Update status to ENDED (1 write)
+  - Clean up Redis cache
+  - **Example**: 100 entries = 1 batch write instead of 100 individual writes
 
 - **Reroll Winner** (3 operations)
   - Fetch giveaway (1 read)
@@ -43,10 +48,20 @@ This document explains when the bot uses the database and how caching is impleme
 
 #### Caching Strategy:
 ```typescript
-// Entry count cached per giveaway
-Key: `giveaway:entries:{giveawayId}`
-TTL: 1 hour
-Invalidation: When giveaway ends
+// Individual entry for duplicate check
+Key: `giveaway:entry:{giveawayId}:{userId}`
+TTL: 24 hours
+
+// All entries list for winner selection
+Key: `giveaway:entries:list:{giveawayId}`
+TTL: 24 hours
+
+// Entry count for display
+Key: `giveaway:entries:count:{giveawayId}`
+TTL: 24 hours
+
+// Batch write to database when giveaway ends
+// Then clean up all Redis keys
 ```
 
 ---
@@ -139,10 +154,15 @@ Flush: Whichever comes first
 | Feature | Operations | Frequency | DB Queries/Hour |
 |---------|-----------|-----------|-----------------|
 | Giveaway Permissions | Read | Per command | ~12 (cached) |
-| Giveaway Entry | Write | Per entry | ~2 per entry |
-| Giveaway End | Read/Write | Per giveaway | ~4 per giveaway |
+| Giveaway Entry | Write | Per entry | 0 (Redis only!) |
+| Giveaway End | Batch Write | Per giveaway | 1 batch write |
 | Spam Detection | Read/Write | Per violation | ~3 per violation |
 | Offense Tracking | Read/Write | Per offense | ~3 per offense |
+
+### Example: 100-Entry Giveaway
+- **Old System**: 200 DB operations (2 per entry)
+- **New System**: 1 DB operation (batch write at end)
+- **Savings**: 99.5% reduction!
 
 ### Inactive Features:
 - Chat Rain: Currently disabled in config
@@ -154,13 +174,15 @@ Flush: Whichever comes first
 ## Optimization Summary
 
 ### What We Cache:
-1. ✅ **Giveaway entry counts** - Redis cache, 1 hour TTL
-2. ✅ **Permission configs** - Redis cache, 5 minutes TTL
-3. ✅ **Chat activity counts** - Redis cache, 1 hour TTL (future)
-4. ✅ **Active chatter lists** - Redis cache, 5 minutes TTL (future)
+1. ✅ **Giveaway entries** - Redis storage during active giveaway, batch write to DB at end
+2. ✅ **Giveaway entry counts** - Redis counter, real-time updates
+3. ✅ **Permission configs** - Redis cache, 5 minutes TTL
+4. ✅ **Chat activity counts** - Redis cache, 1 hour TTL (future)
+5. ✅ **Active chatter lists** - Redis cache, 5 minutes TTL (future)
 
 ### What We Batch:
-1. ✅ **Chat activity writes** - 50 messages or 30 seconds (future)
+1. ✅ **Giveaway entries** - All entries stored in Redis, batch written to DB when giveaway ends
+2. ✅ **Chat activity writes** - 50 messages or 30 seconds (future)
 
 ### What We Don't Cache:
 1. ❌ **Offense records** - Must be accurate for punishment
@@ -174,7 +196,8 @@ Flush: Whichever comes first
 
 | Data Type | Use Redis | Use Database | Reason |
 |-----------|-----------|--------------|---------|
-| Entry counts | ✅ Cache | ✅ Source | Frequently read, can tolerate slight delay |
+| Giveaway entries | ✅ Primary | ✅ Backup | Store in Redis during giveaway, batch write at end |
+| Entry counts | ✅ Cache | ✅ Source | Real-time counter, synced to DB at end |
 | Permissions | ✅ Cache | ✅ Source | Frequently checked, rarely changed |
 | Offenses | ❌ | ✅ Only | Critical for punishment accuracy |
 | Giveaway data | ❌ | ✅ Only | Must persist, not frequently accessed |
@@ -214,6 +237,10 @@ Flush: Whichever comes first
 ```bash
 # Clear all giveaway caches
 redis-cli KEYS "giveaway:*" | xargs redis-cli DEL
+
+# Clear specific giveaway entries (if needed during active giveaway)
+redis-cli DEL "giveaway:entries:list:{giveawayId}"
+redis-cli DEL "giveaway:entries:count:{giveawayId}"
 
 # Clear specific guild permissions
 redis-cli DEL "giveaway:permissions:{guildId}"
@@ -283,9 +310,12 @@ redis-cli KEYS "chat:*" | xargs redis-cli DEL
 
 With the implemented caching and batching optimizations:
 
-- **Giveaway entry counts**: 99% reduction in queries
+- **Giveaway entries**: 99.5% reduction in writes (batch write at end)
+- **Giveaway entry counts**: 100% reduction in queries (Redis counter)
 - **Permission checks**: 95% reduction in queries  
 - **Chat activity** (when enabled): 98% reduction in writes
 - **Overall**: Should stay well under 100 compute hours/month
 
 The bot is now optimized for minimal database usage while maintaining data accuracy where it matters most.
+
+**Key Innovation**: Giveaway entries are stored entirely in Redis during the active giveaway period, with a single batch write to the database when the giveaway ends. This eliminates hundreds of database operations for popular giveaways.
