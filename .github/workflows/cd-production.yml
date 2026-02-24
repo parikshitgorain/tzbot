@@ -228,33 +228,46 @@ jobs:
           # Upload .env to VPS
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
             /tmp/.env \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/.env.new
           
-          # Move .env to shared directory
+          # Create update script
+          cat > /tmp/update-env.sh << 'SCRIPT_EOF'
+          #!/bin/bash
+          
+          # Create shared directory if it doesn't exist
+          mkdir -p /var/www/tzbot/shared/logs
+          mkdir -p /var/www/tzbot/shared/data/state
+          
+          # Backup existing .env if it exists
+          if [ -f "/var/www/tzbot/shared/.env" ]; then
+            echo "📋 Backing up existing .env..."
+            cp /var/www/tzbot/shared/.env /var/www/tzbot/shared/.env.backup.$(date +%Y%m%d_%H%M%S)
+          fi
+          
+          # Move new .env to shared directory
+          mv /tmp/.env.new /var/www/tzbot/shared/.env
+          chmod 600 /var/www/tzbot/shared/.env
+          
+          echo "✅ Environment variables updated"
+          SCRIPT_EOF
+          
+          # Upload and execute script
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
+            /tmp/update-env.sh \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/update-env.sh
+          
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} << 'EOF'
-            
-            # Create shared directory if it doesn't exist
-            mkdir -p /var/www/tzbot/shared/logs
-            mkdir -p /var/www/tzbot/shared/data/state
-            
-            # Backup existing .env if it exists
-            if [ -f "/var/www/tzbot/shared/.env" ]; then
-              echo "📋 Backing up existing .env..."
-              cp /var/www/tzbot/shared/.env /var/www/tzbot/shared/.env.backup.$(date +%Y%m%d_%H%M%S)
-            fi
-            
-            # Move new .env to shared directory
-            mv /tmp/.env.new /var/www/tzbot/shared/.env
-            chmod 600 /var/www/tzbot/shared/.env
-            
-            echo "✅ Environment variables updated"
-          EOF
+            -o LogLevel=ERROR \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
+            "bash /tmp/update-env.sh && rm /tmp/update-env.sh"
           
-          # Clean up local .env
-          rm -f /tmp/.env
+          # Clean up local files
+          rm -f /tmp/.env /tmp/update-env.sh
       
       - name: Verify VPS environment
         timeout-minutes: 2
@@ -357,25 +370,40 @@ jobs:
         run: |
           echo "📨 Sending test notification from VPS to verify webhook..."
           
+          # Create notification script
+          cat > /tmp/send-notification.sh << 'SCRIPT_EOF'
+          #!/bin/bash
+          
+          # Load environment variables
+          if [ -f "/var/www/tzbot/shared/.env" ]; then
+            export $(grep -v '^#' /var/www/tzbot/shared/.env | xargs)
+          fi
+          
+          # Get deployment info
+          CURRENT_RELEASE=$(readlink /var/www/tzbot/current 2>/dev/null | xargs basename || echo "unknown")
+          VERSION=$(cat /var/www/tzbot/current/package.json 2>/dev/null | grep '"version"' | cut -d'"' -f4 || echo "unknown")
+          HOSTNAME=$(hostname)
+          
+          # Send test notification
+          curl -H "Content-Type: application/json" -X POST \
+            -d "{\"embeds\":[{\"title\":\"✅ VPS Webhook Test\",\"description\":\"Deployment successful! Webhook is working correctly.\",\"color\":3066993,\"fields\":[{\"name\":\"🖥️ Server\",\"value\":\"\`${HOSTNAME}\`\",\"inline\":true},{\"name\":\"📦 Version\",\"value\":\"\`v${VERSION}\`\",\"inline\":true},{\"name\":\"🔄 Release\",\"value\":\"\`${CURRENT_RELEASE}\`\",\"inline\":true},{\"name\":\"✅ Status\",\"value\":\"Application is running and webhook is operational\",\"inline\":false}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            "${DISCORD_WEBHOOK_URL}" && echo "✅ Test notification sent from VPS" || echo "⚠️ Failed to send test notification"
+          SCRIPT_EOF
+          
+          # Upload and execute script
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
+            /tmp/send-notification.sh \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/send-notification.sh
+          
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} << 'EOF'
-            
-            # Load environment variables
-            if [ -f "/var/www/tzbot/shared/.env" ]; then
-              export $(grep -v '^#' /var/www/tzbot/shared/.env | xargs)
-            fi
-            
-            # Get deployment info
-            CURRENT_RELEASE=$(readlink /var/www/tzbot/current 2>/dev/null | xargs basename || echo "unknown")
-            VERSION=$(cat /var/www/tzbot/current/package.json 2>/dev/null | grep '"version"' | cut -d'"' -f4 || echo "unknown")
-            HOSTNAME=$(hostname)
-            
-            # Send test notification
-            curl -H "Content-Type: application/json" -X POST \
-              -d "{\"embeds\":[{\"title\":\"✅ VPS Webhook Test\",\"description\":\"Deployment successful! Webhook is working correctly.\",\"color\":3066993,\"fields\":[{\"name\":\"🖥️ Server\",\"value\":\"\`${HOSTNAME}\`\",\"inline\":true},{\"name\":\"📦 Version\",\"value\":\"\`v${VERSION}\`\",\"inline\":true},{\"name\":\"🔄 Release\",\"value\":\"\`${CURRENT_RELEASE}\`\",\"inline\":true},{\"name\":\"✅ Status\",\"value\":\"Application is running and webhook is operational\",\"inline\":false}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
-              "${DISCORD_WEBHOOK_URL}" && echo "✅ Test notification sent from VPS" || echo "⚠️ Failed to send test notification"
-          EOF
+            -o LogLevel=ERROR \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
+            "bash /tmp/send-notification.sh && rm /tmp/send-notification.sh"
+          
+          rm -f /tmp/send-notification.sh
         continue-on-error: true
       
       - name: Rollback on failure
