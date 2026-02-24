@@ -443,61 +443,73 @@ jobs:
         run: |
           echo "📊 Gathering deployment report..."
           
-          # Get deployment details from VPS
+          # Create a script to gather info on VPS
+          cat > /tmp/gather-report.sh << 'SCRIPT_EOF'
+          #!/bin/bash
+          
+          # Get current deployment info
+          CURRENT_RELEASE=$(readlink /var/www/tzbot/current 2>/dev/null | xargs basename || echo "unknown")
+          
+          # Get PM2 status
+          PM2_STATUS=$(pm2 jlist 2>/dev/null | jq -r '.[0].pm2_env.status' 2>/dev/null || echo "unknown")
+          PM2_UPTIME=$(pm2 jlist 2>/dev/null | jq -r '.[0].pm2_env.pm_uptime' 2>/dev/null || echo "0")
+          PM2_RESTARTS=$(pm2 jlist 2>/dev/null | jq -r '.[0].pm2_env.restart_time' 2>/dev/null || echo "0")
+          
+          # Calculate uptime
+          if [ "$PM2_UPTIME" != "0" ] && [ "$PM2_UPTIME" != "null" ]; then
+            CURRENT_TIME=$(date +%s)000
+            UPTIME_MS=$((CURRENT_TIME - PM2_UPTIME))
+            UPTIME_SECONDS=$((UPTIME_MS / 1000))
+            UPTIME_MINUTES=$((UPTIME_SECONDS / 60))
+            UPTIME_HOURS=$((UPTIME_MINUTES / 60))
+            
+            if [ $UPTIME_HOURS -gt 0 ]; then
+              UPTIME="${UPTIME_HOURS}h $((UPTIME_MINUTES % 60))m"
+            elif [ $UPTIME_MINUTES -gt 0 ]; then
+              UPTIME="${UPTIME_MINUTES}m"
+            else
+              UPTIME="${UPTIME_SECONDS}s"
+            fi
+          else
+            UPTIME="unknown"
+          fi
+          
+          # Get disk usage
+          DISK_USAGE=$(df -h /var/www/tzbot 2>/dev/null | awk 'NR==2 {print $5}' || echo "unknown")
+          
+          # Get memory usage
+          MEMORY_USAGE=$(free -h 2>/dev/null | awk 'NR==2 {print $3 "/" $2}' || echo "unknown")
+          
+          # Get release count
+          RELEASE_COUNT=$(ls -1 /var/www/tzbot/releases 2>/dev/null | wc -l || echo "0")
+          
+          # Output as compact JSON
+          printf '{"current_release":"%s","pm2_status":"%s","pm2_uptime":"%s","pm2_restarts":"%s","disk_usage":"%s","memory_usage":"%s","release_count":"%s"}' \
+            "$CURRENT_RELEASE" "$PM2_STATUS" "$UPTIME" "$PM2_RESTARTS" "$DISK_USAGE" "$MEMORY_USAGE" "$RELEASE_COUNT"
+          SCRIPT_EOF
+          
+          # Upload and execute script
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
+            /tmp/gather-report.sh \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/gather-report.sh
+          
+          # Execute script and capture only JSON output
           DEPLOY_INFO=$(ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} << 'EOF'
-            
-            # Get current deployment info
-            CURRENT_RELEASE=$(readlink /var/www/tzbot/current 2>/dev/null | xargs basename || echo "unknown")
-            
-            # Get PM2 status
-            PM2_STATUS=$(pm2 jlist 2>/dev/null | jq -r '.[0].pm2_env.status' 2>/dev/null || echo "unknown")
-            PM2_UPTIME=$(pm2 jlist 2>/dev/null | jq -r '.[0].pm2_env.pm_uptime' 2>/dev/null || echo "0")
-            PM2_RESTARTS=$(pm2 jlist 2>/dev/null | jq -r '.[0].pm2_env.restart_time' 2>/dev/null || echo "0")
-            
-            # Calculate uptime
-            if [ "$PM2_UPTIME" != "0" ] && [ "$PM2_UPTIME" != "null" ]; then
-              CURRENT_TIME=$(date +%s)000
-              UPTIME_MS=$((CURRENT_TIME - PM2_UPTIME))
-              UPTIME_SECONDS=$((UPTIME_MS / 1000))
-              UPTIME_MINUTES=$((UPTIME_SECONDS / 60))
-              UPTIME_HOURS=$((UPTIME_MINUTES / 60))
-              
-              if [ $UPTIME_HOURS -gt 0 ]; then
-                UPTIME="${UPTIME_HOURS}h $((UPTIME_MINUTES % 60))m"
-              elif [ $UPTIME_MINUTES -gt 0 ]; then
-                UPTIME="${UPTIME_MINUTES}m"
-              else
-                UPTIME="${UPTIME_SECONDS}s"
-              fi
-            else
-              UPTIME="unknown"
-            fi
-            
-            # Get disk usage
-            DISK_USAGE=$(df -h /var/www/tzbot 2>/dev/null | awk 'NR==2 {print $5}' || echo "unknown")
-            
-            # Get memory usage
-            MEMORY_USAGE=$(free -h 2>/dev/null | awk 'NR==2 {print $3 "/" $2}' || echo "unknown")
-            
-            # Get release count
-            RELEASE_COUNT=$(ls -1 /var/www/tzbot/releases 2>/dev/null | wc -l || echo "0")
-            
-            # Output as JSON
-            cat << JSON
-            {
-              "current_release": "$CURRENT_RELEASE",
-              "pm2_status": "$PM2_STATUS",
-              "pm2_uptime": "$UPTIME",
-              "pm2_restarts": "$PM2_RESTARTS",
-              "disk_usage": "$DISK_USAGE",
-              "memory_usage": "$MEMORY_USAGE",
-              "release_count": "$RELEASE_COUNT"
-            }
-            JSON
-          EOF
-          ) || DEPLOY_INFO='{"current_release":"unknown","pm2_status":"unknown","pm2_uptime":"unknown","pm2_restarts":"0","disk_usage":"unknown","memory_usage":"unknown","release_count":"0"}'
+            -o LogLevel=ERROR \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
+            "bash /tmp/gather-report.sh 2>/dev/null && rm /tmp/gather-report.sh" 2>/dev/null) || \
+            DEPLOY_INFO='{"current_release":"unknown","pm2_status":"unknown","pm2_uptime":"unknown","pm2_restarts":"0","disk_usage":"unknown","memory_usage":"unknown","release_count":"0"}'
+          
+          # Validate JSON
+          if ! echo "$DEPLOY_INFO" | jq empty 2>/dev/null; then
+            echo "⚠️ Invalid JSON received, using defaults"
+            DEPLOY_INFO='{"current_release":"unknown","pm2_status":"unknown","pm2_uptime":"unknown","pm2_restarts":"0","disk_usage":"unknown","memory_usage":"unknown","release_count":"0"}'
+          fi
+          
+          echo "Deployment info: $DEPLOY_INFO"
           
           echo "deploy_info<<EOF" >> $GITHUB_OUTPUT
           echo "$DEPLOY_INFO" >> $GITHUB_OUTPUT
