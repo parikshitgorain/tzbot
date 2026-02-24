@@ -14,6 +14,8 @@ import {
   Guild,
   Partials,
   ClientEvents,
+  ActionRowBuilder,
+  ButtonBuilder,
 } from 'discord.js';
 import { logger, logError } from '@/core/logger/logger.js';
 import { verifyPermissionsOnStartup } from './permissions.js';
@@ -25,6 +27,7 @@ export interface MessageContent {
   content?: string;
   embeds?: EmbedBuilder[];
   files?: Array<{ attachment: string | Buffer; name: string }>;
+  components?: ActionRowBuilder<ButtonBuilder>[];
 }
 
 /**
@@ -251,6 +254,7 @@ export class DiscordClient implements IDiscordClient {
         content: content.content,
         embeds: content.embeds,
         files: content.files,
+        components: content.components,
       });
 
       logger.debug('Message sent', {

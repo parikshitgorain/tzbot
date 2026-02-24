@@ -156,6 +156,7 @@ export class DiscordClient {
                 content: content.content,
                 embeds: content.embeds,
                 files: content.files,
+                components: content.components,
             });
             logger.debug('Message sent', {
                 channelId,

@@ -3,7 +3,7 @@
  * @description Discord client wrapper with connection management and operations
  * @module core/discord
  */
-import { Client, Message, EmbedBuilder, GuildMember, Guild, ClientEvents } from 'discord.js';
+import { Client, Message, EmbedBuilder, GuildMember, Guild, ClientEvents, ActionRowBuilder, ButtonBuilder } from 'discord.js';
 /**
  * Message content that can be sent to Discord
  */
@@ -14,6 +14,7 @@ export interface MessageContent {
         attachment: string | Buffer;
         name: string;
     }>;
+    components?: ActionRowBuilder<ButtonBuilder>[];
 }
 /**
  * Discord event types
