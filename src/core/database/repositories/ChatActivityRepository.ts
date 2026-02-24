@@ -1,35 +1,132 @@
 import type { Pool } from 'pg';
+import { redisClient } from '@/core/cache/redis.client.js';
+import { logger } from '@/core/logger/logger.js';
 
 /**
  * ChatActivityRepository handles chat activity tracking for chat rain system
  * Tracks user messages to determine active chatters
+ * Uses Redis caching and batch writes to minimize database load
  */
 export class ChatActivityRepository {
+  private batchQueue: Array<{ userId: string; timestamp: Date }> = [];
+  private batchTimer: NodeJS.Timeout | null = null;
+  private readonly BATCH_SIZE = 50; // Write to DB after 50 messages
+  private readonly BATCH_TIMEOUT_MS = 30000; // Or after 30 seconds
+  private readonly CACHE_TTL = 3600; // 1 hour cache for activity tracking
+
   constructor(private pool: Pool) {}
 
   /**
    * Record a chat activity event for a user
-   * Used to track active chatters for chat rain eligibility
+   * Uses batching to reduce database writes
    */
   async record(userId: string, timestamp: Date): Promise<void> {
-    const query = `
-      INSERT INTO chat_activity (user_id, timestamp)
-      VALUES ($1, $2)
-      ON CONFLICT (user_id, timestamp) DO NOTHING
-    `;
-
     try {
-      await this.pool.query(query, [userId, timestamp]);
+      // Increment counter in Redis cache for real-time tracking
+      try {
+        await redisClient.incr(`chat:count:${userId}`);
+        await redisClient.expire(`chat:count:${userId}`, this.CACHE_TTL);
+      } catch (cacheError) {
+        logger.warn('Failed to cache chat activity', {
+          userId,
+          error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+        });
+      }
+
+      // Add to batch queue for database write
+      this.batchQueue.push({ userId, timestamp });
+
+      // Flush if batch is full
+      if (this.batchQueue.length >= this.BATCH_SIZE) {
+        await this.flushBatch();
+      } else if (!this.batchTimer) {
+        // Start timer if not already running
+        this.batchTimer = setTimeout(() => {
+          this.flushBatch().catch((error) => {
+            logger.error('Failed to flush chat activity batch', { error });
+          });
+        }, this.BATCH_TIMEOUT_MS);
+      }
     } catch (error) {
-      throw new Error(`Failed to record chat activity: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      logger.error('Failed to record chat activity', {
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
+  }
+
+  /**
+   * Flush batched chat activities to database
+   */
+  private async flushBatch(): Promise<void> {
+    if (this.batchQueue.length === 0) {
+      return;
+    }
+
+    // Clear timer
+    if (this.batchTimer) {
+      clearTimeout(this.batchTimer);
+      this.batchTimer = null;
+    }
+
+    // Get batch to write
+    const batch = [...this.batchQueue];
+    this.batchQueue = [];
+
+    // Batch insert to database
+    if (batch.length > 0) {
+      const values = batch.map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(', ');
+      const params = batch.flatMap(item => [item.userId, item.timestamp]);
+      
+      const query = `
+        INSERT INTO chat_activity (user_id, timestamp)
+        VALUES ${values}
+        ON CONFLICT (user_id, timestamp) DO NOTHING
+      `;
+
+      try {
+        await this.pool.query(query, params);
+        logger.debug('Flushed chat activity batch', { count: batch.length });
+      } catch (error) {
+        logger.error('Failed to flush chat activity batch to database', {
+          batchSize: batch.length,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        // Re-queue failed items
+        this.batchQueue.unshift(...batch);
+      }
+    }
+  }
+
+  /**
+   * Force flush any pending batched writes
+   * Should be called on shutdown
+   */
+  async forceFlush(): Promise<void> {
+    await this.flushBatch();
   }
 
   /**
    * Get active chatters who have sent messages since a specific time
    * Returns array of user IDs
+   * Uses cache when possible
    */
   async getActiveChatters(since: Date): Promise<string[]> {
+    // Try cache first
+    const cacheKey = `chat:active:${since.getTime()}`;
+    
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (cacheError) {
+      logger.warn('Cache read failed for active chatters', {
+        error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+      });
+    }
+
+    // Query database
     const query = `
       SELECT DISTINCT user_id
       FROM chat_activity
@@ -38,7 +135,18 @@ export class ChatActivityRepository {
 
     try {
       const result = await this.pool.query(query, [since]);
-      return result.rows.map(row => row.user_id);
+      const userIds = result.rows.map(row => row.user_id);
+      
+      // Cache result for 5 minutes
+      try {
+        await redisClient.set(cacheKey, JSON.stringify(userIds), 300);
+      } catch (cacheError) {
+        logger.warn('Failed to cache active chatters', {
+          error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+        });
+      }
+      
+      return userIds;
     } catch (error) {
       throw new Error(`Failed to get active chatters: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -47,8 +155,25 @@ export class ChatActivityRepository {
   /**
    * Get message count for a user within a time window
    * Used to determine if user meets minimum message threshold (3+ messages)
+   * Uses cache when possible
    */
   async getMessageCount(userId: string, since: Date): Promise<number> {
+    // Try cache first
+    const cacheKey = `chat:count:${userId}`;
+    
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        return parseInt(cached, 10);
+      }
+    } catch (cacheError) {
+      logger.warn('Cache read failed for message count', {
+        userId,
+        error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+      });
+    }
+
+    // Query database
     const query = `
       SELECT COUNT(*) as count
       FROM chat_activity
@@ -57,7 +182,19 @@ export class ChatActivityRepository {
 
     try {
       const result = await this.pool.query(query, [userId, since]);
-      return parseInt(result.rows[0].count, 10);
+      const count = parseInt(result.rows[0].count, 10);
+      
+      // Cache result
+      try {
+        await redisClient.set(cacheKey, count.toString(), this.CACHE_TTL);
+      } catch (cacheError) {
+        logger.warn('Failed to cache message count', {
+          userId,
+          error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+        });
+      }
+      
+      return count;
     } catch (error) {
       throw new Error(`Failed to get message count: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

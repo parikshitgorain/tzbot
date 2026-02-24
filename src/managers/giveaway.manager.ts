@@ -19,6 +19,7 @@ import { GiveawayStatus } from '@/types/models.js';
 import { logger, logError } from '@/core/logger/logger.js';
 import { ConfirmationSystem } from '@/giveaway/confirmation-system.js';
 import { ConfigManager } from '@/giveaway/config-manager.js';
+import { redisClient } from '@/core/cache/redis.client.js';
 
 /**
  * Options for creating a giveaway
@@ -248,11 +249,34 @@ export class GiveawayManager {
       // Requirement 9.5: Record entry with user ID and timestamp
       await this.giveawayRepository.addEntry(giveawayId, interaction.user.id);
 
-      // Get updated entry count
-      const entries = await this.giveawayRepository.getEntries(giveawayId);
+      // Increment entry count in cache (more efficient than querying all entries)
+      let entryCount = 0;
+      try {
+        const cacheKey = `giveaway:entries:${giveawayId}`;
+        const cached = await redisClient.get(cacheKey);
+        
+        if (cached) {
+          entryCount = parseInt(cached, 10) + 1;
+        } else {
+          // Cache miss - get from database and cache it
+          const entries = await this.giveawayRepository.getEntries(giveawayId);
+          entryCount = entries.length;
+        }
+        
+        // Update cache with new count (expires when giveaway ends)
+        await redisClient.set(cacheKey, entryCount.toString(), 3600); // 1 hour TTL
+      } catch (cacheError) {
+        // Fallback to database query if cache fails
+        logger.warn('Cache operation failed, falling back to database', {
+          giveawayId,
+          error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+        });
+        const entries = await this.giveawayRepository.getEntries(giveawayId);
+        entryCount = entries.length;
+      }
 
       // Update giveaway message with new entry count
-      await this.updateGiveawayMessage(giveaway, entries.length);
+      await this.updateGiveawayMessage(giveaway, entryCount);
 
       await interaction.reply({
         content: '🎉 You have successfully entered the giveaway! Good luck!',
@@ -262,7 +286,7 @@ export class GiveawayManager {
       logger.info('Giveaway entry recorded', {
         giveawayId,
         userId: interaction.user.id,
-        totalEntries: entries.length,
+        totalEntries: entryCount,
       });
     } catch (error) {
       logError('Failed to handle giveaway entry', error as Error, {
