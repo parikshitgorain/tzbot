@@ -9,6 +9,7 @@ import {
   PermissionFlagsBits,
   ChatInputCommandInteraction,
   EmbedBuilder,
+  GuildMember,
 } from 'discord.js';
 import type { CommandDefinition } from '@/managers/command.manager.js';
 import type { IDiscordClient } from '@/core/discord/client.js';
@@ -184,7 +185,7 @@ function createGiveawayCommand(
 
     // Check permissions for all subcommands except 'config' (config needs admin)
     if (subcommand !== 'config') {
-      if (!interaction.member || !interaction.guildId) {
+      if (!interaction.member || !interaction.guildId || !interaction.guild) {
         await interaction.reply({
           content: '❌ This command can only be used in a server.',
           ephemeral: true,
@@ -194,18 +195,23 @@ function createGiveawayCommand(
 
       const configManager = giveawayManager.getConfigManager();
       
-      // Type guard to ensure member is GuildMember
-      if (typeof interaction.member.permissions === 'string') {
-        await interaction.reply({
-          content: '❌ Unable to verify permissions. Please try again.',
-          ephemeral: true,
-        });
-        return;
+      // Fetch full GuildMember if we have APIInteractionGuildMember
+      let member = interaction.member;
+      if (!(member instanceof GuildMember)) {
+        try {
+          member = await interaction.guild.members.fetch(interaction.user.id);
+        } catch {
+          await interaction.reply({
+            content: '❌ Unable to verify permissions. Please try again.',
+            ephemeral: true,
+          });
+          return;
+        }
       }
 
       const canUse = await configManager.canUseGiveawayCommands(
         interaction.guildId,
-        interaction.member,
+        member,
       );
 
       if (!canUse) {
