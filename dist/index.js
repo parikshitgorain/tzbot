@@ -584,7 +584,11 @@ class TZBotApplication {
             }
         }
         catch (error) {
-            logger.warn('Failed to initialize announcement relay', { error });
+            logger.error('Failed to initialize announcement relay - will continue without it', {
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+            });
+            // Don't throw - announcement relay is optional
         }
         logger.info('Managers initialized');
     }
@@ -1601,11 +1605,106 @@ async function main() {
         logger.info('TZBOT is now running!');
     }
     catch (error) {
-        logger.error('Failed to start TZBOT', {
+        logger.error('CRITICAL: Failed to start TZBOT - Bot will exit', {
             error: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined,
         });
         process.exit(1);
+    }
+}
+// Global error handlers to prevent crashes
+process.on('uncaughtException', (error) => {
+    logger.error('UNCAUGHT EXCEPTION - Bot will continue running', {
+        error: error.message,
+        stack: error.stack,
+    });
+    // Send critical error notification to Discord webhook
+    sendCriticalErrorWebhook('Uncaught Exception', error).catch(err => {
+        logger.error('Failed to send critical error webhook', { err });
+    });
+    // Don't exit - let the bot continue running
+});
+process.on('unhandledRejection', (reason, promise) => {
+    logger.error('UNHANDLED PROMISE REJECTION - Bot will continue running', {
+        reason: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined,
+        promise: String(promise),
+    });
+    // Send critical error notification to Discord webhook
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    sendCriticalErrorWebhook('Unhandled Promise Rejection', error).catch(err => {
+        logger.error('Failed to send critical error webhook', { err });
+    });
+    // Don't exit - let the bot continue running
+});
+/**
+ * Send critical error notification to Discord webhook
+ * This alerts admins when the bot encounters critical errors
+ */
+async function sendCriticalErrorWebhook(errorType, error) {
+    try {
+        const webhookUrl = config.discordWebhookUrl;
+        if (!webhookUrl) {
+            logger.debug('Discord webhook URL not configured, skipping critical error notification');
+            return;
+        }
+        // Get version
+        let version = 'unknown';
+        try {
+            const { readFileSync } = await import('fs');
+            const { fileURLToPath } = await import('url');
+            const { dirname, join } = await import('path');
+            const __dirname = dirname(fileURLToPath(import.meta.url));
+            const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'));
+            version = pkg.version;
+        }
+        catch {
+            // ignore
+        }
+        // Get hostname
+        const hostname = process.env.HOSTNAME || 'unknown';
+        // Truncate error stack if too long
+        let errorStack = error.stack || error.message;
+        if (errorStack.length > 1000) {
+            errorStack = errorStack.substring(0, 1000) + '...\n[truncated]';
+        }
+        // Escape for JSON
+        const escapeJson = (str) => str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+        const payload = {
+            embeds: [{
+                    title: `🔴 Critical Error: ${errorType}`,
+                    description: `The bot encountered a critical error but is still running.`,
+                    color: 15158332, // Red
+                    fields: [
+                        { name: 'Service', value: '`tzbot`', inline: true },
+                        { name: 'Hostname', value: `\`${hostname}\``, inline: true },
+                        { name: 'Version', value: `\`v${version}\``, inline: true },
+                        { name: 'Error Type', value: errorType, inline: true },
+                        { name: 'Error Message', value: `\`${escapeJson(error.message)}\``, inline: false },
+                        { name: 'Stack Trace', value: `\`\`\`\n${escapeJson(errorStack)}\n\`\`\``, inline: false },
+                    ],
+                    timestamp: new Date().toISOString(),
+                }],
+        };
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            logger.error('Failed to send critical error webhook', {
+                status: response.status,
+                statusText: response.statusText,
+            });
+        }
+        else {
+            logger.info('Critical error webhook sent successfully', { errorType });
+        }
+    }
+    catch (webhookError) {
+        logger.error('Error sending critical error webhook', {
+            error: webhookError instanceof Error ? webhookError.message : String(webhookError),
+        });
     }
 }
 // Start the application

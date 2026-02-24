@@ -138,20 +138,8 @@ export class GracefulShutdownManager {
                 process.exit(1);
             });
         });
-        // Handle uncaught exceptions
-        process.on('uncaughtException', (error) => {
-            this.logger.error('Uncaught exception', { error });
-            this.shutdown('uncaughtException').catch(() => {
-                process.exit(1);
-            });
-        });
-        // Handle unhandled promise rejections
-        process.on('unhandledRejection', (reason, promise) => {
-            this.logger.error('Unhandled promise rejection', { reason, promise });
-            this.shutdown('unhandledRejection').catch(() => {
-                process.exit(1);
-            });
-        });
+        // Note: uncaughtException and unhandledRejection handlers are in index.ts
+        // to prevent bot crashes - they log errors but don't shutdown
         this.logger.info('Signal handlers registered');
     }
 }

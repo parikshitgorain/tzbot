@@ -13,6 +13,7 @@ export interface BotConfig {
     discordToken: string;
     guildId: string;
     clientId: string;
+    discordWebhookUrl?: string;
     subscriberRoleId?: string;
     vipRoleId?: string;
     moderatorRoleId?: string;

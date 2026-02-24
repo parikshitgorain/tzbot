@@ -111,11 +111,12 @@ export class HealthCheckSystem {
         const startTime = Date.now();
         try {
             if (!this.kickClient) {
+                // Kick API client is optional - return healthy if not configured
                 return {
-                    healthy: false,
+                    healthy: true,
                     latency: 0,
                     lastCheck: new Date(),
-                    error: 'Kick API client not initialized',
+                    error: undefined,
                 };
             }
             // Try to make a simple API call to check connectivity
@@ -192,11 +193,12 @@ export class HealthCheckSystem {
         const startTime = Date.now();
         try {
             if (!this.cache) {
+                // Redis cache is optional - return healthy if not configured
                 return {
-                    healthy: false,
+                    healthy: true,
                     latency: 0,
                     lastCheck: new Date(),
-                    error: 'Redis cache not initialized',
+                    error: undefined,
                 };
             }
             // Execute a simple ping to check connectivity
@@ -292,7 +294,11 @@ export class HealthCheckSystem {
                 }
             }
             catch (error) {
-                this.logger.error('Error during periodic health check', error);
+                // Log error but don't crash - health checks are non-critical
+                this.logger.error('Error during periodic health check - will retry next interval', {
+                    error: error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                });
             }
         }, interval);
     }

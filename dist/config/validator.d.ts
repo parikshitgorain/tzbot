@@ -8,6 +8,7 @@ declare const configSchema: z.ZodObject<{
     discordToken: z.ZodString;
     guildId: z.ZodString;
     clientId: z.ZodString;
+    discordWebhookUrl: z.ZodOptional<z.ZodString>;
     subscriberRoleId: z.ZodOptional<z.ZodString>;
     vipRoleId: z.ZodOptional<z.ZodString>;
     moderatorRoleId: z.ZodOptional<z.ZodString>;
@@ -88,6 +89,7 @@ declare const configSchema: z.ZodObject<{
     nodeEnv: "development" | "production" | "test";
     maxMessagesPerSecond: number;
     cacheEnabled: boolean;
+    discordWebhookUrl?: string | undefined;
     subscriberRoleId?: string | undefined;
     vipRoleId?: string | undefined;
     moderatorRoleId?: string | undefined;
@@ -115,6 +117,7 @@ declare const configSchema: z.ZodObject<{
         rapidMessages?: number | undefined;
         rapidWindow?: number | undefined;
     };
+    discordWebhookUrl?: string | undefined;
     subscriberRoleId?: string | undefined;
     vipRoleId?: string | undefined;
     moderatorRoleId?: string | undefined;

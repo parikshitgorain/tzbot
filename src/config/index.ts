@@ -51,6 +51,7 @@ function loadConfig(): BotConfig {
     discordToken: process.env.DISCORD_TOKEN,
     guildId: process.env.DISCORD_GUILD_ID,
     clientId: process.env.DISCORD_CLIENT_ID,
+    discordWebhookUrl: process.env.DISCORD_WEBHOOK_URL, // For critical error notifications
 
     // Role mappings
     subscriberRoleId: process.env.SUBSCRIBER_ROLE_ID,

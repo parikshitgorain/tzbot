@@ -16,6 +16,7 @@ export interface BotConfig {
   discordToken: string;
   guildId: string;
   clientId: string;
+  discordWebhookUrl?: string; // For critical error notifications
 
   // Role mappings (optional - features disabled if not set)
   subscriberRoleId?: string;
