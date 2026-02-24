@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file giveaway.manager.ts
  * @description Giveaway manager for creating and managing role-gated giveaways
  * @module managers
@@ -730,57 +730,58 @@ export class GiveawayManager {
    * Create giveaway embed
    */
   private createGiveawayEmbed(
-    title: string,
-    description: string,
-    endsAt: Date,
-    winnerCount: number,
-    requiredRoles: string[],
-    hostedBy?: string,
-  ): EmbedBuilder {
-    // Clean, professional description
-    let embedDescription = `${description}\n\n`;
-    embedDescription += `✨ **Click the button below to enter!**\n\n`;
-    
-    // Add hosted by in description if present
-    if (hostedBy) {
-      embedDescription += `🎤 **Hosted by** <@${hostedBy}>\n`;
+      title: string,
+      description: string,
+      endsAt: Date,
+      winnerCount: number,
+      requiredRoles: string[],
+      hostedBy?: string,
+    ): EmbedBuilder {
+      // Clean, professional description
+      let embedDescription = `${description}\n\n`;
+      embedDescription += `✨ **Click the button below to enter!**\n\n`;
+
+      // Add hosted by in description if present
+      if (hostedBy) {
+        embedDescription += `🎤 **Hosted by** <@${hostedBy}>\n`;
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle(`🎉 ${title}`)
+        .setDescription(embedDescription)
+        .setColor(0x5865f2) // Discord blurple
+        .addFields(
+          { 
+            name: 'Winners', 
+            value: `🏆 ${winnerCount}`, 
+            inline: true 
+          },
+          {
+            name: 'Ends',
+            value: `⏰ <t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
+            inline: true,
+          },
+          { 
+            name: 'Entries', 
+            value: `👥 1`, 
+            inline: true 
+          },
+        )
+        .setTimestamp()
+        .setFooter({ text: '🎁 Good luck to all participants!' });
+
+      // Add required roles if present
+      if (requiredRoles.length > 0) {
+        embed.addFields({
+          name: 'Required Roles',
+          value: `🔒 ${requiredRoles.map((id) => `<@&${id}>`).join(', ')}`,
+          inline: false,
+        });
+      }
+
+      return embed;
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle(`🎉 ${title}`)
-      .setDescription(embedDescription)
-      .setColor(0x5865f2) // Discord blurple
-      .addFields(
-        { 
-          name: '� Winners', 
-          value: `${winnerCount}`, 
-          inline: true 
-        },
-        {
-          name: '⏰ Ends',
-          value: `<t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
-          inline: true,
-        },
-        { 
-          name: '� Entries', 
-          value: '1', 
-          inline: true 
-        },
-      )
-      .setTimestamp()
-      .setFooter({ text: '🎁 Good luck to all participants!' });
-
-    // Add required roles if present
-    if (requiredRoles.length > 0) {
-      embed.addFields({
-        name: '🔒 Required Roles',
-        value: requiredRoles.map((id) => `<@&${id}>`).join(', '),
-        inline: false,
-      });
-    }
-
-    return embed;
-  }
 
   /**
    * Update giveaway message with current entry count
@@ -842,7 +843,7 @@ export class GiveawayManager {
 
       if (winners.length > 0) {
         embed.addFields({
-          name: '🏆 Winners',
+          name: 'Winners',
           value: winners.map((id) => `<@${id}>`).join('\n'),
           inline: false,
         });
