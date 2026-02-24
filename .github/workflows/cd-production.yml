@@ -222,7 +222,7 @@ jobs:
           DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
           DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
           DATABASE_URL=${{ secrets.DATABASE_URL }}
-          GUILD_ID=${{ secrets.DISCORD_GUILD_ID }}
+          DISCORD_GUILD_ID=${{ secrets.DISCORD_GUILD_ID }}
           DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}
           NODE_ENV=production
           ENV_EOF
