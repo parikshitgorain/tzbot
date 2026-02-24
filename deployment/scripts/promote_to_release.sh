@@ -45,26 +45,11 @@ fi
 echo "📝 Source branch: $SOURCE_BRANCH"
 echo "📝 Source commit: $SOURCE_SHA"
 
-# Merge Development commits into release (preserving history)
-echo "🔀 Merging $SOURCE_BRANCH commits into release..."
-git merge "origin/$SOURCE_BRANCH" --no-ff -m "chore: merge $SOURCE_BRANCH into release
+# Reset release to match Development (preserving commit history)
+echo "🔄 Resetting release to match $SOURCE_BRANCH..."
+git reset --hard "origin/$SOURCE_BRANCH"
 
-Merging commits from $SOURCE_BRANCH to release branch.
-This preserves commit history for semantic versioning.
-
-Source commit: ${SOURCE_SHA:0:7}" || {
-  echo "⚠️ Merge conflict detected, using clean build strategy..."
-  git merge --abort 2>/dev/null || true
-  
-  # Fallback: Replace with clean build if merge fails
-  echo "🔄 Replacing release branch content with clean build..."
-  find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
-  cp -r "$CLEAN_BUILD_DIR"/* .
-  cp -r "$CLEAN_BUILD_DIR"/.[!.]* . 2>/dev/null || true
-  git add -A
-}
-
-# Now apply clean build changes (remove dev artifacts)
+# Now remove dev artifacts (this will be a new commit)
 echo "🧹 Removing dev artifacts from release..."
 
 # Remove dev-only files and directories
@@ -136,13 +121,13 @@ else
 fi
 
 # Push to release branch
-# Note: This push will trigger the release-versioning workflow
-# because the checkout in CI used PAT_TOKEN which has workflow trigger permissions
-echo "📤 Pushing to release branch..."
-git push origin release
+# Note: Using force-with-lease to safely overwrite release branch
+# This preserves all Development commits for semantic-release to analyze
+echo "📤 Force pushing to release branch..."
+git push origin release --force-with-lease
 
 if [ $? -eq 0 ]; then
-  echo "✅ Clean production build pushed to release branch"
+  echo "✅ Release branch updated with all Development commits"
   echo "🔄 Release versioning workflow should trigger automatically"
 else
   echo "❌ Failed to push to release branch"
