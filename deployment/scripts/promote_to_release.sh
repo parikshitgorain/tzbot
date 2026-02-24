@@ -47,12 +47,16 @@ fi
 
 # Merge Development into release
 echo "🔀 Merging $SOURCE_BRANCH into release..."
-git merge "origin/$SOURCE_BRANCH" -X theirs --no-ff -m "chore: sync with $SOURCE_BRANCH
+MERGE_SUCCESS=false
+if git merge "origin/$SOURCE_BRANCH" -X theirs --no-ff -m "chore: sync with $SOURCE_BRANCH
 
 Syncing release branch with Development commits.
 Using theirs strategy to prefer Development changes.
 
-Source commit: ${SOURCE_SHA:0:7}" || {
+Source commit: ${SOURCE_SHA:0:7}"; then
+  MERGE_SUCCESS=true
+  echo "✅ Merge successful"
+else
   echo "❌ Merge failed, using clean build..."
   git merge --abort 2>/dev/null || true
   
@@ -61,7 +65,7 @@ Source commit: ${SOURCE_SHA:0:7}" || {
   cp -r "$CLEAN_BUILD_DIR"/* .
   cp -r "$CLEAN_BUILD_DIR"/.[!.]* . 2>/dev/null || true
   git add -A
-}
+fi
 
 # Remove dev artifacts
 echo "🧹 Removing dev artifacts from release..."
@@ -69,7 +73,20 @@ rm -rf tests/ coverage/ .github/workflows/ci-development.yml
 rm -f vitest.config.ts eslint.config.js .eslintrc* tsconfig.json
 find . -name "*.test.*" -o -name "*.spec.*" | xargs rm -f 2>/dev/null || true
 
-# Stage the cleanup
+# Copy production build artifacts from clean build
+if [ "$MERGE_SUCCESS" = true ]; then
+  echo "📦 Copying production build from clean build..."
+  if [ -d "$CLEAN_BUILD_DIR/dist" ]; then
+    rm -rf dist/
+    cp -r "$CLEAN_BUILD_DIR/dist" .
+    echo "✅ Copied dist/ directory"
+  else
+    echo "❌ dist/ not found in clean build!"
+    exit 1
+  fi
+fi
+
+# Stage all changes
 git add -A
 
 # Safety checks
