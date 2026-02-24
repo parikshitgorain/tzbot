@@ -24,16 +24,55 @@ echo "🔄 Promoting clean build to release branch..."
 git config user.name "github-actions[bot]"
 git config user.email "github-actions[bot]@users.noreply.github.com"
 
+# Fetch latest branches
+git fetch origin
+
 # Checkout or create release branch
-git fetch origin release:release 2>/dev/null || git checkout -b release
-git checkout release
+if git show-ref --verify --quiet refs/remotes/origin/release; then
+  echo "📥 Checking out existing release branch..."
+  git checkout -B release origin/release
+else
+  echo "🆕 Creating new release branch..."
+  git checkout -b release
+fi
 
-# Replace with clean production build
-echo "🔄 Replacing release branch content with clean build..."
-find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
-cp -r "$CLEAN_BUILD_DIR"/* .
-cp -r "$CLEAN_BUILD_DIR"/.[!.]* . 2>/dev/null || true
+# Get the source branch name (Development or development)
+SOURCE_BRANCH=$(git branch -r --contains "$SOURCE_SHA" | grep -E 'origin/(Development|development)' | head -1 | sed 's/.*origin\///')
+if [ -z "$SOURCE_BRANCH" ]; then
+  SOURCE_BRANCH="Development"
+fi
 
+echo "📝 Source branch: $SOURCE_BRANCH"
+echo "📝 Source commit: $SOURCE_SHA"
+
+# Merge Development commits into release (preserving history)
+echo "🔀 Merging $SOURCE_BRANCH commits into release..."
+git merge "origin/$SOURCE_BRANCH" --no-ff -m "chore: merge $SOURCE_BRANCH into release
+
+Merging commits from $SOURCE_BRANCH to release branch.
+This preserves commit history for semantic versioning.
+
+Source commit: ${SOURCE_SHA:0:7}" || {
+  echo "⚠️ Merge conflict detected, using clean build strategy..."
+  git merge --abort 2>/dev/null || true
+  
+  # Fallback: Replace with clean build if merge fails
+  echo "🔄 Replacing release branch content with clean build..."
+  find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+  cp -r "$CLEAN_BUILD_DIR"/* .
+  cp -r "$CLEAN_BUILD_DIR"/.[!.]* . 2>/dev/null || true
+  git add -A
+}
+
+# Now apply clean build changes (remove dev artifacts)
+echo "🧹 Removing dev artifacts from release..."
+
+# Remove dev-only files and directories
+rm -rf tests/ coverage/ .github/workflows/ci-development.yml
+rm -f vitest.config.ts eslint.config.js .eslintrc* tsconfig.json
+find . -name "*.test.*" -o -name "*.spec.*" | xargs rm -f 2>/dev/null || true
+
+# Stage the cleanup
 git add -A
 
 # Safety check for dev artifacts
@@ -83,14 +122,17 @@ echo "RELEASE_VERSION=$CLEAN_VERSION" >> "$GITHUB_ENV" 2>/dev/null || echo "RELE
 
 # Commit clean production build
 if git diff --cached --quiet; then
-  echo "No changes to commit"
+  echo "ℹ️ No changes to commit after merge and cleanup"
 else
   SHORT_SHA="${SOURCE_SHA:0:7}"
-  git commit -m "chore: promote clean build to release
+  git commit -m "chore: clean dev artifacts from release
 
+- Removed: tests/, coverage/, dev configs
 - Source commit: $SHORT_SHA
 - Version: $CLEAN_VERSION
-- Build date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+- Build date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+[skip ci]"
 fi
 
 # Push to release branch
