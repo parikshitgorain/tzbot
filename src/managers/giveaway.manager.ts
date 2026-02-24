@@ -65,6 +65,13 @@ export class GiveawayManager {
   }
 
   /**
+   * Get the confirmation system
+   */
+  getConfirmationSystem(): ConfirmationSystem | null {
+    return this.confirmationSystem;
+  }
+
+  /**
    * Set the config manager (called during initialization)
    */
   setConfigManager(configManager: ConfigManager): void {

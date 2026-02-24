@@ -102,6 +102,55 @@ export class GiveawayRepository {
   }
 
   /**
+   * Get a giveaway by message ID
+   * Returns null if giveaway not found
+   * Used for prefix commands that reference the giveaway message
+   */
+  async getByMessageId(messageId: string): Promise<Giveaway | null> {
+    const query = `
+      SELECT 
+        g.id, g.guild_id, g.title, g.description, g.channel_id, g.message_id,
+        g.required_roles, g.winner_count, g.status, g.ends_at, g.created_at,
+        g.condition, g.winners, g.hosted_by
+      FROM giveaways g
+      WHERE g.message_id = $1
+    `;
+
+    try {
+      const result = await this.pool.query(query, [messageId]);
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const row = result.rows[0];
+
+      // Fetch entries separately
+      const entries = await this.getEntries(row.id);
+
+      return {
+        id: row.id,
+        guildId: row.guild_id,
+        title: row.title,
+        description: row.description,
+        channelId: row.channel_id,
+        messageId: row.message_id,
+        requiredRoles: row.required_roles,
+        winnerCount: row.winner_count,
+        status: row.status as GiveawayStatus,
+        endsAt: row.ends_at,
+        createdAt: row.created_at,
+        entries,
+        condition: row.condition || undefined,
+        winners: row.winners || [],
+        hostedBy: row.hosted_by || undefined,
+      };
+    } catch (error) {
+      throw new Error(`Failed to get giveaway by message ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Get all active giveaways
    * Used for state recovery on bot restart
    */
