@@ -758,15 +758,25 @@ class TZBotApplication {
     /**
      * Handle giveaway reroll prefix command
      * Format: gw.reroll <giveaway_id> @user
-     * Only works for users with ManageEvents permission
+     * Checks custom giveaway permissions from database
      * Provides feedback messages for better UX
      */
     async handleGiveawayRerollCommand(message) {
         try {
-            // Check if user has permission (ManageEvents)
-            if (!message.member?.permissions.has('ManageEvents')) {
-                // Send ephemeral-style message that auto-deletes
-                const reply = await message.reply('❌ You need the `Manage Events` permission to use this command.');
+            // Check if in a guild
+            if (!message.guild || !message.member) {
+                const reply = await message.reply('❌ This command can only be used in a server.');
+                setTimeout(() => {
+                    reply.delete().catch(() => { });
+                    message.delete().catch(() => { });
+                }, 5000);
+                return;
+            }
+            // Check custom giveaway permissions
+            const configManager = this.giveawayManager.getConfigManager();
+            const canUse = await configManager.canUseGiveawayCommands(message.guild.id, message.member);
+            if (!canUse) {
+                const reply = await message.reply('❌ You don\'t have permission to use giveaway commands. Contact an administrator.');
                 setTimeout(() => {
                     reply.delete().catch(() => { });
                     message.delete().catch(() => { });

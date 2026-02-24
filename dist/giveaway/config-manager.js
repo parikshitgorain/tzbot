@@ -5,6 +5,7 @@
  */
 import { PermissionFlagsBits } from 'discord.js';
 import { logger } from '../core/logger/logger.js';
+import { redisClient } from '../core/cache/redis.client.js';
 /**
  * ConfigManager handles giveaway command permissions
  * Manages who can use giveaway commands based on roles and user IDs
@@ -12,27 +13,59 @@ import { logger } from '../core/logger/logger.js';
  */
 export class ConfigManager {
     configRepository;
+    CACHE_TTL = 300; // 5 minutes cache
+    CACHE_PREFIX = 'giveaway:permissions:';
     constructor(configRepository) {
         this.configRepository = configRepository;
     }
     /**
      * Get giveaway command permissions for a guild
      * Returns default admin-only config if no configuration exists
+     * Uses Redis cache to reduce database queries
      */
     async getGiveawayPermissions(guildId) {
         try {
+            // Try to get from cache first
+            const cacheKey = `${this.CACHE_PREFIX}${guildId}`;
+            try {
+                const cached = await redisClient.get(cacheKey);
+                if (cached) {
+                    const config = JSON.parse(cached);
+                    // Convert date strings back to Date objects
+                    config.createdAt = new Date(config.createdAt);
+                    config.updatedAt = new Date(config.updatedAt);
+                    return config;
+                }
+            }
+            catch (cacheError) {
+                // If cache fails, continue to database
+                logger.warn('Cache read failed, falling back to database', {
+                    guildId,
+                    error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+                });
+            }
+            // Get from database
             const config = await this.configRepository.getGiveawayPermissions(guildId);
             // Return default admin-only config if none exists
-            if (!config) {
-                return {
-                    guildId,
-                    allowedRoles: [],
-                    allowedUsers: [],
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                };
+            const result = config || {
+                guildId,
+                allowedRoles: [],
+                allowedUsers: [],
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+            // Cache the result
+            try {
+                await redisClient.set(cacheKey, JSON.stringify(result), this.CACHE_TTL);
             }
-            return config;
+            catch (cacheError) {
+                // Log but don't fail if cache write fails
+                logger.warn('Failed to cache giveaway permissions', {
+                    guildId,
+                    error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+                });
+            }
+            return result;
         }
         catch (error) {
             logger.error('Failed to get giveaway permissions', {
@@ -45,10 +78,22 @@ export class ConfigManager {
     /**
      * Update giveaway command permissions for a guild
      * Creates new config if doesn't exist, updates if it does
+     * Invalidates cache after update
      */
     async updateGiveawayPermissions(guildId, allowedRoles, allowedUsers) {
         try {
             await this.configRepository.updateGiveawayPermissions(guildId, allowedRoles, allowedUsers);
+            // Invalidate cache
+            const cacheKey = `${this.CACHE_PREFIX}${guildId}`;
+            try {
+                await redisClient.del(cacheKey);
+            }
+            catch (cacheError) {
+                logger.warn('Failed to invalidate cache after update', {
+                    guildId,
+                    error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+                });
+            }
             logger.info('Updated giveaway permissions', {
                 guildId,
                 allowedRoles,

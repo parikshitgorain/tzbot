@@ -13,15 +13,19 @@ import { GiveawayConfig } from '../types/models.js';
  */
 export declare class ConfigManager {
     private configRepository;
+    private readonly CACHE_TTL;
+    private readonly CACHE_PREFIX;
     constructor(configRepository: GiveawayConfigRepository);
     /**
      * Get giveaway command permissions for a guild
      * Returns default admin-only config if no configuration exists
+     * Uses Redis cache to reduce database queries
      */
     getGiveawayPermissions(guildId: string): Promise<GiveawayConfig>;
     /**
      * Update giveaway command permissions for a guild
      * Creates new config if doesn't exist, updates if it does
+     * Invalidates cache after update
      */
     updateGiveawayPermissions(guildId: string, allowedRoles: string[], allowedUsers: string[]): Promise<void>;
     /**

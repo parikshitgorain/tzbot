@@ -9,6 +9,7 @@ import {
   PermissionFlagsBits,
   ChatInputCommandInteraction,
   EmbedBuilder,
+  GuildMember,
 } from 'discord.js';
 import type { CommandDefinition } from '@/managers/command.manager.js';
 import type { IDiscordClient } from '@/core/discord/client.js';
@@ -37,7 +38,7 @@ function createGiveawayCommand(
   const builder = new SlashCommandBuilder()
     .setName('giveaway')
     .setDescription('Manage giveaways')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
+    // Removed setDefaultMemberPermissions to allow custom role/user permissions
     .addSubcommand((subcommand) =>
       subcommand
         .setName('create')
@@ -182,6 +183,63 @@ function createGiveawayCommand(
   const handler = async (interaction: ChatInputCommandInteraction) => {
     const subcommand = interaction.options.getSubcommand();
 
+    // Check permissions for all subcommands except 'config' (config needs admin)
+    if (subcommand !== 'config') {
+      if (!interaction.member || !interaction.guildId || !interaction.guild) {
+        await interaction.reply({
+          content: '❌ This command can only be used in a server.',
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const configManager = giveawayManager.getConfigManager();
+      
+      // Fetch full GuildMember if we have APIInteractionGuildMember
+      let member = interaction.member;
+      if (!(member instanceof GuildMember)) {
+        try {
+          member = await interaction.guild.members.fetch(interaction.user.id);
+        } catch {
+          await interaction.reply({
+            content: '❌ Unable to verify permissions. Please try again.',
+            ephemeral: true,
+          });
+          return;
+        }
+      }
+
+      const canUse = await configManager.canUseGiveawayCommands(
+        interaction.guildId,
+        member,
+      );
+
+      if (!canUse) {
+        await interaction.reply({
+          content: '❌ You don\'t have permission to use giveaway commands. Contact an administrator.',
+          ephemeral: true,
+        });
+        return;
+      }
+    } else {
+      // Config subcommand requires Administrator permission
+      if (!interaction.member || typeof interaction.member.permissions === 'string') {
+        await interaction.reply({
+          content: '❌ This command can only be used in a server.',
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        await interaction.reply({
+          content: '❌ Only administrators can configure giveaway permissions.',
+          ephemeral: true,
+        });
+        return;
+      }
+    }
+
     if (subcommand === 'create') {
       await handleCreateGiveaway(interaction, giveawayManager);
     } else if (subcommand === 'cancel') {
@@ -200,8 +258,8 @@ function createGiveawayCommand(
     description: 'Manage giveaways',
     builder: builder as SlashCommandBuilder,
     handler,
-    permissions: [PermissionFlagsBits.ManageEvents],
-    moderatorOnly: true,
+    // Removed permissions array - now using custom permission system
+    moderatorOnly: false, // Changed to false - using custom permissions
   };
 }
 
