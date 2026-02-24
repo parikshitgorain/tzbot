@@ -132,9 +132,7 @@ else
 
 - Removed: tests/, coverage/, dev configs
 - Source commit: ${SOURCE_SHA:0:7}
-- Version: $CLEAN_VERSION
-
-[skip ci]"
+- Version: $CLEAN_VERSION"
 fi
 
 # Push to release
