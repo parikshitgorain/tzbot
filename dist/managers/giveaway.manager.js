@@ -28,6 +28,12 @@ export class GiveawayManager {
         this.confirmationSystem = confirmationSystem;
     }
     /**
+     * Get the confirmation system
+     */
+    getConfirmationSystem() {
+        return this.confirmationSystem;
+    }
+    /**
      * Set the config manager (called during initialization)
      */
     setConfigManager(configManager) {
@@ -583,16 +589,16 @@ export class GiveawayManager {
             .setDescription(embedDescription)
             .setColor(0x5865f2) // Discord blurple
             .addFields({
-            name: '� Winners',
-            value: `${winnerCount}`,
+            name: 'Winners',
+            value: `🏆 ${winnerCount}`,
             inline: true
         }, {
-            name: '⏰ Ends',
-            value: `<t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
+            name: 'Ends',
+            value: `⏰ <t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
             inline: true,
         }, {
-            name: '� Entries',
-            value: '1',
+            name: 'Entries',
+            value: `👥 1`,
             inline: true
         })
             .setTimestamp()
@@ -600,8 +606,8 @@ export class GiveawayManager {
         // Add required roles if present
         if (requiredRoles.length > 0) {
             embed.addFields({
-                name: '🔒 Required Roles',
-                value: requiredRoles.map((id) => `<@&${id}>`).join(', '),
+                name: 'Required Roles',
+                value: `🔒 ${requiredRoles.map((id) => `<@&${id}>`).join(', ')}`,
                 inline: false,
             });
         }
@@ -653,7 +659,7 @@ export class GiveawayManager {
                 .setFooter({ text: '🎁 Giveaway has ended' });
             if (winners.length > 0) {
                 embed.addFields({
-                    name: '🏆 Winners',
+                    name: 'Winners',
                     value: winners.map((id) => `<@${id}>`).join('\n'),
                     inline: false,
                 });

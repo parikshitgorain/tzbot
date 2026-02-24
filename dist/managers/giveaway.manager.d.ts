@@ -46,6 +46,10 @@ export declare class GiveawayManager {
      */
     setConfirmationSystem(confirmationSystem: ConfirmationSystem): void;
     /**
+     * Get the confirmation system
+     */
+    getConfirmationSystem(): ConfirmationSystem | null;
+    /**
      * Set the config manager (called during initialization)
      */
     setConfigManager(configManager: ConfigManager): void;

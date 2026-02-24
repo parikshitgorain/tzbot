@@ -18,6 +18,12 @@ export declare class GiveawayRepository {
      */
     get(giveawayId: string): Promise<Giveaway | null>;
     /**
+     * Get a giveaway by message ID
+     * Returns null if giveaway not found
+     * Used for prefix commands that reference the giveaway message
+     */
+    getByMessageId(messageId: string): Promise<Giveaway | null>;
+    /**
      * Get all active giveaways
      * Used for state recovery on bot restart
      */

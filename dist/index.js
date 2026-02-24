@@ -752,6 +752,66 @@ class TZBotApplication {
         }
     }
     /**
+     * Handle giveaway reroll prefix command
+     * Format: gw.reroll <message_id> @user
+     * Only works for users with ManageEvents permission
+     * Silently ignores if user doesn't have permission
+     */
+    async handleGiveawayRerollCommand(message) {
+        try {
+            // Check if user has permission (ManageEvents)
+            if (!message.member?.permissions.has('ManageEvents')) {
+                // Silently ignore - no error message
+                return;
+            }
+            // Parse command: gw.reroll <message_id> @user
+            const parts = message.content.trim().split(/\s+/);
+            if (parts.length < 3) {
+                // Invalid format - silently ignore
+                return;
+            }
+            const messageId = parts[1];
+            const userMention = parts[2];
+            // Extract user ID from mention
+            const userIdMatch = userMention.match(/^<@!?(\d+)>$/);
+            if (!userIdMatch) {
+                // Invalid user mention - silently ignore
+                return;
+            }
+            const userId = userIdMatch[1];
+            // Find giveaway by message ID
+            const giveaway = await this.database.repositories.giveaways.getByMessageId(messageId);
+            if (!giveaway) {
+                // Giveaway not found - silently ignore
+                return;
+            }
+            // Check if user is a winner
+            if (!giveaway.winners || !giveaway.winners.includes(userId)) {
+                // User is not a winner - silently ignore
+                return;
+            }
+            // Perform reroll using confirmation system
+            const confirmationSystem = this.giveawayManager.getConfirmationSystem();
+            if (confirmationSystem) {
+                await confirmationSystem.manualReroll(giveaway.id, userId, message.author.id);
+                logger.info('Giveaway rerolled via prefix command', {
+                    giveawayId: giveaway.id,
+                    messageId,
+                    originalWinner: userId,
+                    moderator: message.author.id,
+                });
+            }
+        }
+        catch (error) {
+            // Silently log error - no user-facing message
+            logger.debug('Failed to handle giveaway reroll command', {
+                error: error.message,
+                userId: message.author.id,
+                content: message.content,
+            });
+        }
+    }
+    /**
      * Set up event routing between components
      */
     async setupEventRouting() {
@@ -765,6 +825,12 @@ class TZBotApplication {
             // Track operation for graceful shutdown
             const completeOp = this.shutdownManager.trackOperation();
             try {
+                // Check for giveaway reroll prefix command (gw.reroll)
+                if (message.content.startsWith('gw.reroll ')) {
+                    await this.handleGiveawayRerollCommand(message);
+                    completeOp();
+                    return;
+                }
                 // Check rate limiter first (if configured)
                 if (this.rateLimiter) {
                     const allowed = await this.rateLimiter.handleMessage(message);
