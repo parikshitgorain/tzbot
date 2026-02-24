@@ -18,6 +18,7 @@ const configSchema = z.object({
   discordToken: z.string().trim().min(1, 'Discord token is required'),
   guildId: z.string().trim().min(1, 'Guild ID is required'),
   clientId: z.string().trim().min(1, 'Client ID is required'),
+  discordWebhookUrl: z.string().trim().optional(), // For critical error notifications
 
   // Role mappings (optional - features disabled if not set)
   subscriberRoleId: z.string().trim().optional(),
