@@ -35,6 +35,9 @@ rm /tmp/deployment-package.tar.gz
 echo "🔗 Creating symlinks to shared resources..."
 rm -rf "$RELEASE_DIR/logs"
 ln -sf "$SHARED_DIR/logs" "$RELEASE_DIR/logs"
+
+# Ensure data directory exists before creating symlink
+mkdir -p "$RELEASE_DIR/data"
 rm -rf "$RELEASE_DIR/data/state"
 ln -sf "$SHARED_DIR/data/state" "$RELEASE_DIR/data/state"
 
