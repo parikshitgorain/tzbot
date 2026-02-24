@@ -498,7 +498,9 @@ export class GiveawayManager {
                 description += `\n**🎤 Hosted by:** <@${giveaway.hostedBy}>`;
             }
             if (winners.length > 0) {
-                description += `\n\n**Moderators:** To reroll a winner, use:\n\`\`\`\n/giveaway reroll giveaway_id:${giveaway.id} winner: @user\n\`\`\``;
+                description += `\n\n**Moderators:** To reroll a winner, use:\n\`\`\`\ngw.reroll ${giveaway.id} @user\n\`\`\`` +
+                    '\nor\n' +
+                    `\`\`\`\n/giveaway reroll giveaway_id:${giveaway.id} winner:@user\n\`\`\``;
             }
             const embed = new EmbedBuilder()
                 .setTitle(`🎉 ${giveaway.title} - Winners Announced!`)
@@ -598,7 +600,7 @@ export class GiveawayManager {
             inline: true,
         }, {
             name: 'Entries',
-            value: `👥 1`,
+            value: `👥 0`,
             inline: true
         })
             .setTimestamp()
@@ -622,20 +624,26 @@ export class GiveawayManager {
             const message = await this.discordClient.getMessage(giveaway.channelId, giveaway.messageId);
             if (message.embeds.length > 0) {
                 const embed = EmbedBuilder.from(message.embeds[0]);
-                // Update entries field
+                // Update entries field - match the field name exactly as created
                 const fields = embed.data.fields || [];
-                const entryFieldIndex = fields.findIndex((f) => f.name === '👥 Entries');
+                const entryFieldIndex = fields.findIndex((f) => f.name === 'Entries');
                 if (entryFieldIndex !== -1) {
-                    fields[entryFieldIndex].value = `${entryCount}`;
+                    fields[entryFieldIndex].value = `👥 ${entryCount}`;
                     embed.setFields(fields);
+                }
+                else {
+                    logger.warn('Entries field not found in giveaway embed', {
+                        giveawayId: giveaway.id,
+                        availableFields: fields.map(f => f.name),
+                    });
                 }
                 await message.edit({ embeds: [embed] });
             }
         }
         catch (error) {
-            logger.debug('Failed to update giveaway message', {
+            logError('Failed to update giveaway message', error, {
                 giveawayId: giveaway.id,
-                error: error.message,
+                entryCount,
             });
         }
     }

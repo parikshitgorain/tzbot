@@ -927,71 +927,131 @@ class TZBotApplication {
 
   /**
    * Handle giveaway reroll prefix command
-   * Format: gw.reroll <message_id> @user
+   * Format: gw.reroll <giveaway_id> @user
    * Only works for users with ManageEvents permission
-   * Silently ignores if user doesn't have permission
+   * Provides feedback messages for better UX
    */
   private async handleGiveawayRerollCommand(message: Message): Promise<void> {
     try {
       // Check if user has permission (ManageEvents)
       if (!message.member?.permissions.has('ManageEvents')) {
-        // Silently ignore - no error message
+        // Send ephemeral-style message that auto-deletes
+        const reply = await message.reply('❌ You need the `Manage Events` permission to use this command.');
+        setTimeout(() => {
+          reply.delete().catch(() => {/* ignore */});
+          message.delete().catch(() => {/* ignore */});
+        }, 5000);
         return;
       }
 
-      // Parse command: gw.reroll <message_id> @user
+      // Parse command: gw.reroll <giveaway_id> @user
       const parts = message.content.trim().split(/\s+/);
       
       if (parts.length < 3) {
-        // Invalid format - silently ignore
+        const reply = await message.reply('❌ Invalid format. Use: `gw.reroll <giveaway_id> @user`');
+        setTimeout(() => {
+          reply.delete().catch(() => {/* ignore */});
+          message.delete().catch(() => {/* ignore */});
+        }, 10000);
         return;
       }
 
-      const messageId = parts[1];
+      const giveawayId = parts[1];
       const userMention = parts[2];
 
       // Extract user ID from mention
       const userIdMatch = userMention.match(/^<@!?(\d+)>$/);
       if (!userIdMatch) {
-        // Invalid user mention - silently ignore
+        const reply = await message.reply('❌ Invalid user mention. Please mention a user like @username');
+        setTimeout(() => {
+          reply.delete().catch(() => {/* ignore */});
+          message.delete().catch(() => {/* ignore */});
+        }, 10000);
         return;
       }
 
       const userId = userIdMatch[1];
 
-      // Find giveaway by message ID
-      const giveaway = await this.database.repositories.giveaways.getByMessageId(messageId);
+      // Find giveaway by ID
+      const giveaway = await this.database.repositories.giveaways.get(giveawayId);
 
       if (!giveaway) {
-        // Giveaway not found - silently ignore
+        const reply = await message.reply('❌ Giveaway not found. Please check the giveaway ID.');
+        setTimeout(() => {
+          reply.delete().catch(() => {/* ignore */});
+          message.delete().catch(() => {/* ignore */});
+        }, 10000);
+        return;
+      }
+
+      // Check if giveaway has ended
+      if (giveaway.status !== 'ended') {
+        const reply = await message.reply('❌ Can only reroll winners from ended giveaways.');
+        setTimeout(() => {
+          reply.delete().catch(() => {/* ignore */});
+          message.delete().catch(() => {/* ignore */});
+        }, 10000);
         return;
       }
 
       // Check if user is a winner
       if (!giveaway.winners || !giveaway.winners.includes(userId)) {
-        // User is not a winner - silently ignore
+        const reply = await message.reply('❌ This user is not a winner of this giveaway.');
+        setTimeout(() => {
+          reply.delete().catch(() => {/* ignore */});
+          message.delete().catch(() => {/* ignore */});
+        }, 10000);
         return;
       }
+
+      // Send processing message
+      const processingMsg = await message.reply('🔄 Rerolling winner...');
 
       // Perform reroll using confirmation system
       const confirmationSystem = this.giveawayManager.getConfirmationSystem();
       if (confirmationSystem) {
-        await confirmationSystem.manualReroll(giveaway.id, userId, message.author.id);
+        await confirmationSystem.manualReroll(giveaway.id, userId, message.guildId || '');
+        
+        // Update processing message
+        await processingMsg.edit('✅ Winner rerolled successfully! Check the giveaway channel for the announcement.');
         
         logger.info('Giveaway rerolled via prefix command', {
           giveawayId: giveaway.id,
-          messageId,
           originalWinner: userId,
           moderator: message.author.id,
+          moderatorTag: message.author.tag,
         });
+
+        // Clean up messages after 10 seconds
+        setTimeout(() => {
+          processingMsg.delete().catch(() => {/* ignore */});
+          message.delete().catch(() => {/* ignore */});
+        }, 10000);
+      } else {
+        await processingMsg.edit('❌ Confirmation system not available. Please use the slash command instead.');
+        setTimeout(() => {
+          processingMsg.delete().catch(() => {/* ignore */});
+          message.delete().catch(() => {/* ignore */});
+        }, 10000);
       }
     } catch (error) {
-      // Silently log error - no user-facing message
-      logger.debug('Failed to handle giveaway reroll command', {
+      logger.error('Failed to handle giveaway reroll command', {
         error: (error as Error).message,
+        stack: (error as Error).stack,
         userId: message.author.id,
         content: message.content,
       });
+
+      // Send error message
+      try {
+        const errorMsg = await message.reply('❌ An error occurred while rerolling. Please try again or use `/giveaway reroll` instead.');
+        setTimeout(() => {
+          errorMsg.delete().catch(() => {/* ignore */});
+          message.delete().catch(() => {/* ignore */});
+        }, 10000);
+      } catch {
+        // Ignore if we can't send error message
+      }
     }
   }
 

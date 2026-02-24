@@ -265,7 +265,9 @@ export class ConfirmationSystem {
             '**⏰ IMPORTANT:** You must send any message in this server within the next **5 minutes** to confirm your win!\n\n' +
             '**Failure to respond will result in an automatic reroll.**\n\n' +
             '**Moderators:** To manually reroll a winner, use:\n' +
-            `\`\`\`\n/giveaway reroll giveaway_id:${giveawayId} winner: @user\n\`\`\``)
+            `\`\`\`\ngw.reroll ${giveawayId} @user\n\`\`\`` +
+            '\nor\n' +
+            `\`\`\`\n/giveaway reroll giveaway_id:${giveawayId} winner:@user\n\`\`\``)
             .setColor(0x00ff00)
             .setTimestamp();
         const channel = await this.client.channels.fetch(channelId);
@@ -277,10 +279,11 @@ export class ConfirmationSystem {
         for (const winner of winners) {
             try {
                 const dmEmbed = new EmbedBuilder()
-                    .setTitle(`🎉 Congratulations ${winner.username}!`)
-                    .setDescription(`You won: **${giveaway?.title || 'a giveaway'}**\n\n` +
+                    .setTitle(`🎉 Congratulations!`)
+                    .setDescription(`<@${winner.id}> You won: **${giveaway?.title || 'a giveaway'}**\n\n` +
                     '**⏰ IMPORTANT:** You must send any message in the server within the next **5 minutes** to confirm your win!\n\n' +
-                    '**Failure to respond will result in an automatic reroll.**')
+                    '**Failure to respond will result in an automatic reroll.**' +
+                    (giveaway?.condition ? `\n\n**Next Steps:**\n${giveaway.condition}` : ''))
                     .setColor(0x00ff00)
                     .setTimestamp();
                 await winner.send({ embeds: [dmEmbed] });
@@ -307,6 +310,7 @@ export class ConfirmationSystem {
         if (!giveaway) {
             return;
         }
+        // Send public confirmation in channel
         const embed = new EmbedBuilder()
             .setTitle('✅ Winner Confirmed!')
             .setDescription(`<@${userId}> has confirmed their win!\n\n` +
@@ -316,7 +320,27 @@ export class ConfirmationSystem {
             .setTimestamp();
         const channel = await this.client.channels.fetch(giveaway.channelId);
         if (channel && 'send' in channel) {
-            await channel.send({ embeds: [embed] });
+            await channel.send({ content: `<@${userId}>`, embeds: [embed] });
+        }
+        // Send DM confirmation to winner
+        try {
+            const user = await this.client.users.fetch(userId);
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('✅ Win Confirmed!')
+                .setDescription(`<@${userId}> Your win has been confirmed for: **${giveaway.title}**\n\n` +
+                '**Next Steps:**\n' +
+                (giveaway.condition || 'Check with the giveaway host for prize details.'))
+                .setColor(0x00ff00)
+                .setTimestamp();
+            await user.send({ embeds: [dmEmbed] });
+            logger.info('Confirmation DM sent', { giveawayId, userId });
+        }
+        catch (error) {
+            logger.warn('Failed to send confirmation DM - user may have DMs disabled', {
+                giveawayId,
+                userId,
+                error: error.message,
+            });
         }
     }
     /**
@@ -331,6 +355,7 @@ export class ConfirmationSystem {
         if (!giveaway) {
             return;
         }
+        // Send public reminder in channel
         const embed = new EmbedBuilder()
             .setTitle('⏰ Giveaway Winner Reminder')
             .setDescription(`<@${userId}>, you have **3 minutes remaining** to confirm your win!\n\n` +
@@ -340,6 +365,26 @@ export class ConfirmationSystem {
         const channel = await this.client.channels.fetch(giveaway.channelId);
         if (channel && 'send' in channel) {
             await channel.send({ content: `<@${userId}>`, embeds: [embed] });
+        }
+        // Send DM reminder to winner
+        try {
+            const user = await this.client.users.fetch(userId);
+            const dmEmbed = new EmbedBuilder()
+                .setTitle('⏰ Reminder: Confirm Your Win!')
+                .setDescription(`<@${userId}> You have **3 minutes remaining** to confirm your win for: **${giveaway.title}**\n\n` +
+                '**Action Required:** Send any message in the server to confirm.\n\n' +
+                '**Warning:** Failure to respond will result in an automatic reroll.')
+                .setColor(0xffa500)
+                .setTimestamp();
+            await user.send({ embeds: [dmEmbed] });
+            logger.info('Reminder DM sent', { giveawayId, userId });
+        }
+        catch (error) {
+            logger.warn('Failed to send reminder DM - user may have DMs disabled', {
+                giveawayId,
+                userId,
+                error: error.message,
+            });
         }
     }
     /**
@@ -371,10 +416,11 @@ export class ConfirmationSystem {
         try {
             const newWinner = await this.client.users.fetch(newWinnerId);
             const dmEmbed = new EmbedBuilder()
-                .setTitle(`🎉 Congratulations ${newWinner.username}!`)
-                .setDescription(`You won: **${giveaway.title}**\n\n` +
+                .setTitle(`🎉 Congratulations!`)
+                .setDescription(`<@${newWinnerId}> You won: **${giveaway.title}**\n\n` +
                 '**⏰ IMPORTANT:** You must send any message in the server within the next **5 minutes** to confirm your win!\n\n' +
-                '**Failure to respond will result in an automatic reroll.**')
+                '**Failure to respond will result in an automatic reroll.**' +
+                (giveaway.condition ? `\n\n**Next Steps:**\n${giveaway.condition}` : ''))
                 .setColor(0x00ff00)
                 .setTimestamp();
             await newWinner.send({ embeds: [dmEmbed] });
