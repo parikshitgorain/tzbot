@@ -508,42 +508,53 @@ export class GiveawayManager {
      * Update countdown in message
      */
     async updateCountdown(giveaway, entryCount, timeRemainingMs) {
-        const message = await this.discordClient.getMessage(giveaway.channelId, giveaway.messageId);
-        if (message.embeds.length === 0)
-            return;
-        const embed = EmbedBuilder.from(message.embeds[0]);
-        // Format countdown
-        const totalSeconds = Math.floor(timeRemainingMs / 1000);
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-        let countdown = '';
-        if (hours > 0) {
-            countdown = `${hours}h ${minutes}m ${seconds}s`;
+        try {
+            const message = await this.discordClient.getMessage(giveaway.channelId, giveaway.messageId);
+            if (message.embeds.length === 0)
+                return;
+            const embed = EmbedBuilder.from(message.embeds[0]);
+            // Format countdown
+            const totalSeconds = Math.floor(timeRemainingMs / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            let countdown = '';
+            if (hours > 0) {
+                countdown = `${hours}h ${minutes}m ${seconds}s`;
+            }
+            else if (minutes > 0) {
+                countdown = `${minutes}m ${seconds}s`;
+            }
+            else {
+                countdown = `${seconds}s`;
+            }
+            // Update description with countdown
+            const timestamp = Math.floor(giveaway.endsAt.getTime() / 1000);
+            let embedDescription = `${giveaway.description}\n\n`;
+            embedDescription += `✨ **Click the button below to enter!**\n\n`;
+            embedDescription += `⏰ **Ends:** in ${countdown} (<t:${timestamp}:f>)\n`;
+            if (giveaway.hostedBy) {
+                embedDescription += `🎤 **Hosted by** <@${giveaway.hostedBy}>\n`;
+            }
+            embed.setDescription(embedDescription);
+            // Update entries field
+            const fields = embed.data.fields || [];
+            const entriesIndex = fields.findIndex(f => f.name === 'Entries');
+            if (entriesIndex !== -1) {
+                fields[entriesIndex].value = `👥 ${entryCount}`;
+                embed.setFields(fields);
+            }
+            await message.edit({ embeds: [embed] });
         }
-        else if (minutes > 0) {
-            countdown = `${minutes}m ${seconds}s`;
+        catch (error) {
+            // If message not found, stop the countdown
+            if (error instanceof Error && error.message.includes('Unknown Message')) {
+                logger.warn('Giveaway message deleted, stopping countdown', { giveawayId: giveaway.id });
+                this.stopSmartCountdown(giveaway.id);
+                return;
+            }
+            // Silently ignore other errors
         }
-        else {
-            countdown = `${seconds}s`;
-        }
-        // Update description with countdown
-        const timestamp = Math.floor(giveaway.endsAt.getTime() / 1000);
-        let embedDescription = `${giveaway.description}\n\n`;
-        embedDescription += `✨ **Click the button below to enter!**\n\n`;
-        embedDescription += `⏰ **Ends:** in ${countdown} (<t:${timestamp}:f>)\n`;
-        if (giveaway.hostedBy) {
-            embedDescription += `🎤 **Hosted by** <@${giveaway.hostedBy}>\n`;
-        }
-        embed.setDescription(embedDescription);
-        // Update entries field
-        const fields = embed.data.fields || [];
-        const entriesIndex = fields.findIndex(f => f.name === 'Entries');
-        if (entriesIndex !== -1) {
-            fields[entriesIndex].value = `👥 ${entryCount}`;
-            embed.setFields(fields);
-        }
-        await message.edit({ embeds: [embed] });
     }
     /**
      * End a giveaway and select winners
@@ -920,6 +931,13 @@ export class GiveawayManager {
             await message.edit({ embeds: [embed], components: [] });
         }
         catch (error) {
+            // If message was deleted, just log and continue
+            if (error instanceof Error && error.message.includes('Unknown Message')) {
+                logger.info('Giveaway message was deleted, skipping update', {
+                    giveawayId: giveaway.id,
+                });
+                return;
+            }
             logger.debug('Failed to update ended giveaway message', {
                 giveawayId: giveaway.id,
                 error: error.message,
