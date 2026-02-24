@@ -1,6 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConfigManager } from '../../../src/giveaway/config-manager.js';
 
+// Mock Redis client
+vi.mock('../../../src/core/cache/redis.client.js', () => ({
+  redisClient: {
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue('OK'),
+    del: vi.fn().mockResolvedValue(1),
+  },
+}));
+
+// Mock logger
+vi.mock('../../../src/core/logger/logger.js', () => ({
+  logger: {
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+  },
+}));
+
 function makeRepo() {
   return {
     getGiveawayPermissions: vi.fn(),
@@ -34,6 +53,7 @@ describe('ConfigManager (giveaway)', () => {
   beforeEach(() => {
     repo = makeRepo();
     manager = new ConfigManager(repo as any);
+    vi.clearAllMocks();
   });
 
   describe('getGiveawayPermissions()', () => {

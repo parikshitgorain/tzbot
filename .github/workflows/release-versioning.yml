@@ -171,18 +171,33 @@ jobs:
           echo "Latest tag: $LATEST_TAG"
           echo "Latest version: $LATEST_VERSION"
           
-          # Get current package.json version
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
-          echo "Current package.json version: $CURRENT_VERSION"
+          # Get current package.json version and strip any -dev.X suffix
+          CURRENT_VERSION_RAW=$(node -p "require('./package.json').version")
+          CURRENT_VERSION=$(echo "$CURRENT_VERSION_RAW" | sed 's/-dev\.[0-9]*$//')
+          
+          echo "Current package.json version (raw): $CURRENT_VERSION_RAW"
+          echo "Current package.json version (clean): $CURRENT_VERSION"
           
           # Use the higher version as base
           if [ "$LATEST_VERSION" != "0.0.0" ]; then
-            # Compare versions and use the latest
+            # Compare clean versions and use the latest
             HIGHER_VERSION=$(printf '%s\n%s' "$LATEST_VERSION" "$CURRENT_VERSION" | sort -V | tail -n1)
             
+            echo "Higher version: $HIGHER_VERSION"
+            
+            # Sync to the higher version if needed
             if [ "$HIGHER_VERSION" != "$CURRENT_VERSION" ]; then
-              echo "Syncing package.json to latest tag version: $LATEST_VERSION"
-              npm version $LATEST_VERSION --no-git-tag-version --allow-same-version
+              echo "Syncing package.json to version: $HIGHER_VERSION"
+              npm version $HIGHER_VERSION --no-git-tag-version --allow-same-version
+            elif [ "$CURRENT_VERSION_RAW" != "$CURRENT_VERSION" ]; then
+              echo "Stripping dev suffix from package.json: $CURRENT_VERSION_RAW → $CURRENT_VERSION"
+              npm version $CURRENT_VERSION --no-git-tag-version --allow-same-version
+            fi
+          else
+            # First release - strip dev suffix if present
+            if [ "$CURRENT_VERSION_RAW" != "$CURRENT_VERSION" ]; then
+              echo "First release - stripping dev suffix: $CURRENT_VERSION_RAW → $CURRENT_VERSION"
+              npm version $CURRENT_VERSION --no-git-tag-version --allow-same-version
             fi
           fi
           

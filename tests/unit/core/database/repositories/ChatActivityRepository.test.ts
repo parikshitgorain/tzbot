@@ -2,6 +2,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChatActivityRepository } from '../../../../../src/core/database/repositories/ChatActivityRepository.js';
 import type { Pool } from 'pg';
 
+// Mock Redis client
+vi.mock('../../../../../src/core/cache/redis.client.js', () => ({
+  redisClient: {
+    incr: vi.fn().mockResolvedValue(1),
+    expire: vi.fn().mockResolvedValue(1),
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue('OK'),
+  },
+}));
+
+// Mock logger
+vi.mock('../../../../../src/core/logger/logger.js', () => ({
+  logger: {
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+  },
+}));
+
 describe('ChatActivityRepository', () => {
   let mockPool: Pool;
   let repo: ChatActivityRepository;
@@ -9,6 +29,7 @@ describe('ChatActivityRepository', () => {
   beforeEach(() => {
     mockPool = { query: vi.fn() } as unknown as Pool;
     repo = new ChatActivityRepository(mockPool);
+    vi.clearAllMocks();
   });
 
   describe('record()', () => {
