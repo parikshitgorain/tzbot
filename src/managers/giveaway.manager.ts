@@ -280,6 +280,9 @@ export class GiveawayManager {
    */
   private async handleViewParticipants(interaction: ButtonInteraction): Promise<void> {
     try {
+      // Defer reply immediately to prevent timeout (Discord requires response within 3 seconds)
+      await interaction.deferReply({ ephemeral: true });
+
       // Extract giveaway ID from button custom ID
       const giveawayId = interaction.customId.replace('giveaway_view_', '');
 
@@ -287,9 +290,8 @@ export class GiveawayManager {
       const giveaway = await this.giveawayRepository.get(giveawayId);
 
       if (!giveaway) {
-        await interaction.reply({
+        await interaction.editReply({
           content: '❌ This giveaway no longer exists.',
-          ephemeral: true,
         });
         return;
       }
@@ -298,9 +300,8 @@ export class GiveawayManager {
       const entries = await this.giveawayRepository.getEntries(giveawayId);
 
       if (entries.length === 0) {
-        await interaction.reply({
+        await interaction.editReply({
           content: '📋 No participants yet. Be the first to enter!',
-          ephemeral: true,
         });
         return;
       }
@@ -365,9 +366,8 @@ export class GiveawayManager {
         inline: false,
       });
 
-      await interaction.reply({
+      await interaction.editReply({
         embeds: [embed],
-        ephemeral: true,
       });
 
       logger.info('Giveaway participants viewed', {
@@ -381,10 +381,17 @@ export class GiveawayManager {
         customId: interaction.customId,
       });
 
-      await interaction.reply({
-        content: '❌ An error occurred while loading participants. Please try again.',
-        ephemeral: true,
-      });
+      // Check if we can still reply
+      if (interaction.deferred) {
+        await interaction.editReply({
+          content: '❌ An error occurred while loading participants. Please try again.',
+        });
+      } else if (!interaction.replied) {
+        await interaction.reply({
+          content: '❌ An error occurred while loading participants. Please try again.',
+          ephemeral: true,
+        });
+      }
     }
   }
 
