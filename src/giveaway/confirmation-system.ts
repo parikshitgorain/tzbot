@@ -330,7 +330,7 @@ export class ConfirmationSystem {
         '**⏰ IMPORTANT:** You must send any message in this server within the next **5 minutes** to confirm your win!\n\n' +
         '**Failure to respond will result in an automatic reroll.**\n\n' +
         '**Moderators:** To manually reroll a winner, use:\n' +
-        `\`\`\`\n/giveaway reroll giveaway_id:${giveawayId} winner:@user\n\`\`\``,
+        `\`\`\`\n/giveaway reroll giveaway_id:${giveawayId} winner: @user\n\`\`\``,
       )
       .setColor(0x00ff00)
       .setTimestamp();

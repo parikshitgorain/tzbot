@@ -707,10 +707,19 @@ class TZBotApplication {
      */
     async handleButtonInteraction(interaction) {
         try {
-            // Check if this is a giveaway entry button
+            // Check if this is a giveaway-related button
             if (interaction.customId.startsWith('giveaway_enter_')) {
                 await this.giveawayManager.handleEntryInteraction(interaction, interaction.guildId || '');
                 logger.debug('Giveaway entry button handled', {
+                    userId: interaction.user.id,
+                    username: interaction.user.username,
+                    customId: interaction.customId,
+                });
+            }
+            else if (interaction.customId.startsWith('giveaway_view_')) {
+                // Handle view participants button
+                await this.giveawayManager.handleEntryInteraction(interaction, interaction.guildId || '');
+                logger.debug('Giveaway view participants button handled', {
                     userId: interaction.user.id,
                     username: interaction.user.username,
                     customId: interaction.customId,
@@ -726,13 +735,13 @@ class TZBotApplication {
             try {
                 if (interaction.deferred || interaction.replied) {
                     await interaction.followUp({
-                        content: '❌ An error occurred while processing your entry. Please try again.',
+                        content: '❌ An error occurred while processing your request. Please try again.',
                         ephemeral: true,
                     });
                 }
                 else {
                     await interaction.reply({
-                        content: '❌ An error occurred while processing your entry. Please try again.',
+                        content: '❌ An error occurred while processing your request. Please try again.',
                         ephemeral: true,
                     });
                 }

@@ -199,23 +199,23 @@ export class GiveawayManager {
      */
     async handleViewParticipants(interaction) {
         try {
+            // Defer reply immediately to prevent timeout (Discord requires response within 3 seconds)
+            await interaction.deferReply({ ephemeral: true });
             // Extract giveaway ID from button custom ID
             const giveawayId = interaction.customId.replace('giveaway_view_', '');
             // Get giveaway from database
             const giveaway = await this.giveawayRepository.get(giveawayId);
             if (!giveaway) {
-                await interaction.reply({
+                await interaction.editReply({
                     content: '❌ This giveaway no longer exists.',
-                    ephemeral: true,
                 });
                 return;
             }
             // Get all entries
             const entries = await this.giveawayRepository.getEntries(giveawayId);
             if (entries.length === 0) {
-                await interaction.reply({
+                await interaction.editReply({
                     content: '📋 No participants yet. Be the first to enter!',
-                    ephemeral: true,
                 });
                 return;
             }
@@ -269,9 +269,8 @@ export class GiveawayManager {
                 value: statsValue,
                 inline: false,
             });
-            await interaction.reply({
+            await interaction.editReply({
                 embeds: [embed],
-                ephemeral: true,
             });
             logger.info('Giveaway participants viewed', {
                 giveawayId,
@@ -284,10 +283,18 @@ export class GiveawayManager {
                 userId: interaction.user.id,
                 customId: interaction.customId,
             });
-            await interaction.reply({
-                content: '❌ An error occurred while loading participants. Please try again.',
-                ephemeral: true,
-            });
+            // Check if we can still reply
+            if (interaction.deferred) {
+                await interaction.editReply({
+                    content: '❌ An error occurred while loading participants. Please try again.',
+                });
+            }
+            else if (!interaction.replied) {
+                await interaction.reply({
+                    content: '❌ An error occurred while loading participants. Please try again.',
+                    ephemeral: true,
+                });
+            }
         }
     }
     /**
