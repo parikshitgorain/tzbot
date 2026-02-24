@@ -220,8 +220,9 @@ jobs:
           # Create .env content from secrets
           cat > /tmp/.env << 'ENV_EOF'
           DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
+          DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
           DATABASE_URL=${{ secrets.DATABASE_URL }}
-          GUILD_ID=${{ secrets.GUILD_ID }}
+          GUILD_ID=${{ secrets.DISCORD_GUILD_ID }}
           DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}
           NODE_ENV=production
           ENV_EOF
