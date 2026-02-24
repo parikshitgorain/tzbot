@@ -31,9 +31,16 @@ git fetch origin
 if git show-ref --verify --quiet refs/remotes/origin/release; then
   echo "📥 Checking out existing release branch..."
   git checkout -B release origin/release
+  
+  # Check if we can fast-forward to Development
+  if git merge-base --is-ancestor release "origin/$SOURCE_BRANCH"; then
+    echo "✅ Can fast-forward, no conflicts"
+  else
+    echo "⚠️ Cannot fast-forward, will create merge commit"
+  fi
 else
-  echo "🆕 Creating new release branch..."
-  git checkout -b release
+  echo "🆕 Creating new release branch from Development..."
+  git checkout -b release "origin/$SOURCE_BRANCH"
 fi
 
 # Get the source branch name (Development or development)
@@ -42,12 +49,33 @@ if [ -z "$SOURCE_BRANCH" ]; then
   SOURCE_BRANCH="Development"
 fi
 
-echo "📝 Source branch: $SOURCE_BRANCH"
+echo "� Source branch: $SOURCE_BRANCH"
 echo "📝 Source commit: $SOURCE_SHA"
 
-# Reset release to match Development (preserving commit history)
-echo "🔄 Resetting release to match $SOURCE_BRANCH..."
-git reset --hard "origin/$SOURCE_BRANCH"
+# Instead of reset, use rebase to replay Development commits on top of release
+echo "🔄 Rebasing release onto $SOURCE_BRANCH..."
+git rebase "origin/$SOURCE_BRANCH" || {
+  echo "⚠️ Rebase failed, aborting and using merge strategy..."
+  git rebase --abort 2>/dev/null || true
+  
+  # Fallback to merge
+  echo "🔀 Merging $SOURCE_BRANCH into release..."
+  git merge "origin/$SOURCE_BRANCH" -X theirs --no-ff -m "chore: sync with $SOURCE_BRANCH
+
+Syncing release branch with Development commits.
+Using theirs strategy to prefer Development changes.
+
+Source commit: ${SOURCE_SHA:0:7}" || {
+    echo "❌ Merge also failed, using clean build..."
+    git merge --abort 2>/dev/null || true
+    
+    # Last resort: clean build
+    find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+    cp -r "$CLEAN_BUILD_DIR"/* .
+    cp -r "$CLEAN_BUILD_DIR"/.[!.]* . 2>/dev/null || true
+    git add -A
+  }
+}
 
 # Now remove dev artifacts (this will be a new commit)
 echo "🧹 Removing dev artifacts from release..."
@@ -121,10 +149,9 @@ else
 fi
 
 # Push to release branch
-# Note: Using force-with-lease to safely overwrite release branch
-# This preserves all Development commits for semantic-release to analyze
-echo "📤 Force pushing to release branch..."
-git push origin release --force-with-lease
+# Note: Using regular push (not force) since we rebased/merged
+echo "📤 Pushing to release branch..."
+git push origin release
 
 if [ $? -eq 0 ]; then
   echo "✅ Release branch updated with all Development commits"
