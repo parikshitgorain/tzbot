@@ -71,7 +71,7 @@ export declare class GiveawayManager {
     handleEntryInteraction(interaction: ButtonInteraction, guildId: string): Promise<void>;
     /**
      * Handle view participants button interaction
-     * Shows real-time list of participants
+     * Shows real-time list of participants from cache or database
      */
     private handleViewParticipants;
     /**

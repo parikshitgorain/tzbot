@@ -159,6 +159,17 @@ export class ConfirmationSystem {
                 timerActive: true,
             });
             this.timerManager.startTimers(giveawayId, newWinnerId, now);
+            // Update giveaway winners array in database (replace old winner with new)
+            const giveaway = await this.giveawayRepo.get(giveawayId);
+            if (giveaway && giveaway.winners && giveaway.winners.length > 0) {
+                const updatedWinners = giveaway.winners.map(id => id === userId ? newWinnerId : id);
+                await this.giveawayRepo.updateWinners(giveawayId, updatedWinners);
+                logger.debug('Updated giveaway winners array after expiry', {
+                    giveawayId,
+                    oldWinners: giveaway.winners,
+                    newWinners: updatedWinners,
+                });
+            }
             // Send reroll announcement
             await this.sendRerollAnnouncement(giveawayId, userId, newWinnerId);
             logger.info('Winner rerolled', { giveawayId, originalWinner: userId, newWinner: newWinnerId });
@@ -208,6 +219,16 @@ export class ConfirmationSystem {
                 timerActive: true,
             });
             this.timerManager.startTimers(giveawayId, newWinnerId, now);
+            // Update giveaway winners array in database (replace old winner with new)
+            if (giveaway.winners && giveaway.winners.length > 0) {
+                const updatedWinners = giveaway.winners.map(id => id === userId ? newWinnerId : id);
+                await this.giveawayRepo.updateWinners(giveawayId, updatedWinners);
+                logger.debug('Updated giveaway winners array', {
+                    giveawayId,
+                    oldWinners: giveaway.winners,
+                    newWinners: updatedWinners,
+                });
+            }
             // Send reroll announcement
             await this.sendRerollAnnouncement(giveawayId, userId, newWinnerId);
             logger.info('Manual reroll completed', {
