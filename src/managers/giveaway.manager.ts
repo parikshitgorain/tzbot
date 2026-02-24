@@ -523,7 +523,7 @@ export class GiveawayManager {
       return;
     }
 
-    // Schedule end event
+    // Schedule end event at EXACT time (not early, not late)
     const timeout = setTimeout(() => {
       void this.endGiveaway(giveaway.id, guildId);
     }, delay);
@@ -534,6 +534,7 @@ export class GiveawayManager {
       giveawayId: giveaway.id,
       endsAt: giveaway.endsAt.toISOString(),
       delayMs: delay,
+      willTriggerAt: new Date(endsAt).toISOString(),
     });
   }
 
@@ -841,7 +842,8 @@ export class GiveawayManager {
   }
 
   /**
-   * Create giveaway embed
+   * Create giveaway embed with dynamic countdown
+   * Uses Discord's native timestamp feature - updates automatically on client side
    */
   private createGiveawayEmbed(
       title: string,
@@ -851,9 +853,14 @@ export class GiveawayManager {
       requiredRoles: string[],
       hostedBy?: string,
     ): EmbedBuilder {
-      // Clean, professional description
+      const timestamp = Math.floor(endsAt.getTime() / 1000);
+      
+      // Clean, professional description with dynamic countdown
       let embedDescription = `${description}\n\n`;
       embedDescription += `✨ **Click the button below to enter!**\n\n`;
+      
+      // Add countdown that updates automatically
+      embedDescription += `⏰ **Ends:** <t:${timestamp}:R> (<t:${timestamp}:f>)\n`;
 
       // Add hosted by in description if present
       if (hostedBy) {
@@ -869,11 +876,6 @@ export class GiveawayManager {
             name: 'Winners', 
             value: `🏆 ${winnerCount}`, 
             inline: true 
-          },
-          {
-            name: 'Ends',
-            value: `⏰ <t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
-            inline: true,
           },
           { 
             name: 'Entries', 
@@ -937,6 +939,7 @@ export class GiveawayManager {
 
   /**
    * Update giveaway message when ended
+   * Shows "Ended X time ago" using Discord's dynamic timestamp
    */
   private async updateGiveawayMessageEnded(
     giveaway: Giveaway,
@@ -946,11 +949,14 @@ export class GiveawayManager {
       // Fetch the message
       const message = await this.discordClient.getMessage(giveaway.channelId, giveaway.messageId);
 
-      // Clean ended message description
+      const endTimestamp = Math.floor(giveaway.endsAt.getTime() / 1000);
+
+      // Clean ended message description with "ended X ago" timestamp
       let embedDescription = `${giveaway.description}\n\n`;
+      embedDescription += `⏰ **Ended:** <t:${endTimestamp}:R> (<t:${endTimestamp}:f>)\n`;
       
       if (giveaway.hostedBy) {
-        embedDescription += `🎤 **Hosted by** <@${giveaway.hostedBy}>\n\n`;
+        embedDescription += `🎤 **Hosted by** <@${giveaway.hostedBy}>\n`;
       }
 
       const embed = new EmbedBuilder()
@@ -962,14 +968,14 @@ export class GiveawayManager {
 
       if (winners.length > 0) {
         embed.addFields({
-          name: 'Winners',
+          name: '🏆 Winners',
           value: winners.map((id) => `<@${id}>`).join('\n'),
           inline: false,
         });
       } else {
         embed.addFields({
-          name: '� Winners',
-          value: '❌ No entries',
+          name: '❌ Winners',
+          value: 'No entries',
           inline: false,
         });
       }
