@@ -25,6 +25,7 @@ export interface MessageContent {
   content?: string;
   embeds?: EmbedBuilder[];
   files?: Array<{ attachment: string | Buffer; name: string }>;
+  components?: any[];
 }
 
 /**
@@ -251,6 +252,7 @@ export class DiscordClient implements IDiscordClient {
         content: content.content,
         embeds: content.embeds,
         files: content.files,
+        components: content.components,
       });
 
       logger.debug('Message sent', {

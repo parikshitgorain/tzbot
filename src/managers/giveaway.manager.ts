@@ -102,30 +102,26 @@ export class GiveawayManager {
         options.hostedBy,
       );
 
-      // Create entry button
+      // Create entry button - clean and simple
       const enterButton = new ButtonBuilder()
         .setCustomId(`giveaway_enter_${giveawayId}`)
-        .setLabel('🎉 Enter Giveaway')
+        .setLabel('Enter')
         .setStyle(ButtonStyle.Success)
-        .setEmoji('🎁');
+        .setEmoji('🎉');
 
-      // Create view participants button
+      // Create view participants button - clean and simple
       const viewButton = new ButtonBuilder()
         .setCustomId(`giveaway_view_${giveawayId}`)
-        .setLabel('👥 View Participants')
+        .setLabel('Participants')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('📋');
+        .setEmoji('👥');
 
       const row = new ActionRowBuilder<ButtonBuilder>().addComponents(enterButton, viewButton);
 
-      // Send giveaway message
+      // Send giveaway message with buttons
       const message = await this.discordClient.sendMessage(options.channelId, {
         embeds: [embed],
-      });
-
-      // Add button to message
-      await message.edit({
-        components: [row],
+        components: [row] as any,
       });
 
       // Create giveaway object
@@ -734,30 +730,40 @@ export class GiveawayManager {
     requiredRoles: string[],
     hostedBy?: string,
   ): EmbedBuilder {
+    // Clean, professional description
+    let embedDescription = `${description}\n\n`;
+    embedDescription += `✨ **Click the button below to enter!**\n\n`;
+    
+    // Add hosted by in description if present
+    if (hostedBy) {
+      embedDescription += `🎤 **Hosted by** <@${hostedBy}>\n`;
+    }
+
     const embed = new EmbedBuilder()
       .setTitle(`🎉 ${title}`)
-      .setDescription(`${description}\n\n✨ Click the button below to enter!`)
-      .setColor(0x5865f2)
+      .setDescription(embedDescription)
+      .setColor(0x5865f2) // Discord blurple
       .addFields(
-        { name: '🏆 Winners', value: `${winnerCount}`, inline: true },
+        { 
+          name: '� Winners', 
+          value: `${winnerCount}`, 
+          inline: true 
+        },
         {
           name: '⏰ Ends',
           value: `<t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
           inline: true,
         },
-        { name: '👥 Entries', value: '0', inline: true },
+        { 
+          name: '� Entries', 
+          value: '1', 
+          inline: true 
+        },
       )
       .setTimestamp()
       .setFooter({ text: '🎁 Good luck to all participants!' });
 
-    if (hostedBy) {
-      embed.addFields({
-        name: '🎤 Hosted by',
-        value: `<@${hostedBy}>`,
-        inline: false,
-      });
-    }
-
+    // Add required roles if present
     if (requiredRoles.length > 0) {
       embed.addFields({
         name: '🔒 Required Roles',
@@ -813,36 +819,35 @@ export class GiveawayManager {
       // Fetch the message
       const message = await this.discordClient.getMessage(giveaway.channelId, giveaway.messageId);
 
+      // Clean ended message description
+      let embedDescription = `${giveaway.description}\n\n`;
+      
+      if (giveaway.hostedBy) {
+        embedDescription += `🎤 **Hosted by** <@${giveaway.hostedBy}>\n\n`;
+      }
+
       const embed = new EmbedBuilder()
         .setTitle(`🎉 ${giveaway.title} - Ended`)
-        .setDescription(giveaway.description)
-        .setColor(0x808080)
+        .setDescription(embedDescription)
+        .setColor(0x808080) // Gray for ended
         .setTimestamp()
         .setFooter({ text: '🎁 Giveaway has ended' });
 
       if (winners.length > 0) {
         embed.addFields({
           name: '🏆 Winners',
-          value: winners.map((id) => `<@${id}>`).join(', '),
+          value: winners.map((id) => `<@${id}>`).join('\n'),
           inline: false,
         });
       } else {
         embed.addFields({
-          name: '🏆 Winners',
+          name: '� Winners',
           value: '❌ No entries',
           inline: false,
         });
       }
 
-      if (giveaway.hostedBy) {
-        embed.addFields({
-          name: '🎤 Hosted by',
-          value: `<@${giveaway.hostedBy}>`,
-          inline: false,
-        });
-      }
-
-      // Remove button
+      // Remove buttons when ended
       await message.edit({ embeds: [embed], components: [] });
     } catch (error) {
       logger.debug('Failed to update ended giveaway message', {
