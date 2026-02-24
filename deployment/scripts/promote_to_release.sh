@@ -27,60 +27,44 @@ git config user.email "github-actions[bot]@users.noreply.github.com"
 # Fetch latest branches
 git fetch origin
 
-# Checkout or create release branch
-if git show-ref --verify --quiet refs/remotes/origin/release; then
-  echo "📥 Checking out existing release branch..."
-  git checkout -B release origin/release
-  
-  # Check if we can fast-forward to Development
-  if git merge-base --is-ancestor release "origin/$SOURCE_BRANCH"; then
-    echo "✅ Can fast-forward, no conflicts"
-  else
-    echo "⚠️ Cannot fast-forward, will create merge commit"
-  fi
-else
-  echo "🆕 Creating new release branch from Development..."
-  git checkout -b release "origin/$SOURCE_BRANCH"
-fi
-
 # Get the source branch name (Development or development)
 SOURCE_BRANCH=$(git branch -r --contains "$SOURCE_SHA" | grep -E 'origin/(Development|development)' | head -1 | sed 's/.*origin\///')
 if [ -z "$SOURCE_BRANCH" ]; then
   SOURCE_BRANCH="Development"
 fi
 
-echo "� Source branch: $SOURCE_BRANCH"
+echo "📝 Source branch: $SOURCE_BRANCH"
 echo "📝 Source commit: $SOURCE_SHA"
 
-# Instead of reset, use rebase to replay Development commits on top of release
-echo "🔄 Rebasing release onto $SOURCE_BRANCH..."
-git rebase "origin/$SOURCE_BRANCH" || {
-  echo "⚠️ Rebase failed, aborting and using merge strategy..."
-  git rebase --abort 2>/dev/null || true
-  
-  # Fallback to merge
-  echo "🔀 Merging $SOURCE_BRANCH into release..."
-  git merge "origin/$SOURCE_BRANCH" -X theirs --no-ff -m "chore: sync with $SOURCE_BRANCH
+# Checkout or create release branch
+if git show-ref --verify --quiet refs/remotes/origin/release; then
+  echo "📥 Checking out existing release branch..."
+  git checkout -B release origin/release
+else
+  echo "🆕 Creating new release branch..."
+  git checkout -b release
+fi
+
+# Merge Development into release
+echo "🔀 Merging $SOURCE_BRANCH into release..."
+git merge "origin/$SOURCE_BRANCH" -X theirs --no-ff -m "chore: sync with $SOURCE_BRANCH
 
 Syncing release branch with Development commits.
 Using theirs strategy to prefer Development changes.
 
 Source commit: ${SOURCE_SHA:0:7}" || {
-    echo "❌ Merge also failed, using clean build..."
-    git merge --abort 2>/dev/null || true
-    
-    # Last resort: clean build
-    find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
-    cp -r "$CLEAN_BUILD_DIR"/* .
-    cp -r "$CLEAN_BUILD_DIR"/.[!.]* . 2>/dev/null || true
-    git add -A
-  }
+  echo "❌ Merge failed, using clean build..."
+  git merge --abort 2>/dev/null || true
+  
+  # Fallback: Replace with clean build
+  find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+  cp -r "$CLEAN_BUILD_DIR"/* .
+  cp -r "$CLEAN_BUILD_DIR"/.[!.]* . 2>/dev/null || true
+  git add -A
 }
 
-# Now remove dev artifacts (this will be a new commit)
+# Remove dev artifacts
 echo "🧹 Removing dev artifacts from release..."
-
-# Remove dev-only files and directories
 rm -rf tests/ coverage/ .github/workflows/ci-development.yml
 rm -f vitest.config.ts eslint.config.js .eslintrc* tsconfig.json
 find . -name "*.test.*" -o -name "*.spec.*" | xargs rm -f 2>/dev/null || true
@@ -88,36 +72,23 @@ find . -name "*.test.*" -o -name "*.spec.*" | xargs rm -f 2>/dev/null || true
 # Stage the cleanup
 git add -A
 
-# Safety check for dev artifacts
-echo "🔍 Running safety checks on release branch content..."
-
-UNTRACKED=$(git ls-files --others --exclude-standard)
-if [ -n "$UNTRACKED" ]; then
-  echo "❌ Untracked files found:"
-  echo "$UNTRACKED"
-  exit 1
-fi
-echo "✅ No untracked files"
-
-if git grep -nE 'TODO|DEBUG|FIXME|console\.log' -- '*.js' '*.ts' ':!node_modules' ':!dist' 2>/dev/null | head -10; then
-  echo "⚠️ Warning: Found debug statements (review recommended, but not blocking)"
-fi
+# Safety checks
+echo "🔍 Running safety checks..."
 
 if [ -d "tests/" ]; then
-  echo "❌ tests/ directory found in release branch!"
+  echo "❌ tests/ directory found!"
   exit 1
 fi
 
 TEST_FILES=$(find . -name "*.test.*" -o -name "*.spec.*" 2>/dev/null | wc -l)
 if [ "$TEST_FILES" -gt 0 ]; then
-  echo "❌ Found $TEST_FILES test files in release branch!"
-  find . -name "*.test.*" -o -name "*.spec.*"
+  echo "❌ Found $TEST_FILES test files!"
   exit 1
 fi
 
 echo "✅ All safety checks passed"
 
-# Clean version for release
+# Clean version
 CURRENT_VERSION=$(node -p "require('./package.json').version")
 echo "Current version: $CURRENT_VERSION"
 
@@ -127,36 +98,29 @@ if [ "$CURRENT_VERSION" != "$CLEAN_VERSION" ]; then
   echo "Cleaning version: $CURRENT_VERSION → $CLEAN_VERSION"
   npm version "$CLEAN_VERSION" --no-git-tag-version --allow-same-version
   git add package.json package-lock.json
-else
-  echo "Version already clean: $CLEAN_VERSION"
 fi
 
-echo "RELEASE_VERSION=$CLEAN_VERSION" >> "$GITHUB_ENV" 2>/dev/null || echo "RELEASE_VERSION=$CLEAN_VERSION"
-
-# Commit clean production build
+# Commit cleanup
 if git diff --cached --quiet; then
-  echo "ℹ️ No changes to commit after merge and cleanup"
+  echo "ℹ️ No changes to commit"
 else
-  SHORT_SHA="${SOURCE_SHA:0:7}"
   git commit -m "chore: clean dev artifacts from release
 
 - Removed: tests/, coverage/, dev configs
-- Source commit: $SHORT_SHA
+- Source commit: ${SOURCE_SHA:0:7}
 - Version: $CLEAN_VERSION
-- Build date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 [skip ci]"
 fi
 
-# Push to release branch
-# Note: Using regular push (not force) since we rebased/merged
+# Push to release
 echo "📤 Pushing to release branch..."
 git push origin release
 
 if [ $? -eq 0 ]; then
-  echo "✅ Release branch updated with all Development commits"
-  echo "🔄 Release versioning workflow should trigger automatically"
+  echo "✅ Release branch updated"
+  echo "🔄 Release versioning workflow should trigger"
 else
-  echo "❌ Failed to push to release branch"
+  echo "❌ Failed to push"
   exit 1
 fi
