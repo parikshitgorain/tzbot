@@ -68,8 +68,24 @@ pm2 save
 echo "✅ Rollback completed successfully"
 echo "Active release: $TARGET_RELEASE"
 
-# Show release info
+# Get and export version info
 if [ -f "$TARGET_DIR/package.json" ]; then
   VERSION=$(node -p "require('$TARGET_DIR/package.json').version" 2>/dev/null || echo "unknown")
   echo "Version: $VERSION"
+  
+  # Export for GitHub Actions (if running in CI)
+  if [ -n "$GITHUB_OUTPUT" ]; then
+    echo "rollback_version=$VERSION" >> "$GITHUB_OUTPUT"
+    echo "rollback_release=$TARGET_RELEASE" >> "$GITHUB_OUTPUT"
+  fi
+else
+  echo "Version: unknown"
+  if [ -n "$GITHUB_OUTPUT" ]; then
+    echo "rollback_version=unknown" >> "$GITHUB_OUTPUT"
+    echo "rollback_release=$TARGET_RELEASE" >> "$GITHUB_OUTPUT"
+  fi
 fi
+
+# Output version info to file for SSH retrieval
+echo "$VERSION" > /tmp/rollback_version.txt
+echo "$TARGET_RELEASE" > /tmp/rollback_release.txt

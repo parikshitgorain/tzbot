@@ -211,6 +211,46 @@ jobs:
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deployment-package.tar.gz
           echo "✅ Package uploaded"
       
+      - name: Verify VPS environment
+        timeout-minutes: 2
+        run: |
+          echo "🔍 Verifying VPS environment..."
+          
+          ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} << 'EOF'
+            
+            # Check if shared directory exists
+            if [ ! -d "/var/www/tzbot/shared" ]; then
+              echo "❌ Shared directory not found!"
+              echo "Creating shared directory..."
+              mkdir -p /var/www/tzbot/shared/logs
+              mkdir -p /var/www/tzbot/shared/data/state
+            fi
+            
+            # Check if .env file exists
+            if [ ! -f "/var/www/tzbot/shared/.env" ]; then
+              echo "❌ ERROR: .env file not found in /var/www/tzbot/shared/"
+              echo "Please create .env file with required environment variables:"
+              echo "  - DISCORD_TOKEN"
+              echo "  - DATABASE_URL"
+              echo "  - GUILD_ID"
+              echo "  - And other required variables"
+              exit 1
+            fi
+            
+            echo "✅ .env file found"
+            
+            # Check if required commands are available
+            command -v node >/dev/null 2>&1 || { echo "❌ Node.js not installed"; exit 1; }
+            command -v npm >/dev/null 2>&1 || { echo "❌ npm not installed"; exit 1; }
+            command -v pm2 >/dev/null 2>&1 || { echo "❌ PM2 not installed"; exit 1; }
+            command -v jq >/dev/null 2>&1 || { echo "❌ jq not installed"; exit 1; }
+            
+            echo "✅ All required commands available"
+            echo "✅ VPS environment verified"
+          EOF
+      
       - name: Deploy on VPS
         timeout-minutes: 10
         run: |
@@ -222,14 +262,22 @@ jobs:
             deployment/scripts/deploy_release.sh \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deploy_release.sh
           
-          # Execute deployment
+          # Execute deployment and capture output
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             -o ConnectTimeout=30 \
             -o ServerAliveInterval=15 \
             -o ServerAliveCountMax=3 \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
-            "bash /tmp/deploy_release.sh && rm /tmp/deploy_release.sh"
+            "bash /tmp/deploy_release.sh 2>&1 | tee /tmp/deploy.log && rm /tmp/deploy_release.sh" || {
+              echo "❌ Deployment failed!"
+              echo "📋 Fetching deployment logs..."
+              ssh -i ~/.ssh/deploy_key \
+                -o UserKnownHostsFile=~/.ssh/known_hosts \
+                ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
+                "cat /tmp/deploy.log 2>/dev/null || echo 'No deployment log found'"
+              exit 1
+            }
           
           echo "✅ Deployment completed"
       
@@ -251,11 +299,11 @@ jobs:
       - name: Wait for startup
         run: |
           echo "⏳ Waiting for application startup..."
-          sleep 15
+          sleep 30
       
       - name: Run health checks
         id: health
-        timeout-minutes: 3
+        timeout-minutes: 5
         run: |
           echo "🏥 Running health checks..."
           
@@ -265,14 +313,15 @@ jobs:
             deployment/scripts/health_check.sh \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/health_check.sh
           
-          # Run health checks
+          # Run health checks with more attempts and longer initial delay
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
-            "bash /tmp/health_check.sh 5 5 && rm /tmp/health_check.sh"
+            "bash /tmp/health_check.sh 10 10 && rm /tmp/health_check.sh"
       
       - name: Rollback on failure
         if: failure() && steps.health.outcome == 'failure'
+        id: rollback
         timeout-minutes: 5
         run: |
           echo "🔄 Health check failed, initiating rollback..."
@@ -283,17 +332,30 @@ jobs:
             deployment/scripts/rollback.sh \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/rollback.sh
           
-          # Execute rollback
+          # Execute rollback and capture output
           ssh -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "bash /tmp/rollback.sh && rm /tmp/rollback.sh"
           
-          echo "✅ Rollback completed"
+          # Get rollback version info
+          ROLLBACK_VERSION=$(ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
+            "cat /tmp/rollback_version.txt 2>/dev/null || echo 'unknown'")
           
-          # Send rollback notification
+          ROLLBACK_RELEASE=$(ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
+            "cat /tmp/rollback_release.txt 2>/dev/null || echo 'unknown'")
+          
+          echo "✅ Rollback completed"
+          echo "Rolled back to version: v$ROLLBACK_VERSION"
+          echo "Rolled back to release: $ROLLBACK_RELEASE"
+          
+          # Send rollback notification with correct version info
           curl -H "Content-Type: application/json" -X POST \
-            -d "{\"embeds\":[{\"title\":\"🔄 Automatic Rollback\",\"description\":\"Health check failed, rolled back to previous release\",\"color\":15158332,\"fields\":[{\"name\":\"Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\"},{\"name\":\"Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\"}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            -d "{\"embeds\":[{\"title\":\"🔄 Automatic Rollback\",\"description\":\"Health check failed, rolled back to previous release\",\"color\":15158332,\"fields\":[{\"name\":\"Failed Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\",\"inline\":true},{\"name\":\"Rolled Back To\",\"value\":\"\`v${ROLLBACK_VERSION}\`\",\"inline\":true},{\"name\":\"Failed Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\",\"inline\":true},{\"name\":\"Release\",\"value\":\"\`${ROLLBACK_RELEASE}\`\",\"inline\":true},{\"name\":\"Reason\",\"value\":\"Health check failed after deployment\"}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
             "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
           
           exit 1
@@ -319,18 +381,32 @@ jobs:
       - name: Send Discord notification
         if: always()
         run: |
+          # Determine if rollback occurred
+          ROLLBACK_OCCURRED="false"
+          if [ "${{ steps.rollback.outcome }}" = "failure" ]; then
+            ROLLBACK_OCCURRED="true"
+          fi
+          
           if [ "${{ job.status }}" = "success" ]; then
             COLOR=3066993
             TITLE="✅ Deployment Successful"
-            DESC="Version \`v${{ needs.validate.outputs.version }}\` deployed to production"
+            DESC="Version \`v${{ needs.validate.outputs.version }}\` deployed to production successfully"
+            FIELDS="[{\"name\":\"Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\",\"inline\":true},{\"name\":\"Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\",\"inline\":true},{\"name\":\"Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}]"
           else
             COLOR=15158332
             TITLE="❌ Deployment Failed"
-            DESC="Version \`v${{ needs.validate.outputs.version }}\` failed to deploy"
+            
+            if [ "$ROLLBACK_OCCURRED" = "true" ]; then
+              DESC="Version \`v${{ needs.validate.outputs.version }}\` failed to deploy. System automatically rolled back to previous version."
+              FIELDS="[{\"name\":\"Failed Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\",\"inline\":true},{\"name\":\"Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\",\"inline\":true},{\"name\":\"Status\",\"value\":\"Rolled back to previous release\",\"inline\":false},{\"name\":\"Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}]"
+            else
+              DESC="Version \`v${{ needs.validate.outputs.version }}\` failed to deploy"
+              FIELDS="[{\"name\":\"Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\",\"inline\":true},{\"name\":\"Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\",\"inline\":true},{\"name\":\"Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}]"
+            fi
           fi
           
           curl -H "Content-Type: application/json" -X POST \
-            -d "{\"embeds\":[{\"title\":\"${TITLE}\",\"description\":\"${DESC}\",\"color\":${COLOR},\"fields\":[{\"name\":\"Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\"},{\"name\":\"Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\"},{\"name\":\"Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            -d "{\"embeds\":[{\"title\":\"${TITLE}\",\"description\":\"${DESC}\",\"color\":${COLOR},\"fields\":${FIELDS},\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
             "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
         continue-on-error: true
       

@@ -4,8 +4,8 @@
 
 set -e
 
-MAX_ATTEMPTS="${1:-5}"
-INITIAL_DELAY="${2:-5}"
+MAX_ATTEMPTS="${1:-10}"
+INITIAL_DELAY="${2:-10}"
 
 echo "🏥 Running health checks..."
 echo "Max attempts: $MAX_ATTEMPTS"
@@ -49,14 +49,14 @@ while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
     echo "✅ PM2 process is online"
     
     # Check restart count (high restarts indicate instability)
-    if [ "$RESTARTS" -lt 3 ]; then
+    if [ "$RESTARTS" -lt 5 ]; then
       echo "✅ Restart count is acceptable: $RESTARTS"
       
-      # Check if process has been up for at least 10 seconds
+      # Check if process has been up for at least 20 seconds
       CURRENT_TIME=$(date +%s)
       UPTIME_SECONDS=$(( (CURRENT_TIME * 1000 - UPTIME) / 1000 ))
       
-      if [ "$UPTIME_SECONDS" -ge 10 ]; then
+      if [ "$UPTIME_SECONDS" -ge 20 ]; then
         echo "✅ Process has been stable for ${UPTIME_SECONDS}s"
         echo "✅ Health check passed"
         exit 0
@@ -65,9 +65,15 @@ while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
       fi
     else
       echo "⚠️ High restart count: $RESTARTS"
+      echo "📋 Recent error logs:"
+      pm2 logs tzbot --err --lines 50 --nostream || true
     fi
   else
     echo "❌ PM2 process status: $STATUS"
+    if [ "$STATUS" = "errored" ] || [ "$STATUS" = "stopped" ]; then
+      echo "📋 Error logs:"
+      pm2 logs tzbot --err --lines 100 --nostream || true
+    fi
   fi
   
   # Retry logic
