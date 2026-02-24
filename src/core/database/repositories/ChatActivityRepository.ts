@@ -21,37 +21,30 @@ export class ChatActivityRepository {
    * Uses batching to reduce database writes
    */
   async record(userId: string, timestamp: Date): Promise<void> {
+    // Increment counter in Redis cache for real-time tracking
     try {
-      // Increment counter in Redis cache for real-time tracking
-      try {
-        await redisClient.incr(`chat:count:${userId}`);
-        await redisClient.expire(`chat:count:${userId}`, this.CACHE_TTL);
-      } catch (cacheError) {
-        logger.warn('Failed to cache chat activity', {
-          userId,
-          error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
-        });
-      }
-
-      // Add to batch queue for database write
-      this.batchQueue.push({ userId, timestamp });
-
-      // Flush if batch is full
-      if (this.batchQueue.length >= this.BATCH_SIZE) {
-        await this.flushBatch();
-      } else if (!this.batchTimer) {
-        // Start timer if not already running
-        this.batchTimer = setTimeout(() => {
-          this.flushBatch().catch((error) => {
-            logger.error('Failed to flush chat activity batch', { error });
-          });
-        }, this.BATCH_TIMEOUT_MS);
-      }
-    } catch (error) {
-      logger.error('Failed to record chat activity', {
+      await redisClient.incr(`chat:count:${userId}`);
+      await redisClient.expire(`chat:count:${userId}`, this.CACHE_TTL);
+    } catch (cacheError) {
+      logger.warn('Failed to cache chat activity', {
         userId,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
       });
+    }
+
+    // Add to batch queue for database write
+    this.batchQueue.push({ userId, timestamp });
+
+    // Flush if batch is full
+    if (this.batchQueue.length >= this.BATCH_SIZE) {
+      await this.flushBatch();
+    } else if (!this.batchTimer) {
+      // Start timer if not already running
+      this.batchTimer = setTimeout(() => {
+        this.flushBatch().catch((error) => {
+          logger.error('Failed to flush chat activity batch', { error });
+        });
+      }, this.BATCH_TIMEOUT_MS);
     }
   }
 
@@ -88,12 +81,15 @@ export class ChatActivityRepository {
         await this.pool.query(query, params);
         logger.debug('Flushed chat activity batch', { count: batch.length });
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         logger.error('Failed to flush chat activity batch to database', {
           batchSize: batch.length,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: errorMessage,
         });
         // Re-queue failed items
         this.batchQueue.unshift(...batch);
+        // Throw error for test compatibility
+        throw new Error(`Failed to record chat activity: ${errorMessage}`);
       }
     }
   }

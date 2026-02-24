@@ -14,7 +14,14 @@ describe('ChatActivityRepository', () => {
   describe('record()', () => {
     it('executes INSERT INTO chat_activity', async () => {
       (mockPool.query as ReturnType<typeof vi.fn>).mockResolvedValue({ rows: [] });
-      await repo.record('u1', new Date());
+      
+      // Add enough records to trigger batch flush (BATCH_SIZE = 50)
+      const promises = [];
+      for (let i = 0; i < 50; i++) {
+        promises.push(repo.record(`u${i}`, new Date()));
+      }
+      await Promise.all(promises);
+      
       expect(mockPool.query).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO chat_activity'),
         expect.any(Array),
@@ -23,12 +30,26 @@ describe('ChatActivityRepository', () => {
 
     it('throws wrapped error on DB failure', async () => {
       (mockPool.query as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db down'));
-      await expect(repo.record('u1', new Date())).rejects.toThrow('Failed to record chat activity');
+      
+      // Add enough records to trigger batch flush
+      const promises = [];
+      for (let i = 0; i < 50; i++) {
+        promises.push(repo.record(`u${i}`, new Date()));
+      }
+      
+      await expect(Promise.all(promises)).rejects.toThrow('Failed to record chat activity');
     });
 
     it('wraps non-Error throws with Unknown error', async () => {
       (mockPool.query as ReturnType<typeof vi.fn>).mockRejectedValue(42);
-      await expect(repo.record('u1', new Date())).rejects.toThrow('Unknown error');
+      
+      // Add enough records to trigger batch flush
+      const promises = [];
+      for (let i = 0; i < 50; i++) {
+        promises.push(repo.record(`u${i}`, new Date()));
+      }
+      
+      await expect(Promise.all(promises)).rejects.toThrow('Unknown error');
     });
   });
 
