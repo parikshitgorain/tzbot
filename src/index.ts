@@ -964,14 +964,15 @@ class TZBotApplication {
       }
 
       // Check if user is a winner
-      if (!giveaway.winners.includes(userId)) {
+      if (!giveaway.winners || !giveaway.winners.includes(userId)) {
         // User is not a winner - silently ignore
         return;
       }
 
       // Perform reroll using confirmation system
-      if (this.giveawayManager.getConfirmationSystem()) {
-        await this.giveawayManager.getConfirmationSystem()?.rerollWinner(giveaway.id, userId);
+      const confirmationSystem = this.giveawayManager.getConfirmationSystem();
+      if (confirmationSystem) {
+        await confirmationSystem.manualReroll(giveaway.id, userId, message.author.id);
         
         logger.info('Giveaway rerolled via prefix command', {
           giveawayId: giveaway.id,
