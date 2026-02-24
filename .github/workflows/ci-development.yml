@@ -235,9 +235,15 @@ jobs:
           tar -xzf /tmp/production-build-${{ github.sha }}.tar.gz
       
       - name: Promote to release branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           chmod +x deployment/scripts/promote_to_release.sh
           deployment/scripts/promote_to_release.sh /tmp/clean-build ${{ github.sha }}
+          
+          echo "✅ Promotion complete"
+          echo "📋 Checking if release branch was updated..."
+          git ls-remote origin release | head -1
       
       - name: Send Discord notification
         if: always()

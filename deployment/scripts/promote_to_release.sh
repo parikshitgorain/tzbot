@@ -136,5 +136,15 @@ else
 fi
 
 # Push to release branch
+# Note: This push will trigger the release-versioning workflow
+# because the checkout in CI used PAT_TOKEN which has workflow trigger permissions
+echo "📤 Pushing to release branch..."
 git push origin release
-echo "✅ Clean production build pushed to release branch"
+
+if [ $? -eq 0 ]; then
+  echo "✅ Clean production build pushed to release branch"
+  echo "🔄 Release versioning workflow should trigger automatically"
+else
+  echo "❌ Failed to push to release branch"
+  exit 1
+fi
