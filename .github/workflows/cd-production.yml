@@ -211,6 +211,51 @@ jobs:
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deployment-package.tar.gz
           echo "✅ Package uploaded"
       
+      - name: Update environment variables
+        timeout-minutes: 2
+        run: |
+          echo "🔧 Updating environment variables on VPS..."
+          
+          # Create .env content from secrets
+          cat > /tmp/.env << 'ENV_EOF'
+          DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          GUILD_ID=${{ secrets.GUILD_ID }}
+          DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}
+          NODE_ENV=production
+          ENV_EOF
+          
+          # Upload .env to VPS
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            /tmp/.env \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/.env.new
+          
+          # Move .env to shared directory
+          ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} << 'EOF'
+            
+            # Create shared directory if it doesn't exist
+            mkdir -p /var/www/tzbot/shared/logs
+            mkdir -p /var/www/tzbot/shared/data/state
+            
+            # Backup existing .env if it exists
+            if [ -f "/var/www/tzbot/shared/.env" ]; then
+              echo "📋 Backing up existing .env..."
+              cp /var/www/tzbot/shared/.env /var/www/tzbot/shared/.env.backup.$(date +%Y%m%d_%H%M%S)
+            fi
+            
+            # Move new .env to shared directory
+            mv /tmp/.env.new /var/www/tzbot/shared/.env
+            chmod 600 /var/www/tzbot/shared/.env
+            
+            echo "✅ Environment variables updated"
+          EOF
+          
+          # Clean up local .env
+          rm -f /tmp/.env
+      
       - name: Verify VPS environment
         timeout-minutes: 2
         run: |
@@ -220,26 +265,13 @@ jobs:
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} << 'EOF'
             
-            # Check if shared directory exists
-            if [ ! -d "/var/www/tzbot/shared" ]; then
-              echo "❌ Shared directory not found!"
-              echo "Creating shared directory..."
-              mkdir -p /var/www/tzbot/shared/logs
-              mkdir -p /var/www/tzbot/shared/data/state
-            fi
-            
-            # Check if .env file exists
+            # Verify .env file exists
             if [ ! -f "/var/www/tzbot/shared/.env" ]; then
-              echo "❌ ERROR: .env file not found in /var/www/tzbot/shared/"
-              echo "Please create .env file with required environment variables:"
-              echo "  - DISCORD_TOKEN"
-              echo "  - DATABASE_URL"
-              echo "  - GUILD_ID"
-              echo "  - And other required variables"
+              echo "❌ ERROR: .env file not found after update!"
               exit 1
             fi
             
-            echo "✅ .env file found"
+            echo "✅ .env file verified"
             
             # Check if required commands are available
             command -v node >/dev/null 2>&1 || { echo "❌ Node.js not installed"; exit 1; }
@@ -319,6 +351,33 @@ jobs:
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "bash /tmp/health_check.sh 10 10 && rm /tmp/health_check.sh"
       
+      - name: Send test notification from VPS
+        if: success()
+        timeout-minutes: 2
+        run: |
+          echo "📨 Sending test notification from VPS to verify webhook..."
+          
+          ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} << 'EOF'
+            
+            # Load environment variables
+            if [ -f "/var/www/tzbot/shared/.env" ]; then
+              export $(grep -v '^#' /var/www/tzbot/shared/.env | xargs)
+            fi
+            
+            # Get deployment info
+            CURRENT_RELEASE=$(readlink /var/www/tzbot/current 2>/dev/null | xargs basename || echo "unknown")
+            VERSION=$(cat /var/www/tzbot/current/package.json 2>/dev/null | grep '"version"' | cut -d'"' -f4 || echo "unknown")
+            HOSTNAME=$(hostname)
+            
+            # Send test notification
+            curl -H "Content-Type: application/json" -X POST \
+              -d "{\"embeds\":[{\"title\":\"✅ VPS Webhook Test\",\"description\":\"Deployment successful! Webhook is working correctly.\",\"color\":3066993,\"fields\":[{\"name\":\"🖥️ Server\",\"value\":\"\`${HOSTNAME}\`\",\"inline\":true},{\"name\":\"📦 Version\",\"value\":\"\`v${VERSION}\`\",\"inline\":true},{\"name\":\"🔄 Release\",\"value\":\"\`${CURRENT_RELEASE}\`\",\"inline\":true},{\"name\":\"✅ Status\",\"value\":\"Application is running and webhook is operational\",\"inline\":false}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+              "${DISCORD_WEBHOOK_URL}" && echo "✅ Test notification sent from VPS" || echo "⚠️ Failed to send test notification"
+          EOF
+        continue-on-error: true
+      
       - name: Rollback on failure
         if: failure() && steps.health.outcome == 'failure'
         id: rollback
@@ -378,9 +437,85 @@ jobs:
           deployment-id: ${{ needs.create-deployment.outputs.deployment_id }}
           state: 'failure'
       
-      - name: Send Discord notification
+      - name: Gather deployment report
+        if: always()
+        id: report
+        run: |
+          echo "📊 Gathering deployment report..."
+          
+          # Get deployment details from VPS
+          DEPLOY_INFO=$(ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} << 'EOF'
+            
+            # Get current deployment info
+            CURRENT_RELEASE=$(readlink /var/www/tzbot/current 2>/dev/null | xargs basename || echo "unknown")
+            
+            # Get PM2 status
+            PM2_STATUS=$(pm2 jlist 2>/dev/null | jq -r '.[0].pm2_env.status' 2>/dev/null || echo "unknown")
+            PM2_UPTIME=$(pm2 jlist 2>/dev/null | jq -r '.[0].pm2_env.pm_uptime' 2>/dev/null || echo "0")
+            PM2_RESTARTS=$(pm2 jlist 2>/dev/null | jq -r '.[0].pm2_env.restart_time' 2>/dev/null || echo "0")
+            
+            # Calculate uptime
+            if [ "$PM2_UPTIME" != "0" ] && [ "$PM2_UPTIME" != "null" ]; then
+              CURRENT_TIME=$(date +%s)000
+              UPTIME_MS=$((CURRENT_TIME - PM2_UPTIME))
+              UPTIME_SECONDS=$((UPTIME_MS / 1000))
+              UPTIME_MINUTES=$((UPTIME_SECONDS / 60))
+              UPTIME_HOURS=$((UPTIME_MINUTES / 60))
+              
+              if [ $UPTIME_HOURS -gt 0 ]; then
+                UPTIME="${UPTIME_HOURS}h $((UPTIME_MINUTES % 60))m"
+              elif [ $UPTIME_MINUTES -gt 0 ]; then
+                UPTIME="${UPTIME_MINUTES}m"
+              else
+                UPTIME="${UPTIME_SECONDS}s"
+              fi
+            else
+              UPTIME="unknown"
+            fi
+            
+            # Get disk usage
+            DISK_USAGE=$(df -h /var/www/tzbot 2>/dev/null | awk 'NR==2 {print $5}' || echo "unknown")
+            
+            # Get memory usage
+            MEMORY_USAGE=$(free -h 2>/dev/null | awk 'NR==2 {print $3 "/" $2}' || echo "unknown")
+            
+            # Get release count
+            RELEASE_COUNT=$(ls -1 /var/www/tzbot/releases 2>/dev/null | wc -l || echo "0")
+            
+            # Output as JSON
+            cat << JSON
+            {
+              "current_release": "$CURRENT_RELEASE",
+              "pm2_status": "$PM2_STATUS",
+              "pm2_uptime": "$UPTIME",
+              "pm2_restarts": "$PM2_RESTARTS",
+              "disk_usage": "$DISK_USAGE",
+              "memory_usage": "$MEMORY_USAGE",
+              "release_count": "$RELEASE_COUNT"
+            }
+            JSON
+          EOF
+          ) || DEPLOY_INFO='{"current_release":"unknown","pm2_status":"unknown","pm2_uptime":"unknown","pm2_restarts":"0","disk_usage":"unknown","memory_usage":"unknown","release_count":"0"}'
+          
+          echo "deploy_info<<EOF" >> $GITHUB_OUTPUT
+          echo "$DEPLOY_INFO" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Send Discord notification - Deploy to VPS
         if: always()
         run: |
+          # Parse deployment info
+          DEPLOY_INFO='${{ steps.report.outputs.deploy_info }}'
+          CURRENT_RELEASE=$(echo "$DEPLOY_INFO" | jq -r '.current_release // "unknown"')
+          PM2_STATUS=$(echo "$DEPLOY_INFO" | jq -r '.pm2_status // "unknown"')
+          PM2_UPTIME=$(echo "$DEPLOY_INFO" | jq -r '.pm2_uptime // "unknown"')
+          PM2_RESTARTS=$(echo "$DEPLOY_INFO" | jq -r '.pm2_restarts // "0"')
+          DISK_USAGE=$(echo "$DEPLOY_INFO" | jq -r '.disk_usage // "unknown"')
+          MEMORY_USAGE=$(echo "$DEPLOY_INFO" | jq -r '.memory_usage // "unknown"')
+          RELEASE_COUNT=$(echo "$DEPLOY_INFO" | jq -r '.release_count // "0"')
+          
           # Determine if rollback occurred
           ROLLBACK_OCCURRED="false"
           if [ "${{ steps.rollback.outcome }}" = "failure" ]; then
@@ -389,19 +524,45 @@ jobs:
           
           if [ "${{ job.status }}" = "success" ]; then
             COLOR=3066993
-            TITLE="✅ Deployment Successful"
-            DESC="Version \`v${{ needs.validate.outputs.version }}\` deployed to production successfully"
-            FIELDS="[{\"name\":\"Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\",\"inline\":true},{\"name\":\"Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\",\"inline\":true},{\"name\":\"Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}]"
+            TITLE="🚀 Deploy to VPS - Success"
+            DESC="Version \`v${{ needs.validate.outputs.version }}\` successfully deployed to production VPS"
+            
+            FIELDS="[
+              {\"name\":\"📦 Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\",\"inline\":true},
+              {\"name\":\"📝 Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\",\"inline\":true},
+              {\"name\":\"🔄 Current Release\",\"value\":\"\`${CURRENT_RELEASE}\`\",\"inline\":true},
+              {\"name\":\"✅ PM2 Status\",\"value\":\"\`${PM2_STATUS}\`\",\"inline\":true},
+              {\"name\":\"⏱️ Uptime\",\"value\":\"\`${PM2_UPTIME}\`\",\"inline\":true},
+              {\"name\":\"🔁 Restarts\",\"value\":\"\`${PM2_RESTARTS}\`\",\"inline\":true},
+              {\"name\":\"💾 Disk Usage\",\"value\":\"\`${DISK_USAGE}\`\",\"inline\":true},
+              {\"name\":\"🧠 Memory\",\"value\":\"\`${MEMORY_USAGE}\`\",\"inline\":true},
+              {\"name\":\"📚 Total Releases\",\"value\":\"\`${RELEASE_COUNT}\`\",\"inline\":true},
+              {\"name\":\"🔗 Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\",\"inline\":false}
+            ]"
           else
             COLOR=15158332
-            TITLE="❌ Deployment Failed"
+            TITLE="❌ Deploy to VPS - Failed"
             
             if [ "$ROLLBACK_OCCURRED" = "true" ]; then
               DESC="Version \`v${{ needs.validate.outputs.version }}\` failed to deploy. System automatically rolled back to previous version."
-              FIELDS="[{\"name\":\"Failed Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\",\"inline\":true},{\"name\":\"Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\",\"inline\":true},{\"name\":\"Status\",\"value\":\"Rolled back to previous release\",\"inline\":false},{\"name\":\"Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}]"
+              FIELDS="[
+                {\"name\":\"❌ Failed Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\",\"inline\":true},
+                {\"name\":\"📝 Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\",\"inline\":true},
+                {\"name\":\"🔄 Current Release\",\"value\":\"\`${CURRENT_RELEASE}\`\",\"inline\":true},
+                {\"name\":\"✅ PM2 Status\",\"value\":\"\`${PM2_STATUS}\`\",\"inline\":true},
+                {\"name\":\"⏱️ Uptime\",\"value\":\"\`${PM2_UPTIME}\`\",\"inline\":true},
+                {\"name\":\"🔁 Restarts\",\"value\":\"\`${PM2_RESTARTS}\`\",\"inline\":true},
+                {\"name\":\"⚠️ Status\",\"value\":\"Rolled back to previous release\",\"inline\":false},
+                {\"name\":\"🔗 Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\",\"inline\":false}
+              ]"
             else
-              DESC="Version \`v${{ needs.validate.outputs.version }}\` failed to deploy"
-              FIELDS="[{\"name\":\"Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\",\"inline\":true},{\"name\":\"Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\",\"inline\":true},{\"name\":\"Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}]"
+              DESC="Version \`v${{ needs.validate.outputs.version }}\` failed to deploy to production VPS"
+              FIELDS="[
+                {\"name\":\"❌ Failed Version\",\"value\":\"\`v${{ needs.validate.outputs.version }}\`\",\"inline\":true},
+                {\"name\":\"📝 Commit\",\"value\":\"\`${{ needs.validate.outputs.short_sha }}\`\",\"inline\":true},
+                {\"name\":\"🔄 Current Release\",\"value\":\"\`${CURRENT_RELEASE}\`\",\"inline\":true},
+                {\"name\":\"🔗 Workflow\",\"value\":\"[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\",\"inline\":false}
+              ]"
             fi
           fi
           

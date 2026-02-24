@@ -174,26 +174,21 @@ jobs:
           echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
           echo "New version: $VERSION_TAG"
           
-          # Check if tag already exists and keep bumping until we find a unique version
-          ATTEMPT=0
-          MAX_ATTEMPTS=10
-          while git rev-parse "$VERSION_TAG" >/dev/null 2>&1; do
-            ATTEMPT=$((ATTEMPT + 1))
-            if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-              echo "❌ Failed to find unique version after $MAX_ATTEMPTS attempts"
-              exit 1
-            fi
-            
-            echo "⚠️ Tag $VERSION_TAG already exists, bumping patch version..."
-            npm version patch --no-git-tag-version
-            NEW_VERSION=$(node -p "require('./package.json').version")
-            VERSION_TAG="v$NEW_VERSION"
-            echo "Trying version: $VERSION_TAG"
-          done
+          # Check if tag already exists - if so, fail with clear message
+          if git rev-parse "$VERSION_TAG" >/dev/null 2>&1; then
+            echo "❌ Tag $VERSION_TAG already exists!"
+            echo "This usually means:"
+            echo "  1. The release was already created"
+            echo "  2. Manual intervention is needed to resolve version conflict"
+            echo ""
+            echo "Current version in package.json: $NEW_VERSION"
+            echo "Existing tag: $VERSION_TAG"
+            echo ""
+            echo "To fix: Manually bump version in package.json on release branch"
+            exit 1
+          fi
           
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
-          echo "✅ Final version: $VERSION_TAG"
+          echo "✅ Version: $VERSION_TAG"
           
           git add package.json package-lock.json
           git commit -m "chore(release): bump version to $NEW_VERSION [skip ci]"
