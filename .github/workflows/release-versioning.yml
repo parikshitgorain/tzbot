@@ -226,16 +226,27 @@ jobs:
         run: git pull origin release
       
       - name: Create Git tag
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME="${{ needs.version.outputs.version_tag }}"
           
           if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
             echo "⚠️ Tag $TAG_NAME already exists"
           else
+            # Create and push tag
             git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
             git push origin "$TAG_NAME"
             echo "✅ Tag created: $TAG_NAME"
           fi
+      
+      - name: Trigger CD workflow
+        if: success()
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          event-type: deploy-release
+          client-payload: '{"tag": "${{ needs.version.outputs.version_tag }}", "version": "${{ needs.version.outputs.new_version }}"}'
       
       - name: Generate changelog
         id: changelog
