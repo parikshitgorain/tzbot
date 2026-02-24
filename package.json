@@ -1,6 +1,6 @@
 {
   "name": "tzbot-discord-bot",
-  "version": "1.0.18",
+  "version": "1.0.0",
   "description": "Comprehensive Discord moderation and engagement bot with Kick.com integration",
   "main": "dist/index.js",
   "type": "module",

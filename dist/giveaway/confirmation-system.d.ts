@@ -13,10 +13,9 @@ export declare class ConfirmationSystem {
     private giveawayRepo;
     private timerManager;
     private rerollHandler;
-    private configManager;
     private messageListener;
     private client;
-    constructor(winnerStateRepo: WinnerStateRepository, giveawayRepo: GiveawayRepository, configManager: ConfigManager);
+    constructor(winnerStateRepo: WinnerStateRepository, giveawayRepo: GiveawayRepository, _configManager: ConfigManager);
     /**
      * Initialize the confirmation system with Discord client
      */
@@ -45,7 +44,7 @@ export declare class ConfirmationSystem {
      * Handle manual reroll command
      * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
      */
-    manualReroll(giveawayId: string, userId: string, moderatorId: string): Promise<void>;
+    manualReroll(giveawayId: string, userId: string, guildId: string): Promise<void>;
     /**
      * Restore active confirmations on system startup
      * Requirements: 9.4, 10.4, 10.5

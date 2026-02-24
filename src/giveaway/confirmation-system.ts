@@ -17,16 +17,14 @@ import { logger } from '../core/logger/logger.js';
 export class ConfirmationSystem {
   private timerManager: TimerManager;
   private rerollHandler: RerollHandler;
-  private configManager: ConfigManager;
   private messageListener: MessageListener;
   private client: Client | null = null;
 
   constructor(
     private winnerStateRepo: WinnerStateRepository,
     private giveawayRepo: GiveawayRepository,
-    configManager: ConfigManager,
+    _configManager: ConfigManager, // Kept for backward compatibility but not used
   ) {
-    this.configManager = configManager;
     this.rerollHandler = new RerollHandler(giveawayRepo, winnerStateRepo);
 
     // Initialize timer manager with callbacks
@@ -208,31 +206,17 @@ export class ConfirmationSystem {
   async manualReroll(
     giveawayId: string,
     userId: string,
-    moderatorId: string,
+    guildId: string,
   ): Promise<void> {
     try {
       if (!this.client) {
         throw new Error('ConfirmationSystem not initialized');
       }
 
-      // Get giveaway to check guild
+      // Get giveaway to verify it exists
       const giveaway = await this.giveawayRepo.get(giveawayId);
       if (!giveaway) {
         throw new Error('Giveaway not found');
-      }
-
-      // Fetch guild and moderator member
-      const guild = await this.client.guilds.fetch(giveaway.guildId);
-      const moderatorMember = await guild.members.fetch(moderatorId);
-
-      // Validate moderator permissions
-      const canUse = await this.configManager.canUseGiveawayCommands(
-        giveaway.guildId,
-        moderatorMember,
-      );
-
-      if (!canUse) {
-        throw new Error('Insufficient permissions to reroll winners');
       }
 
       // Verify winner exists
@@ -276,10 +260,10 @@ export class ConfirmationSystem {
         giveawayId,
         originalWinner: userId,
         newWinner: newWinnerId,
-        moderator: moderatorId,
+        guildId,
       });
     } catch (error) {
-      logger.error('Failed to execute manual reroll', { giveawayId, userId, moderatorId, error });
+      logger.error('Failed to execute manual reroll', { giveawayId, userId, guildId, error });
       throw error;
     }
   }
@@ -321,6 +305,9 @@ export class ConfirmationSystem {
       return;
     }
 
+    // Add small delay before sending
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     const winnerMentions = winners.map(w => `<@${w.id}>`).join(', ');
 
     const embed = new EmbedBuilder()
@@ -330,9 +317,7 @@ export class ConfirmationSystem {
         '**⏰ IMPORTANT:** You must send any message in this server within the next **5 minutes** to confirm your win!\n\n' +
         '**Failure to respond will result in an automatic reroll.**\n\n' +
         '**Moderators:** To manually reroll a winner, use:\n' +
-        `\`\`\`\ngw.reroll ${giveawayId} @user\n\`\`\`` +
-        '\nor\n' +
-        `\`\`\`\n/giveaway reroll giveaway_id:${giveawayId} winner:@user\n\`\`\``,
+        `\`\`\`\ngw.reroll ${giveawayId} @user\n\`\`\``,
       )
       .setColor(0x00ff00)
       .setTimestamp();
@@ -341,6 +326,9 @@ export class ConfirmationSystem {
     if (channel && 'send' in channel) {
       await channel.send({ content: winnerMentions, embeds: [embed] });
     }
+
+    // Add small delay before sending DMs
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     // Send DM to each winner
     const giveaway = await this.giveawayRepo.get(giveawayId);
@@ -383,6 +371,9 @@ export class ConfirmationSystem {
       return;
     }
 
+    // Add small delay before sending
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     // Send public confirmation in channel
     const embed = new EmbedBuilder()
       .setTitle('✅ Winner Confirmed!')
@@ -398,6 +389,9 @@ export class ConfirmationSystem {
     if (channel && 'send' in channel) {
       await channel.send({ content: `<@${userId}>`, embeds: [embed] });
     }
+
+    // Add small delay before sending DM
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     // Send DM confirmation to winner
     try {
@@ -437,6 +431,9 @@ export class ConfirmationSystem {
       return;
     }
 
+    // Add small delay before sending
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     // Send public reminder in channel
     const embed = new EmbedBuilder()
       .setTitle('⏰ Giveaway Winner Reminder')
@@ -451,6 +448,9 @@ export class ConfirmationSystem {
     if (channel && 'send' in channel) {
       await channel.send({ content: `<@${userId}>`, embeds: [embed] });
     }
+
+    // Add small delay before sending DM
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     // Send DM reminder to winner
     try {
@@ -494,6 +494,9 @@ export class ConfirmationSystem {
       return;
     }
 
+    // Add small delay before sending
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     const embed = new EmbedBuilder()
       .setTitle('🔄 Winner Rerolled')
       .setDescription(
@@ -501,7 +504,7 @@ export class ConfirmationSystem {
         `**New Winner:** <@${newWinnerId}>\n\n` +
         '**⏰ IMPORTANT:** You must send any message in this server within the next **5 minutes** to confirm your win!\n\n' +
         '**Moderators:** To manually reroll, use:\n' +
-        `\`\`\`\n/giveaway reroll giveaway_id:${giveawayId} winner:@user\n\`\`\``,
+        `\`\`\`\ngw.reroll ${giveawayId} @user\n\`\`\``,
       )
       .setColor(0xffa500)
       .setTimestamp();
@@ -510,6 +513,9 @@ export class ConfirmationSystem {
     if (channel && 'send' in channel) {
       await channel.send({ content: `<@${newWinnerId}>`, embeds: [embed] });
     }
+
+    // Add small delay before sending DM
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     // Send DM to new winner
     try {
