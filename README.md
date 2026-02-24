@@ -2,6 +2,8 @@
 
 A comprehensive Discord moderation and engagement bot with Kick.com integration, featuring automated moderation, role synchronization, giveaways, and CI/CD auto-deployment.
 
+<!-- CI/CD Pipeline: Fully automated deployment from Development to Production -->
+
 ## Features
 
 ### Core Features
