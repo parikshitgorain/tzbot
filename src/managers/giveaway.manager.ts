@@ -336,7 +336,7 @@ export class GiveawayManager {
 
   /**
    * Handle view participants button interaction
-   * Shows real-time list of participants
+   * Shows real-time list of participants from cache or database
    */
   private async handleViewParticipants(interaction: ButtonInteraction): Promise<void> {
     try {
@@ -356,8 +356,34 @@ export class GiveawayManager {
         return;
       }
 
-      // Get all entries
-      const entries = await this.giveawayRepository.getEntries(giveawayId);
+      // Get all entries - try cache first, then database
+      let entries: Array<{ userId: string; timestamp: Date }> = [];
+      
+      try {
+        // Try to get from Redis cache first (for active giveaways)
+        const entriesListKey = `giveaway:entries:list:${giveawayId}`;
+        const cachedEntries = await redisClient.get(entriesListKey);
+        
+        if (cachedEntries) {
+          const parsedEntries = JSON.parse(cachedEntries) as Array<{ userId: string; timestamp: string }>;
+          entries = parsedEntries.map((e) => ({
+            userId: e.userId,
+            timestamp: new Date(e.timestamp),
+          }));
+          logger.debug('Loaded participants from cache', { giveawayId, count: entries.length });
+        } else {
+          // Fallback to database (for ended giveaways or cache miss)
+          entries = await this.giveawayRepository.getEntries(giveawayId);
+          logger.debug('Loaded participants from database', { giveawayId, count: entries.length });
+        }
+      } catch (cacheError) {
+        // If cache fails, use database
+        logger.warn('Failed to load from cache, using database', {
+          giveawayId,
+          error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+        });
+        entries = await this.giveawayRepository.getEntries(giveawayId);
+      }
 
       if (entries.length === 0) {
         await interaction.editReply({
