@@ -1733,10 +1733,8 @@ class TZBotApplication {
           }
         }
 
-        // Handle announcement relay (if configured)
-        // if (this.announcementRelay && message.guild) {
-        //   await this.announcementRelay.handleMessage(message);
-        // }
+        // Announcement relay handles its own messageCreate events
+        // No need to call it here - it's already listening via discordClient.on('messageCreate')
       } catch (error) {
         logger.error('Error processing message event', { error });
       } finally {
