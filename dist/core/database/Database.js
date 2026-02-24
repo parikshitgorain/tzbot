@@ -68,6 +68,16 @@ export class Database {
      * Should be called during graceful shutdown
      */
     async disconnect() {
+        // Flush any pending chat activity writes
+        if (this.chatActivityRepo) {
+            try {
+                await this.chatActivityRepo.forceFlush();
+                logger.info('Flushed pending chat activity writes');
+            }
+            catch (error) {
+                logger.error('Failed to flush chat activity on shutdown', { error });
+            }
+        }
         await closePool();
         this.pool = null;
         this.userRepo = null;

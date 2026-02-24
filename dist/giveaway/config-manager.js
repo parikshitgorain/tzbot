@@ -78,18 +78,29 @@ export class ConfigManager {
     /**
      * Update giveaway command permissions for a guild
      * Creates new config if doesn't exist, updates if it does
-     * Invalidates cache after update
+     * Updates cache immediately after database write for instant effect
      */
     async updateGiveawayPermissions(guildId, allowedRoles, allowedUsers) {
         try {
+            // Write to database FIRST (source of truth)
             await this.configRepository.updateGiveawayPermissions(guildId, allowedRoles, allowedUsers);
-            // Invalidate cache
+            // Update cache immediately with new data (instead of just invalidating)
+            // This makes the change take effect instantly without waiting for next read
             const cacheKey = `${this.CACHE_PREFIX}${guildId}`;
             try {
-                await redisClient.del(cacheKey);
+                const updatedConfig = {
+                    guildId,
+                    allowedRoles,
+                    allowedUsers,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                };
+                await redisClient.set(cacheKey, JSON.stringify(updatedConfig), this.CACHE_TTL);
+                logger.debug('Updated cache with new permissions', { guildId });
             }
             catch (cacheError) {
-                logger.warn('Failed to invalidate cache after update', {
+                // If cache update fails, just log warning - database is already updated
+                logger.warn('Failed to update cache after permission change', {
                     guildId,
                     error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
                 });

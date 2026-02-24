@@ -2,23 +2,40 @@ import type { Pool } from 'pg';
 /**
  * ChatActivityRepository handles chat activity tracking for chat rain system
  * Tracks user messages to determine active chatters
+ * Uses Redis caching and batch writes to minimize database load
  */
 export declare class ChatActivityRepository {
     private pool;
+    private batchQueue;
+    private batchTimer;
+    private readonly BATCH_SIZE;
+    private readonly BATCH_TIMEOUT_MS;
+    private readonly CACHE_TTL;
     constructor(pool: Pool);
     /**
      * Record a chat activity event for a user
-     * Used to track active chatters for chat rain eligibility
+     * Uses batching to reduce database writes
      */
     record(userId: string, timestamp: Date): Promise<void>;
     /**
+     * Flush batched chat activities to database
+     */
+    private flushBatch;
+    /**
+     * Force flush any pending batched writes
+     * Should be called on shutdown
+     */
+    forceFlush(): Promise<void>;
+    /**
      * Get active chatters who have sent messages since a specific time
      * Returns array of user IDs
+     * Uses cache when possible
      */
     getActiveChatters(since: Date): Promise<string[]>;
     /**
      * Get message count for a user within a time window
      * Used to determine if user meets minimum message threshold (3+ messages)
+     * Uses cache when possible
      */
     getMessageCount(userId: string, since: Date): Promise<number>;
     /**

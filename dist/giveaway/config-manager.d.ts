@@ -25,7 +25,7 @@ export declare class ConfigManager {
     /**
      * Update giveaway command permissions for a guild
      * Creates new config if doesn't exist, updates if it does
-     * Invalidates cache after update
+     * Updates cache immediately after database write for instant effect
      */
     updateGiveawayPermissions(guildId: string, allowedRoles: string[], allowedUsers: string[]): Promise<void>;
     /**
