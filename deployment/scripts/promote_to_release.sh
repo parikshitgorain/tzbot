@@ -84,6 +84,13 @@ if [ "$MERGE_SUCCESS" = true ]; then
     echo "❌ dist/ not found in clean build!"
     exit 1
   fi
+  
+  # Remove dist/ from .gitignore on release branch
+  if [ -f ".gitignore" ]; then
+    echo "🔧 Removing dist/ from .gitignore..."
+    sed -i '/^dist\/$/d' .gitignore
+    sed -i '/^dist$/d' .gitignore
+  fi
 fi
 
 # Stage all changes
