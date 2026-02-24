@@ -56,6 +56,14 @@ jobs:
           echo "Branch: ${{ github.ref_name }}"
           echo "Ref: ${{ github.ref }}"
           
+          # Allow repository_dispatch events (triggered by release-versioning)
+          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            echo "✅ Triggered by repository_dispatch event"
+            echo "is_valid=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # For push events, validate it's from release branch or version tag
           if [[ "${{ github.ref }}" != "refs/heads/release" ]] && [[ "${{ github.ref }}" != refs/tags/v* ]]; then
             echo "❌ Not from release branch or version tag"
             echo "is_valid=false" >> $GITHUB_OUTPUT
