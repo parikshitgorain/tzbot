@@ -230,64 +230,92 @@ export class GiveawayManager {
         return;
       }
 
-      // Check for duplicate entry
+      // Check for duplicate entry using Redis (much faster than DB)
       // Requirement 9.6: Prevent duplicate entries
-      const hasEntry = await this.giveawayRepository.hasEntry(
-        giveawayId,
-        interaction.user.id,
-      );
-
-      if (hasEntry) {
-        await interaction.reply({
-          content: '✅ You have already entered this giveaway!',
-          ephemeral: true,
-        });
-        return;
-      }
-
-      // Add entry
-      // Requirement 9.5: Record entry with user ID and timestamp
-      await this.giveawayRepository.addEntry(giveawayId, interaction.user.id);
-
-      // Increment entry count in cache (more efficient than querying all entries)
-      let entryCount = 0;
+      const entryKey = `giveaway:entry:${giveawayId}:${interaction.user.id}`;
+      
       try {
-        const cacheKey = `giveaway:entries:${giveawayId}`;
-        const cached = await redisClient.get(cacheKey);
+        const alreadyEntered = await redisClient.exists(entryKey);
         
-        if (cached) {
-          entryCount = parseInt(cached, 10) + 1;
-        } else {
-          // Cache miss - get from database and cache it
-          const entries = await this.giveawayRepository.getEntries(giveawayId);
-          entryCount = entries.length;
+        if (alreadyEntered) {
+          await interaction.reply({
+            content: '✅ You have already entered this giveaway!',
+            ephemeral: true,
+          });
+          return;
         }
-        
-        // Update cache with new count (expires when giveaway ends)
-        await redisClient.set(cacheKey, entryCount.toString(), 3600); // 1 hour TTL
       } catch (cacheError) {
-        // Fallback to database query if cache fails
-        logger.warn('Cache operation failed, falling back to database', {
+        // Fallback to database check if Redis fails
+        logger.warn('Redis check failed, falling back to database', {
           giveawayId,
           error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
         });
-        const entries = await this.giveawayRepository.getEntries(giveawayId);
-        entryCount = entries.length;
+        
+        const hasEntry = await this.giveawayRepository.hasEntry(
+          giveawayId,
+          interaction.user.id,
+        );
+
+        if (hasEntry) {
+          await interaction.reply({
+            content: '✅ You have already entered this giveaway!',
+            ephemeral: true,
+          });
+          return;
+        }
       }
 
-      // Update giveaway message with new entry count
-      await this.updateGiveawayMessage(giveaway, entryCount);
+      // Store entry in Redis (will be batch written to DB when giveaway ends)
+      // Requirement 9.5: Record entry with user ID and timestamp
+      try {
+        const timestamp = new Date().toISOString();
+        const entryData = JSON.stringify({ userId: interaction.user.id, timestamp });
+        
+        // Store individual entry (for duplicate check)
+        await redisClient.set(entryKey, entryData, 86400); // 24 hour TTL
+        
+        // Add to entries list (for counting and winner selection)
+        const entriesListKey = `giveaway:entries:list:${giveawayId}`;
+        const currentList = await redisClient.get(entriesListKey);
+        const entries = currentList ? JSON.parse(currentList) : [];
+        entries.push({ userId: interaction.user.id, timestamp });
+        await redisClient.set(entriesListKey, JSON.stringify(entries), 86400);
+        
+        // Increment entry count
+        const countKey = `giveaway:entries:count:${giveawayId}`;
+        const entryCount = await redisClient.incr(countKey);
+        await redisClient.expire(countKey, 86400);
+        
+        // Update giveaway message with new entry count
+        await this.updateGiveawayMessage(giveaway, entryCount);
 
-      await interaction.reply({
-        content: '🎉 You have successfully entered the giveaway! Good luck!',
-        ephemeral: true,
-      });
+        await interaction.reply({
+          content: '🎉 You have successfully entered the giveaway! Good luck!',
+          ephemeral: true,
+        });
 
-      logger.info('Giveaway entry recorded', {
-        giveawayId,
-        userId: interaction.user.id,
-        totalEntries: entryCount,
-      });
+        logger.info('Giveaway entry recorded in cache', {
+          giveawayId,
+          userId: interaction.user.id,
+          totalEntries: entryCount,
+        });
+      } catch (error) {
+        // If Redis fails completely, fallback to direct database write
+        logger.error('Failed to store entry in cache, using database fallback', {
+          giveawayId,
+          userId: interaction.user.id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        
+        await this.giveawayRepository.addEntry(giveawayId, interaction.user.id);
+        const entries = await this.giveawayRepository.getEntries(giveawayId);
+        await this.updateGiveawayMessage(giveaway, entries.length);
+        
+        await interaction.reply({
+          content: '🎉 You have successfully entered the giveaway! Good luck!',
+          ephemeral: true,
+        });
+      }
     } catch (error) {
       logError('Failed to handle giveaway entry', error as Error, {
         userId: interaction.user.id,
@@ -530,8 +558,68 @@ export class GiveawayManager {
       // Update status to ended
       await this.giveawayRepository.updateStatus(giveawayId, GiveawayStatus.ENDED);
 
-      // Get all entries
-      const entries = await this.giveawayRepository.getEntries(giveawayId);
+      // Get all entries from Redis first (where they were stored during giveaway)
+      let entries: Array<{ userId: string; timestamp: Date }> = [];
+      
+      try {
+        const entriesListKey = `giveaway:entries:list:${giveawayId}`;
+        const cachedEntries = await redisClient.get(entriesListKey);
+        
+        if (cachedEntries) {
+          const parsedEntries = JSON.parse(cachedEntries);
+          entries = parsedEntries.map((e: any) => ({
+            userId: e.userId,
+            timestamp: new Date(e.timestamp),
+          }));
+          
+          // Batch write all entries to database now
+          logger.info('Writing giveaway entries to database', {
+            giveawayId,
+            entryCount: entries.length,
+          });
+          
+          for (const entry of entries) {
+            try {
+              await this.giveawayRepository.addEntry(giveawayId, entry.userId);
+            } catch (dbError) {
+              // Log but continue - entry might already exist from fallback writes
+              logger.warn('Failed to write entry to database', {
+                giveawayId,
+                userId: entry.userId,
+                error: dbError instanceof Error ? dbError.message : 'Unknown error',
+              });
+            }
+          }
+          
+          // Clean up Redis cache
+          await redisClient.del(entriesListKey);
+          await redisClient.del(`giveaway:entries:count:${giveawayId}`);
+          
+          // Clean up individual entry keys
+          for (const entry of entries) {
+            await redisClient.del(`giveaway:entry:${giveawayId}:${entry.userId}`);
+          }
+          
+          logger.info('Batch wrote entries to database and cleaned cache', {
+            giveawayId,
+            entryCount: entries.length,
+          });
+        } else {
+          // Fallback: entries might already be in database (from fallback writes)
+          entries = await this.giveawayRepository.getEntries(giveawayId);
+          logger.info('No cached entries found, using database entries', {
+            giveawayId,
+            entryCount: entries.length,
+          });
+        }
+      } catch (cacheError) {
+        // If Redis fails, get entries from database
+        logger.warn('Failed to get entries from cache, using database', {
+          giveawayId,
+          error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
+        });
+        entries = await this.giveawayRepository.getEntries(giveawayId);
+      }
 
       // Remove scheduled timeout
       const timeout = this.activeGiveaways.get(giveawayId);
