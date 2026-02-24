@@ -107,7 +107,8 @@ export declare class GiveawayManager {
      */
     private announceNoWinners;
     /**
-     * Create giveaway embed
+     * Create giveaway embed with dynamic countdown
+     * Uses Discord's native timestamp feature - updates automatically on client side
      */
     private createGiveawayEmbed;
     /**
@@ -116,6 +117,7 @@ export declare class GiveawayManager {
     private updateGiveawayMessage;
     /**
      * Update giveaway message when ended
+     * Shows "Ended X time ago" using Discord's dynamic timestamp
      */
     private updateGiveawayMessageEnded;
     /**
