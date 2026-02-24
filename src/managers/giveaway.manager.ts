@@ -121,7 +121,7 @@ export class GiveawayManager {
       // Send giveaway message with buttons
       const message = await this.discordClient.sendMessage(options.channelId, {
         embeds: [embed],
-        components: [row] as any,
+        components: [row],
       });
 
       // Create giveaway object
