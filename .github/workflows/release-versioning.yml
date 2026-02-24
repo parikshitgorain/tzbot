@@ -164,12 +164,12 @@ jobs:
         run: |
           BUMP_TYPE="${{ steps.analyze.outputs.bump_type }}"
           
-          # Get the latest tag version
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          # Get the latest RELEASE tag (exclude dev tags)
+          LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -v '\-dev\.' | head -1 || echo "v0.0.0")
           LATEST_VERSION="${LATEST_TAG#v}"
           
-          echo "Latest tag: $LATEST_TAG"
-          echo "Latest version: $LATEST_VERSION"
+          echo "Latest release tag: $LATEST_TAG"
+          echo "Latest release version: $LATEST_VERSION"
           
           # Get current package.json version and strip any -dev.X suffix
           CURRENT_VERSION_RAW=$(node -p "require('./package.json').version")
@@ -178,10 +178,10 @@ jobs:
           echo "Current package.json version (raw): $CURRENT_VERSION_RAW"
           echo "Current package.json version (clean): $CURRENT_VERSION"
           
-          # Always use the latest tag as the base version (ignore package.json)
+          # Always use the latest release tag as the base version
           if [ "$LATEST_VERSION" != "0.0.0" ]; then
             BASE_VERSION="$LATEST_VERSION"
-            echo "Using latest tag as base: $BASE_VERSION"
+            echo "Using latest release tag as base: $BASE_VERSION"
             
             # Sync package.json to latest tag version
             npm version "$BASE_VERSION" --no-git-tag-version --allow-same-version
@@ -196,6 +196,7 @@ jobs:
           fi
           
           # Now bump from the base version
+          echo "Bumping $BUMP_TYPE from $BASE_VERSION..."
           npm version $BUMP_TYPE --no-git-tag-version
           
           NEW_VERSION=$(node -p "require('./package.json').version")
@@ -203,14 +204,19 @@ jobs:
           
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
-          echo "Bumped to: $VERSION_TAG (type: $BUMP_TYPE)"
+          echo "✅ Bumped to: $VERSION_TAG (type: $BUMP_TYPE)"
           
           # Verify tag doesn't exist
           if git rev-parse "$VERSION_TAG" >/dev/null 2>&1; then
             echo "❌ ERROR: Tag $VERSION_TAG already exists!"
-            echo "This should not happen. Latest tag was $LATEST_TAG"
-            echo "Bump type was $BUMP_TYPE"
-            echo "Something is wrong with the version logic."
+            echo "Latest release tag was: $LATEST_TAG"
+            echo "Bump type was: $BUMP_TYPE"
+            echo "Base version was: $BASE_VERSION"
+            
+            # List recent tags for debugging
+            echo "Recent tags:"
+            git tag -l --sort=-v:refname | head -10
+            
             exit 1
           fi
           
