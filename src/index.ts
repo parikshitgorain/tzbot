@@ -1007,6 +1007,16 @@ class TZBotApplication {
       // Send processing message
       const processingMsg = await message.reply('🔄 Rerolling winner...');
 
+      // Delete the original command message immediately
+      try {
+        await message.delete();
+      } catch (error) {
+        logger.debug('Failed to delete command message', {
+          messageId: message.id,
+          error: (error as Error).message,
+        });
+      }
+
       // Perform reroll using confirmation system
       const confirmationSystem = this.giveawayManager.getConfirmationSystem();
       if (confirmationSystem) {
@@ -1022,16 +1032,14 @@ class TZBotApplication {
           moderatorTag: message.author.tag,
         });
 
-        // Clean up messages after 10 seconds
+        // Clean up processing message after 10 seconds
         setTimeout(() => {
           processingMsg.delete().catch(() => {/* ignore */});
-          message.delete().catch(() => {/* ignore */});
         }, 10000);
       } else {
         await processingMsg.edit('❌ Confirmation system not available. Please use the slash command instead.');
         setTimeout(() => {
           processingMsg.delete().catch(() => {/* ignore */});
-          message.delete().catch(() => {/* ignore */});
         }, 10000);
       }
     } catch (error) {
