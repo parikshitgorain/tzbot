@@ -170,14 +170,25 @@ jobs:
       - name: Create deployment package
         run: |
           echo "📦 Creating deployment package..."
-          tar -czf deployment-package.tar.gz \
-            --exclude='.git' \
+          
+          # Create a staging directory
+          mkdir -p /tmp/deploy-staging
+          
+          # Copy files to staging (excluding what we don't need)
+          rsync -av --exclude='.git' \
             --exclude='node_modules' \
             --exclude='tests' \
             --exclude='*.test.*' \
             --exclude='*.spec.*' \
-            .
-          echo "✅ Package created: $(du -h deployment-package.tar.gz | cut -f1)"
+            --exclude='coverage' \
+            . /tmp/deploy-staging/
+          
+          # Create tar from staging directory
+          cd /tmp/deploy-staging
+          tar -czf /tmp/deployment-package.tar.gz .
+          mv /tmp/deployment-package.tar.gz $GITHUB_WORKSPACE/
+          
+          echo "✅ Package created: $(du -h $GITHUB_WORKSPACE/deployment-package.tar.gz | cut -f1)"
       
       - name: Upload package to VPS
         timeout-minutes: 5
