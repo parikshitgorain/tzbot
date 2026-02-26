@@ -189,6 +189,8 @@ export class GiveawayManager {
     interaction: ButtonInteraction,
     guildId: string,
   ): Promise<void> {
+    const startTime = Date.now();
+    
     try {
       // Check if this is a view participants button
       if (interaction.customId.startsWith('giveaway_view_')) {
@@ -206,17 +208,13 @@ export class GiveawayManager {
       const giveaway = await this.giveawayRepository.get(giveawayId);
 
       if (!giveaway) {
-        await interaction.editReply({
-          content: '❌ This giveaway no longer exists.',
-        });
+        await this.queueResponse(interaction, '❌ This giveaway no longer exists.');
         return;
       }
 
       // Check if giveaway is still active
       if (giveaway.status !== 'active') {
-        await interaction.editReply({
-          content: '❌ This giveaway has ended.',
-        });
+        await this.queueResponse(interaction, '❌ This giveaway has ended.');
         return;
       }
 
@@ -229,9 +227,7 @@ export class GiveawayManager {
 
       if (!validation.allowed) {
         // Requirement 9.2: Send ephemeral message explaining restriction
-        await interaction.editReply({
-          content: `❌ ${validation.reason}`,
-        });
+        await this.queueResponse(interaction, `❌ ${validation.reason}`);
         return;
       }
 
@@ -243,9 +239,7 @@ export class GiveawayManager {
         const alreadyEntered = await redisClient.exists(entryKey);
         
         if (alreadyEntered) {
-          await interaction.editReply({
-            content: '✅ You have already entered this giveaway!',
-          });
+          await this.queueResponse(interaction, '✅ Already entered!');
           return;
         }
       } catch (cacheError) {
@@ -261,15 +255,12 @@ export class GiveawayManager {
         );
 
         if (hasEntry) {
-          await interaction.editReply({
-            content: '✅ You have already entered this giveaway!',
-          });
+          await this.queueResponse(interaction, '✅ Already entered!');
           return;
         }
       }
 
-      // Store entry in Redis (will be batch written to DB when giveaway ends)
-      // Requirement 9.5: Record entry with user ID and timestamp
+      // PRIORITY 1: Record entry IMMEDIATELY in Redis
       try {
         const timestamp = new Date().toISOString();
         const entryData = JSON.stringify({ userId: interaction.user.id, timestamp });
@@ -289,20 +280,20 @@ export class GiveawayManager {
         const entryCount = await redisClient.incr(countKey);
         await redisClient.expire(countKey, 86400);
         
-        // Update giveaway message with new entry count (don't await to speed up response)
+        // Update giveaway message with new entry count (don't await)
         void this.updateGiveawayMessage(giveaway, entryCount);
 
-        await interaction.editReply({
-          content: '🎉 You have successfully entered the giveaway! Good luck!',
-        });
+        // PRIORITY 2: Queue the response (1 second delay between responses)
+        await this.queueResponse(interaction, '🎉 Entered!');
 
-        logger.info('Giveaway entry recorded in cache', {
+        logger.info('Giveaway entry recorded', {
           giveawayId,
           userId: interaction.user.id,
           totalEntries: entryCount,
+          processingTime: Date.now() - startTime,
         });
       } catch (error) {
-        // If Redis fails completely, fallback to direct database write
+        // If Redis fails, fallback to database
         logger.error('Failed to store entry in cache, using database fallback', {
           giveawayId,
           userId: interaction.user.id,
@@ -313,9 +304,7 @@ export class GiveawayManager {
         const entries = await this.giveawayRepository.getEntries(giveawayId);
         void this.updateGiveawayMessage(giveaway, entries.length);
         
-        await interaction.editReply({
-          content: '🎉 You have successfully entered the giveaway! Good luck!',
-        });
+        await this.queueResponse(interaction, '🎉 Entered!');
       }
     } catch (error) {
       logError('Failed to handle giveaway entry', error as Error, {
@@ -323,18 +312,63 @@ export class GiveawayManager {
         customId: interaction.customId,
       });
 
-      // Check if we can still reply
-      if (interaction.deferred && !interaction.replied) {
-        await interaction.editReply({
-          content: '❌ An error occurred while entering the giveaway. Please try again.',
-        });
-      } else if (!interaction.replied) {
-        await interaction.reply({
-          content: '❌ An error occurred while entering the giveaway. Please try again.',
-          ephemeral: true,
+      await this.queueResponse(interaction, '❌ Error. Please try again.').catch(() => {});
+    }
+  }
+
+  /**
+   * Queue a response with rate limiting (1 second between responses)
+   */
+  private async queueResponse(interaction: ButtonInteraction, content: string): Promise<void> {
+    // Add to response queue
+    this.responseQueue.push({
+      interaction,
+      content,
+      timestamp: Date.now(),
+    });
+
+    // Start processing if not already running
+    if (!this.processingQueue) {
+      void this.processResponseQueue();
+    }
+  }
+
+  private responseQueue: Array<{ interaction: ButtonInteraction; content: string; timestamp: number }> = [];
+  private processingQueue = false;
+  private lastResponseTime = 0;
+
+  /**
+   * Process queued responses with 1 second delay between each
+   */
+  private async processResponseQueue(): Promise<void> {
+    if (this.processingQueue) return;
+    this.processingQueue = true;
+
+    while (this.responseQueue.length > 0) {
+      const now = Date.now();
+      const timeSinceLastResponse = now - this.lastResponseTime;
+
+      // Wait 1 second between responses to avoid rate limits
+      if (timeSinceLastResponse < 1000 && this.lastResponseTime > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000 - timeSinceLastResponse));
+      }
+
+      const item = this.responseQueue.shift();
+      if (!item) break;
+
+      try {
+        if (item.interaction.deferred && !item.interaction.replied) {
+          await item.interaction.editReply({ content: item.content });
+          this.lastResponseTime = Date.now();
+        }
+      } catch (error) {
+        logger.debug('Failed to send queued response (interaction may have expired)', {
+          error: error instanceof Error ? error.message : 'Unknown',
         });
       }
     }
+
+    this.processingQueue = false;
   }
 
   /**
