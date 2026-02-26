@@ -6,9 +6,11 @@ Quick commands and workflows for the CI/CD system.
 
 | Workflow | Trigger | Purpose | Duration |
 |----------|---------|---------|----------|
-| `ci-development.yml` | Push/PR to `development` | Quality gates + auto-promote | 5-10 min |
+| `ci-development.yml` | Push/PR to `development` | Quality gates + **manual approval** for promotion | 5-10 min |
 | `release-versioning.yml` | Push to `release` | Create version tag + release | 2-3 min |
 | `cd-production.yml` | Push to `release` or tag `v*` | Deploy to VPS | 3-5 min |
+
+> **⚠️ Important:** Promotion to Release now requires manual approval. See [Release Approval Setup](./RELEASE_APPROVAL_SETUP.md)
 
 ## Common Tasks
 
@@ -33,13 +35,13 @@ git push origin feature/my-feature
 # 5. Merge PR
 # CI runs automatically
 
-# 6. Wait for auto-promotion
-# Release versioning runs automatically
+# 6. **APPROVE PROMOTION** (NEW STEP)
+# Go to Actions → Review deployments → Approve
 
 # 7. Wait for deployment
 # CD deploys to VPS automatically
 
-# Total time: ~10-15 minutes
+# Total time: ~10-15 minutes (+ approval time)
 ```
 
 ### Check Deployment Status
