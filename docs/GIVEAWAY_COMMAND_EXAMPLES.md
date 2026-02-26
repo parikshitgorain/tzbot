@@ -212,12 +212,18 @@ ID: ghi789jkl012
   winner: @OldWinner
 ```
 
+Or use the prefix command (easier to copy from announcements):
+```
+gw.reroll GW-02-16306 @parik
+```
+
 **Result:**
 - Selects new winner from remaining entries
 - Announces reroll in channel
 - Shows both old and new winner
 - Host attribution included
 - New winner receives DM
+- Reroll command displayed with @username format for easy copying (Discord auto-detects)
 
 ---
 

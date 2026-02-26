@@ -13,6 +13,8 @@ export class MessageListener {
   private winnerStateRepo: WinnerStateRepository;
   private pendingWinnersCache: Map<string, Set<string>>; // guildId -> Set<userId>
   private confirmationCallback: (giveawayId: string, userId: string) => Promise<void>;
+  private userConfirmationAttempts: Map<string, number> = new Map(); // userId -> attempt count
+  private readonly MAX_CONFIRMATION_ATTEMPTS = 3;
 
   constructor(
     winnerStateRepo: WinnerStateRepository,
@@ -60,6 +62,23 @@ export class MessageListener {
       if (!isPending) {
         return;
       }
+
+      // Rate limiting: Check if user has exceeded confirmation attempts
+      const attemptKey = `${guildId}:${userId}`;
+      const attempts = this.userConfirmationAttempts.get(attemptKey) || 0;
+      
+      if (attempts >= this.MAX_CONFIRMATION_ATTEMPTS) {
+        logger.debug('User exceeded confirmation attempts, ignoring', { userId, attempts });
+        return;
+      }
+
+      // Increment attempt counter
+      this.userConfirmationAttempts.set(attemptKey, attempts + 1);
+      
+      // Clear attempt counter after 10 seconds
+      setTimeout(() => {
+        this.userConfirmationAttempts.delete(attemptKey);
+      }, 10000);
 
       // Get all giveaways where user is pending
       const giveawayIds = await this.getPendingGiveaways(guildId, userId);

@@ -16,27 +16,35 @@ Reroll a specific winner from an ended giveaway.
 
 **Format:**
 ```
-gw.reroll <giveaway_id> @user
+gw.reroll <giveaway_id> @username
 ```
 
 **Parameters:**
 - `giveaway_id`: The unique ID of the giveaway (shown in winner announcements)
-- `@user`: Mention of the user to reroll/replace
+- `@username`: Username with @ prefix (e.g., @parik) - Discord will auto-detect it
 
 **Permissions Required:**
 - Manage Events permission
 
-**Example:**
+**Examples:**
 ```
-gw.reroll 1475607354715279361 @Ace
+gw.reroll GW-02-16306 @parik
+gw.reroll GW-02-16306 @Parik
 ```
 
+**How it works:**
+When you copy `gw.reroll GW-02-16306 @parik` and paste it, Discord automatically detects `@parik` and converts it to a proper mention. This makes it easy to copy and paste on both mobile and desktop.
+
 **Behavior:**
+- ✅ Accepts @username format (Discord auto-converts to mention)
+- ✅ Accepts Discord mention format (<@123456>)
+- ✅ Case-insensitive username matching
 - ✅ Provides clear feedback messages for all scenarios
 - ✅ Auto-deletes command and response messages after 10 seconds (keeps channels clean)
 - ✅ Validates all inputs before processing
 - ✅ Shows processing status while rerolling
 - ✅ Announces new winner in the giveaway channel
+- ✅ Easy to copy on both mobile and desktop
 - ❌ Fails gracefully with helpful error messages
 
 **Error Messages:**
@@ -44,8 +52,8 @@ gw.reroll 1475607354715279361 @Ace
 | Scenario | Message |
 |----------|---------|
 | No permission | ❌ You need the `Manage Events` permission to use this command. |
-| Invalid format | ❌ Invalid format. Use: `gw.reroll <giveaway_id> @user` |
-| Invalid mention | ❌ Invalid user mention. Please mention a user like @username |
+| Invalid format | ❌ Invalid format. Use: `gw.reroll <giveaway_id> @username` |
+| Invalid user | ❌ Invalid user. Please use the format: `gw.reroll <giveaway_id> @username` |
 | Giveaway not found | ❌ Giveaway not found. Please check the giveaway ID. |
 | Giveaway not ended | ❌ Can only reroll winners from ended giveaways. |
 | User not a winner | ❌ This user is not a winner of this giveaway. |
@@ -57,12 +65,13 @@ Both prefix and slash commands are supported for flexibility:
 
 | Feature | Prefix Command | Slash Command |
 |---------|---------------|---------------|
-| Format | `gw.reroll <id> @user` | `/giveaway reroll giveaway_id:<id> winner:@user` |
+| Format | `gw.reroll <id> @username` | `/giveaway reroll giveaway_id:<id> winner:@user` |
 | Speed | ⚡ Faster to type | Slower (more typing) |
 | Autocomplete | ❌ No | ✅ Yes |
 | Validation | ✅ Real-time | ✅ Before submission |
 | Cleanup | ✅ Auto-deletes | ❌ Stays visible |
-| Mobile-friendly | ✅ Very easy | ⚠️ Requires more taps |
+| Mobile-friendly | ✅ Very easy (@username format) | ⚠️ Requires more taps |
+| Copy-friendly | ✅ @username Discord auto-detects | ⚠️ Mention format harder |
 
 ## Design Philosophy
 
@@ -85,25 +94,27 @@ Example from winner announcement:
 ```
 Congratulations! 🎉
 
-@Ace's won the giveaway of 10!
+@Parik won the giveaway!
 
 • Hosted by: BOBOC
-• Reroll Command: gw.reroll 1475607354715279361 @Ace
+• Reroll Command: gw.reroll GW-02-16306 @parik
 ```
+
+The @username format makes it easy to copy and paste. When you paste `@parik`, Discord automatically detects it and converts it to a proper mention. This works on both mobile and desktop.
 
 ## Technical Implementation
 
 ### Message Flow
 
-1. User sends `gw.reroll <id> @user`
+1. User sends `gw.reroll <id> @username` (Discord auto-converts @username to mention)
 2. Bot validates permission (Manage Events)
-3. Bot parses and validates all parameters
+3. Bot parses and validates all parameters (handles @username and <@id> formats)
 4. Bot checks giveaway exists and is ended
 5. Bot verifies user is a winner
 6. Bot sends "🔄 Rerolling winner..." message
 7. Bot performs reroll via confirmation system
 8. Bot updates message to "✅ Winner rerolled successfully!"
-9. Bot announces new winner in giveaway channel
+9. Bot announces new winner in giveaway channel with @username format
 10. Bot auto-deletes command and response after 10 seconds
 
 ### Error Handling
@@ -128,9 +139,9 @@ Congratulations! 🎉
 
 ## Best Practices
 
-1. **Use the short format**: `gw.reroll <id> @user` is faster than slash commands
-2. **Copy the ID**: Copy the giveaway ID from the winner announcement
-3. **Mention correctly**: Use Discord's @mention feature, don't type manually
+1. **Use the @username format**: `gw.reroll <id> @username` - Discord auto-detects and converts it
+2. **Copy from announcements**: The bot displays the exact command you need to copy
+3. **Case doesn't matter**: @parik and @Parik both work
 4. **Check permissions**: Ensure you have Manage Events permission
 5. **Wait for confirmation**: The bot will show a success message when done
 
@@ -139,8 +150,9 @@ Congratulations! 🎉
 **Command not working?**
 - Check you have Manage Events permission
 - Verify the giveaway ID is correct
-- Make sure you're mentioning the user correctly
+- Make sure you're using @username format (e.g., @parik)
 - Ensure the giveaway has ended
+- Try typing the username - Discord should auto-complete it
 
 **Messages not deleting?**
 - This is normal - they auto-delete after 10 seconds
