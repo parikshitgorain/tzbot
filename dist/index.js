@@ -408,6 +408,9 @@ class TZBotApplication {
         }
         // Parse PostgreSQL connection string
         const url = new URL(databaseUrl);
+        // Check if SSL should be disabled (for local PostgreSQL)
+        const sslMode = url.searchParams.get('sslmode');
+        const useSsl = sslMode !== 'disable';
         const dbConfig = {
             host: url.hostname,
             port: parseInt(url.port) || 5432,
@@ -415,7 +418,7 @@ class TZBotApplication {
             user: url.username,
             password: url.password,
             max: 20,
-            ssl: { rejectUnauthorized: false }, // Required for Neon
+            ssl: useSsl ? { rejectUnauthorized: false } : false, // Disable SSL for local, enable for Neon
         };
         this.database = new Database();
         await this.database.connect(dbConfig);
@@ -1559,7 +1562,7 @@ class TZBotApplication {
         const modCommands = createModerationCommands(this.discordClient, this.database, this.rateLimiter);
         this.commandManager.registerCommands(modCommands);
         // Register utility commands
-        const utilCommands = createUtilityCommands(this.discordClient, this.database, config);
+        const utilCommands = createUtilityCommands(this.discordClient, this.database, config, this.announcementRelay);
         this.commandManager.registerCommands(utilCommands);
         // Register giveaway commands
         const giveawayCommands = createGiveawayCommands(this.discordClient, this.giveawayManager);

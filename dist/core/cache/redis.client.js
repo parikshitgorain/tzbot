@@ -162,10 +162,11 @@ export class RedisClient {
      * Get a value from Redis
      */
     async get(key) {
+        if (!this.client || !this.isConnected) {
+            // Silently return null when Redis is not connected (optional service)
+            return null;
+        }
         try {
-            if (!this.client || !this.isConnected) {
-                throw new Error('Redis client not connected');
-            }
             return await this.client.get(key);
         }
         catch (error) {
@@ -179,10 +180,11 @@ export class RedisClient {
      * Set a value in Redis
      */
     async set(key, value, ttlSeconds) {
+        if (!this.client || !this.isConnected) {
+            // Silently skip when Redis is not connected (optional service)
+            return;
+        }
         try {
-            if (!this.client || !this.isConnected) {
-                throw new Error('Redis client not connected');
-            }
             if (ttlSeconds) {
                 await this.client.setex(key, ttlSeconds, value);
             }
@@ -201,10 +203,11 @@ export class RedisClient {
      * Delete a key from Redis
      */
     async del(key) {
+        if (!this.client || !this.isConnected) {
+            // Silently return 0 when Redis is not connected (optional service)
+            return 0;
+        }
         try {
-            if (!this.client || !this.isConnected) {
-                throw new Error('Redis client not connected');
-            }
             return await this.client.del(key);
         }
         catch (error) {
@@ -218,10 +221,11 @@ export class RedisClient {
      * Set expiration time for a key
      */
     async expire(key, seconds) {
+        if (!this.client || !this.isConnected) {
+            // Silently return false when Redis is not connected (optional service)
+            return false;
+        }
         try {
-            if (!this.client || !this.isConnected) {
-                throw new Error('Redis client not connected');
-            }
             const result = await this.client.expire(key, seconds);
             return result === 1;
         }

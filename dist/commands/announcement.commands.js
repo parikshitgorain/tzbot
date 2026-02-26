@@ -1,6 +1,12 @@
 /**
  * @file announcement.commands.ts
  * @description Announcement relay configuration commands
+ *
+ * Features:
+ * - Configure private and public announcement channels
+ * - Relay messages from private to public channels
+ * - !embed command: Prefix messages with !embed to format as Discord embeds
+ *
  * @module commands
  */
 import { SlashCommandBuilder, PermissionFlagsBits, ChannelType, } from 'discord.js';

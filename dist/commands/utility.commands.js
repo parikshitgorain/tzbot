@@ -8,10 +8,10 @@ import { logger, logError } from '../core/logger/logger.js';
 /**
  * Create utility commands
  */
-export function createUtilityCommands(_client, database, config) {
+export function createUtilityCommands(_client, database, config, announcementRelay) {
     return [
         createConfigCommand(config),
-        createSetupCommand(database, config),
+        createSetupCommand(database, config, announcementRelay),
         createUserInfoCommand(database),
         createLinkCommand(database),
         createUnlinkCommand(database),
@@ -22,7 +22,7 @@ export function createUtilityCommands(_client, database, config) {
 /**
  * /setup command - Configure bot settings through Discord
  */
-function createSetupCommand(database, config) {
+function createSetupCommand(database, config, announcementRelay) {
     const builder = new SlashCommandBuilder()
         .setName('setup')
         .setDescription('Configure bot settings')
@@ -125,6 +125,10 @@ function createSetupCommand(database, config) {
                 else if (subcommand === 'moderator') {
                     await database.setConfig('moderatorRoleId', role.id);
                     config.moderatorRoleId = role.id;
+                    // Update announcement relay if it exists
+                    if (announcementRelay) {
+                        announcementRelay.updateConfig({ moderatorRoleId: role.id });
+                    }
                     await interaction.editReply({
                         content: `✅ Moderator role set to <@&${role.id}>`,
                     });
