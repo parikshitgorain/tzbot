@@ -16,6 +16,8 @@ import type { Database } from '@/types/interfaces.js';
 import type { BotConfig } from '@/config/types.js';
 import { logger, logError } from '@/core/logger/logger.js';
 
+import type { AnnouncementRelayManager } from '@/managers/announcement-relay.manager.js';
+
 /**
  * Create utility commands
  */
@@ -23,10 +25,11 @@ export function createUtilityCommands(
   _client: IDiscordClient,
   database: Database,
   config: BotConfig,
+  announcementRelay?: AnnouncementRelayManager | null,
 ): CommandDefinition[] {
   return [
     createConfigCommand(config),
-    createSetupCommand(database, config),
+    createSetupCommand(database, config, announcementRelay),
     createUserInfoCommand(database),
     createLinkCommand(database),
     createUnlinkCommand(database),
@@ -38,7 +41,11 @@ export function createUtilityCommands(
 /**
  * /setup command - Configure bot settings through Discord
  */
-function createSetupCommand(database: Database, config: BotConfig): CommandDefinition {
+function createSetupCommand(
+  database: Database,
+  config: BotConfig,
+  announcementRelay?: AnnouncementRelayManager | null,
+): CommandDefinition {
   const builder = new SlashCommandBuilder()
     .setName('setup')
     .setDescription('Configure bot settings')
@@ -174,6 +181,11 @@ function createSetupCommand(database: Database, config: BotConfig): CommandDefin
         } else if (subcommand === 'moderator') {
           await database.setConfig('moderatorRoleId', role.id);
           config.moderatorRoleId = role.id;
+
+          // Update announcement relay if it exists
+          if (announcementRelay) {
+            announcementRelay.updateConfig({ moderatorRoleId: role.id });
+          }
 
           await interaction.editReply({
             content: `✅ Moderator role set to <@&${role.id}>`,

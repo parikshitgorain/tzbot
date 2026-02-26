@@ -1,6 +1,13 @@
 /**
  * @file announcement-relay.manager.ts
  * @description Announcement relay system for moderator messages
+ * 
+ * Features:
+ * - Relay messages from private moderator channel to public channels
+ * - Preserve formatting, embeds, and attachments
+ * - !embed command: Convert message content to Discord embeds
+ * - Automatic failure notifications
+ * 
  * @module managers
  */
 
@@ -27,6 +34,33 @@ interface RelayResult {
   success: boolean;
   messageId?: string;
   error?: string;
+}
+
+/**
+ * Embed JSON data structure
+ */
+interface EmbedData {
+  title?: string;
+  description?: string;
+  url?: string;
+  color?: number;
+  timestamp?: string | number;
+  thumbnail?: { url?: string };
+  image?: { url?: string };
+  author?: {
+    name?: string;
+    icon_url?: string;
+    url?: string;
+  };
+  fields?: Array<{
+    name?: string;
+    value?: string;
+    inline?: boolean;
+  }>;
+  footer?: {
+    text?: string;
+    icon_url?: string;
+  };
 }
 
 /**
@@ -123,26 +157,54 @@ export class AnnouncementRelayManager {
    * Check if the message author is a moderator
    */
   private async isUserModerator(message: Message): Promise<boolean> {
-    try {
-      const member = await this.discordClient.getMember(
-        this.config.guildId,
-        message.author.id,
-      );
+      try {
+        const member = await this.discordClient.getMember(
+          this.config.guildId,
+          message.author.id,
+        );
 
-      if (!member) {
+        if (!member) {
+          logger.debug('Member not found for moderator check', {
+            userId: message.author.id,
+            guildId: this.config.guildId,
+          });
+          return false;
+        }
+
+        // Check if user is server owner
+        if (member.guild.ownerId === message.author.id) {
+          logger.debug('User is server owner', {
+            userId: message.author.id,
+          });
+          return true;
+        }
+
+        // Check if user has administrator permission
+        if (member.permissions.has('Administrator')) {
+          logger.debug('User has administrator permission', {
+            userId: message.author.id,
+          });
+          return true;
+        }
+
+        // Check if user has the moderator role
+        const hasModerator = member.roles.cache.has(this.config.moderatorRoleId);
+        logger.debug('Moderator role check', {
+          userId: message.author.id,
+          moderatorRoleId: this.config.moderatorRoleId,
+          hasModerator,
+          userRoles: Array.from(member.roles.cache.keys()),
+        });
+        return hasModerator;
+      } catch (error) {
+        logError('Failed to check moderator status', error as Error, {
+          userId: message.author.id,
+          guildId: this.config.guildId,
+        });
         return false;
       }
-
-      // Check if user has the moderator role
-      return member.roles.cache.has(this.config.moderatorRoleId);
-    } catch (error) {
-      logError('Failed to check moderator status', error as Error, {
-        userId: message.author.id,
-        guildId: this.config.guildId,
-      });
-      return false;
     }
-  }
+
 
   /**
    * Relay a message to all configured public channels
@@ -227,6 +289,11 @@ export class AnnouncementRelayManager {
    * Requirement 6.2: Preserve message formatting, embeds, and attachments
    */
   private prepareMessageContent(message: Message) {
+    // Check if message starts with !embed command
+    if (message.content.trim().startsWith('!embed')) {
+      return this.prepareEmbedMessage(message);
+    }
+
     // Convert Discord Embed objects to EmbedBuilder for sending
     const embeds = message.embeds.length > 0
       ? message.embeds.map((embed) => {
@@ -245,6 +312,214 @@ export class AnnouncementRelayManager {
         }))
         : undefined,
     };
+  }
+
+  /**
+   * Prepare embed message from !embed command
+   * Supports both plain text and JSON format
+   * 
+   * Plain text: !embed Your message here
+   * JSON (embed only): !embed {"title": "Title", "description": "Description", "color": 0xFF0000}
+   * JSON (full message): !embed {"content": "@everyone", "embeds": [{"title": "Title", ...}]}
+   */
+  private prepareEmbedMessage(message: Message) {
+    // Extract content after !embed
+    const content = message.content.trim();
+    const embedContent = content.substring('!embed'.length).trim();
+
+    if (!embedContent) {
+      logger.warn('Empty !embed command detected', {
+        messageId: message.id,
+        authorId: message.author.id,
+      });
+      return {
+        content: '⚠️ Empty embed content',
+      };
+    }
+
+    // Try to parse as JSON first
+    if (embedContent.startsWith('{') || embedContent.startsWith('[')) {
+      try {
+        const data = JSON.parse(embedContent);
+        
+        // Check if it's a full message object with content and embeds
+        if (data.content !== undefined || data.embeds !== undefined) {
+          const result: { content?: string; embeds?: EmbedBuilder[]; files?: Array<{ attachment: string; name: string }> } = {};
+          
+          // Add content if present
+          if (data.content) {
+            result.content = data.content;
+          }
+          
+          // Add embeds if present
+          if (Array.isArray(data.embeds)) {
+            result.embeds = data.embeds.map((embedData: EmbedData) => 
+              this.createEmbedFromJSON(embedData, message)
+            );
+          }
+          
+          // Add attachments if present
+          if (message.attachments.size > 0) {
+            result.files = Array.from(message.attachments.values()).map((attachment) => ({
+              attachment: attachment.url,
+              name: attachment.name,
+            }));
+          }
+          
+          return result;
+        }
+        
+        // Handle array of embeds (legacy format)
+        if (Array.isArray(data)) {
+          const embeds = data.map(embedData => this.createEmbedFromJSON(embedData, message));
+          return {
+            embeds,
+            files: message.attachments.size > 0
+              ? Array.from(message.attachments.values()).map((attachment) => ({
+                attachment: attachment.url,
+                name: attachment.name,
+              }))
+              : undefined,
+          };
+        }
+        
+        // Single embed object (legacy format)
+        const embed = this.createEmbedFromJSON(data, message);
+        return {
+          embeds: [embed],
+          files: message.attachments.size > 0
+            ? Array.from(message.attachments.values()).map((attachment) => ({
+              attachment: attachment.url,
+              name: attachment.name,
+            }))
+            : undefined,
+        };
+      } catch (error) {
+        logger.warn('Failed to parse embed JSON, treating as plain text', {
+          messageId: message.id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        // Fall through to plain text handling
+      }
+    }
+
+    // Plain text embed
+    const embed = new EmbedBuilder()
+      .setDescription(embedContent)
+      .setColor(0x5865F2) // Discord blurple color
+      .setTimestamp();
+
+    // Add author footer if available
+    if (message.author) {
+      embed.setFooter({
+        text: `Posted by ${message.author.username}`,
+        iconURL: message.author.displayAvatarURL(),
+      });
+    }
+
+    return {
+      embeds: [embed],
+      files: message.attachments.size > 0
+        ? Array.from(message.attachments.values()).map((attachment) => ({
+          attachment: attachment.url,
+          name: attachment.name,
+        }))
+        : undefined,
+    };
+  }
+
+  /**
+   * Create EmbedBuilder from JSON data
+   */
+  private createEmbedFromJSON(data: EmbedData, message: Message): EmbedBuilder {
+    const embed = new EmbedBuilder();
+
+    // Set basic properties
+    if (data.title) embed.setTitle(data.title);
+    if (data.description) embed.setDescription(data.description);
+    if (data.url) embed.setURL(data.url);
+    if (data.color !== undefined) embed.setColor(data.color);
+    if (data.timestamp) embed.setTimestamp(new Date(data.timestamp));
+    
+    // Set thumbnail
+    if (data.thumbnail?.url) {
+      embed.setThumbnail(data.thumbnail.url);
+    }
+    
+    // Set image
+    if (data.image?.url) {
+      embed.setImage(data.image.url);
+    }
+    
+    // Set author
+    if (data.author) {
+      embed.setAuthor({
+        name: data.author.name || 'Unknown',
+        iconURL: data.author.icon_url,
+        url: data.author.url,
+      });
+    }
+    
+    // Add fields with timestamp conversion
+    if (Array.isArray(data.fields)) {
+      for (const field of data.fields) {
+        if (field.name && field.value) {
+          // Convert timestamps in field values
+          const processedValue = this.processTimestamps(field.value);
+          embed.addFields({
+            name: field.name,
+            value: processedValue,
+            inline: field.inline === true,
+          });
+        }
+      }
+    }
+    
+    // Set footer
+    if (data.footer) {
+      embed.setFooter({
+        text: data.footer.text || '',
+        iconURL: data.footer.icon_url,
+      });
+    } else {
+      // Add default footer with poster's name
+      embed.setFooter({
+        text: `Posted by ${message.author.username}`,
+        iconURL: message.author.displayAvatarURL(),
+      });
+    }
+
+    return embed;
+  }
+
+  /**
+   * Process timestamps in text to Discord's dynamic timestamp format
+   * Converts patterns like <t:UNIX_TIMESTAMP:R> or {{UNIX_TIMESTAMP}} to Discord timestamps
+   */
+  private processTimestamps(text: string): string {
+    // Already formatted Discord timestamps - leave as is
+    if (text.includes('<t:')) {
+      return text;
+    }
+
+    // Convert {{UNIX_TIMESTAMP}} or {{UNIX_TIMESTAMP:R}} format
+    text = text.replace(/\{\{(\d+)(?::([RrTtDdFf]))?\}\}/g, (_match, timestamp, format) => {
+      return `<t:${timestamp}:${format || 'R'}>`;
+    });
+
+    // Convert plain UNIX_TIMESTAMP in specific contexts (10-digit numbers)
+    // Only convert if it looks like a Unix timestamp (10 digits, reasonable range)
+    text = text.replace(/\b(1[6-9]\d{8}|[2-9]\d{9})\b/g, (match) => {
+      const timestamp = parseInt(match);
+      const now = Math.floor(Date.now() / 1000);
+      // Only convert if it's within reasonable range (not too far in past/future)
+      if (timestamp > now - 31536000 && timestamp < now + 31536000) {
+        return `<t:${timestamp}:R>`;
+      }
+      return match;
+    });
+
+    return text;
   }
 
   /**
