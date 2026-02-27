@@ -941,6 +941,9 @@ export class GiveawayManager {
       const randomIndex = this.secureRandomInt(0, available.length);
       const selectedWinner = available[randomIndex];
       
+      // CRITICAL DEBUG: Log the actual random generation
+      logger.warn(`[DEBUG] Winner selection round ${i + 1}: poolSize=${available.length}, randomIndex=${randomIndex}, winner=${selectedWinner}, available=${JSON.stringify(available)}`);
+      
       winners.push(selectedWinner);
       
       // Log each selection for transparency
