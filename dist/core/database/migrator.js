@@ -63,6 +63,12 @@ const MIGRATIONS = [
         upPath: join(__dirname, 'schema', '006_add_hosted_by_to_giveaways.sql'),
         downPath: join(__dirname, 'schema', '006_add_hosted_by_to_giveaways_down.sql'),
     },
+    {
+        version: 7,
+        name: '007_change_giveaway_id_to_varchar',
+        upPath: join(__dirname, 'schema', '007_change_giveaway_id_to_varchar.sql'),
+        downPath: join(__dirname, 'schema', '007_change_giveaway_id_to_varchar_down.sql'),
+    },
 ];
 /**
  * Ensure schema_migrations table exists

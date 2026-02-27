@@ -11,6 +11,8 @@ export declare class MessageListener {
     private winnerStateRepo;
     private pendingWinnersCache;
     private confirmationCallback;
+    private userConfirmationAttempts;
+    private readonly MAX_CONFIRMATION_ATTEMPTS;
     constructor(winnerStateRepo: WinnerStateRepository, confirmationCallback: (giveawayId: string, userId: string) => Promise<void>);
     /**
      * Initialize message event listener

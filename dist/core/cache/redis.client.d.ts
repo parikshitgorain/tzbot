@@ -40,6 +40,11 @@ export declare class RedisClient {
      */
     set(key: string, value: string, ttlSeconds?: number): Promise<void>;
     /**
+     * Set a value only if it doesn't exist (atomic operation)
+     * Returns true if the key was set, false if it already existed
+     */
+    setnx(key: string, value: string, ttlSeconds?: number): Promise<boolean>;
+    /**
      * Delete a key from Redis
      */
     del(key: string): Promise<number>;

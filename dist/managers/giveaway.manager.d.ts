@@ -1,8 +1,8 @@
 /**
- * @file giveaway.manager.ts
- * @description Giveaway manager for creating and managing role-gated giveaways
- * @module managers
- */
+* @file giveaway.manager.ts
+* @description Giveaway manager for creating and managing role-gated giveaways
+* @module managers
+*/
 import { ButtonInteraction } from 'discord.js';
 import type { IDiscordClient } from '../core/discord/client.js';
 import type { GiveawayRepository } from '../core/database/repositories/GiveawayRepository.js';
@@ -70,6 +70,18 @@ export declare class GiveawayManager {
      */
     handleEntryInteraction(interaction: ButtonInteraction, guildId: string): Promise<void>;
     /**
+     * Queue a response with rate limiting (1 second between responses)
+     */
+    private queueResponse;
+    private responseQueue;
+    private readonly MAX_QUEUE_SIZE;
+    private processingQueue;
+    private lastResponseTime;
+    /**
+     * Process queued responses with 1 second delay between each
+     */
+    private processResponseQueue;
+    /**
      * Handle view participants button interaction
      * Shows real-time list of participants from cache or database
      */
@@ -127,6 +139,18 @@ export declare class GiveawayManager {
      */
     private createGiveawayEmbed;
     /**
+     * Create progress bar with ▰▱ symbols
+     */
+    private createProgressBar;
+    /**
+     * Format prize display
+     */
+    private formatPrize;
+    /**
+     * Format time remaining
+     */
+    private formatTimeRemaining;
+    /**
      * Update giveaway message with current entry count
      */
     private updateGiveawayMessage;
@@ -136,7 +160,8 @@ export declare class GiveawayManager {
      */
     private updateGiveawayMessageEnded;
     /**
-     * Generate unique giveaway ID
+     * Generate unique giveaway ID in format: GW-MM-XXXXX
+     * Example: GW-02-47821 (February, random 5-digit number)
      */
     private generateGiveawayId;
     /**

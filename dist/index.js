@@ -41,7 +41,7 @@ import { createUtilityCommands } from './commands/utility.commands.js';
 import { createGiveawayCommands } from './commands/giveaway.commands.js';
 import { createAnnouncementCommands } from './commands/announcement.commands.js';
 import { EmbedBuilder } from 'discord.js';
-import { EventType } from './types/models.js';
+import { EventType, WinnerStatus } from './types/models.js';
 /**
  * Main application class
  * Manages initialization and lifecycle of all bot components
@@ -760,7 +760,8 @@ class TZBotApplication {
     }
     /**
      * Handle giveaway reroll prefix command
-     * Format: gw.reroll <giveaway_id> @user
+     * Format: gw.reroll <giveaway_id> @username
+     * Supports @username format (e.g., @parik) and Discord mentions (<@123>)
      * Checks custom giveaway permissions from database
      * Provides feedback messages for better UX
      */
@@ -786,10 +787,10 @@ class TZBotApplication {
                 }, 5000);
                 return;
             }
-            // Parse command: gw.reroll <giveaway_id> @user
+            // Parse command: gw.reroll <giveaway_id> @user or username
             const parts = message.content.trim().split(/\s+/);
             if (parts.length < 3) {
-                const reply = await message.reply('❌ Invalid format. Use: `gw.reroll <giveaway_id> @user`');
+                const reply = await message.reply('❌ Invalid format. Use: `gw.reroll <giveaway_id> @username`');
                 setTimeout(() => {
                     reply.delete().catch(() => { });
                     message.delete().catch(() => { });
@@ -797,18 +798,43 @@ class TZBotApplication {
                 return;
             }
             const giveawayId = parts[1];
-            const userMention = parts[2];
-            // Extract user ID from mention
-            const userIdMatch = userMention.match(/^<@!?(\d+)>$/);
-            if (!userIdMatch) {
-                const reply = await message.reply('❌ Invalid user mention. Please mention a user like @username');
+            const userIdentifier = parts[2];
+            let userId;
+            // Try to extract user ID from mention format first (<@123> or <@!123>)
+            const userIdMatch = userIdentifier.match(/^<@!?(\d+)>$/);
+            if (userIdMatch) {
+                userId = userIdMatch[1];
+            }
+            else {
+                // Handle @username format (without angle brackets) or plain username
+                // Remove @ if present
+                const cleanUsername = userIdentifier.startsWith('@')
+                    ? userIdentifier.substring(1)
+                    : userIdentifier;
+                // Search for the user in the guild by username
+                try {
+                    const members = await message.guild.members.fetch();
+                    const member = members.find(m => m.user.username.toLowerCase() === cleanUsername.toLowerCase() ||
+                        m.user.tag.toLowerCase() === cleanUsername.toLowerCase() ||
+                        m.displayName.toLowerCase() === cleanUsername.toLowerCase());
+                    if (member) {
+                        userId = member.user.id;
+                    }
+                }
+                catch (error) {
+                    logger.debug('Failed to fetch guild members for username lookup', {
+                        error: error.message,
+                    });
+                }
+            }
+            if (!userId) {
+                const reply = await message.reply('❌ Invalid user. Please use the format: `gw.reroll <giveaway_id> @username`');
                 setTimeout(() => {
                     reply.delete().catch(() => { });
                     message.delete().catch(() => { });
                 }, 10000);
                 return;
             }
-            const userId = userIdMatch[1];
             // Find giveaway by ID
             const giveaway = await this.database.repositories.giveaways.get(giveawayId);
             if (!giveaway) {
@@ -828,14 +854,31 @@ class TZBotApplication {
                 }, 10000);
                 return;
             }
-            // Check if user is a winner
-            if (!giveaway.winners || !giveaway.winners.includes(userId)) {
-                const reply = await message.reply('❌ This user is not a winner of this giveaway.');
-                setTimeout(() => {
-                    reply.delete().catch(() => { });
-                    message.delete().catch(() => { });
-                }, 10000);
-                return;
+            // Check if user is currently a winner (check winner state, not just giveaway.winners array)
+            // The winner state table is the source of truth for current winners
+            const confirmationSystem = this.giveawayManager.getConfirmationSystem();
+            if (confirmationSystem) {
+                const winnerState = await confirmationSystem.getWinnerState(giveaway.id, userId);
+                // Check if user is a current winner (not rerolled)
+                if (!winnerState || winnerState.status === WinnerStatus.REROLLED) {
+                    const reply = await message.reply('❌ This user is not a current winner of this giveaway.');
+                    setTimeout(() => {
+                        reply.delete().catch(() => { });
+                        message.delete().catch(() => { });
+                    }, 10000);
+                    return;
+                }
+            }
+            else {
+                // Fallback to checking giveaway.winners array if confirmation system not available
+                if (!giveaway.winners || !giveaway.winners.includes(userId)) {
+                    const reply = await message.reply('❌ This user is not a winner of this giveaway.');
+                    setTimeout(() => {
+                        reply.delete().catch(() => { });
+                        message.delete().catch(() => { });
+                    }, 10000);
+                    return;
+                }
             }
             // Send processing message
             const processingMsg = await message.reply('🔄 Rerolling winner...');
@@ -849,12 +892,11 @@ class TZBotApplication {
                     error: error.message,
                 });
             }
-            // Perform reroll using confirmation system
-            const confirmationSystem = this.giveawayManager.getConfirmationSystem();
+            // Perform reroll using confirmation system (reuse variable from above)
             if (confirmationSystem) {
                 await confirmationSystem.manualReroll(giveaway.id, userId, message.guildId || '');
-                // Update processing message
-                await processingMsg.edit('✅ Winner rerolled successfully! Check the giveaway channel for the announcement.');
+                // Update processing message with channel reference
+                await processingMsg.edit(`✅ Winner rerolled successfully! Check <#${giveaway.channelId}> for the announcement.`);
                 logger.info('Giveaway rerolled via prefix command', {
                     giveawayId: giveaway.id,
                     originalWinner: userId,

@@ -161,7 +161,7 @@ export class GiveawayRepository {
         required_roles, winner_count, status, ends_at, created_at,
         condition, winners, hosted_by
       FROM giveaways
-      WHERE status = 'active'
+      WHERE status = 'active' AND ends_at > NOW()
       ORDER BY ends_at ASC
     `;
 

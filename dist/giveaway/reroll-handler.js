@@ -28,6 +28,10 @@ export class RerollHandler {
             if (!giveaway) {
                 throw new Error(`Giveaway not found: ${giveawayId}`);
             }
+            // Verify giveaway has ended
+            if (giveaway.status !== 'ended') {
+                throw new Error('Can only reroll winners from ended giveaways');
+            }
             // Get all winner records for this giveaway
             const winners = await this.winnerStateRepository.getWinners(giveawayId);
             // Create a Set of user IDs who have already been selected
@@ -84,13 +88,12 @@ export class RerollHandler {
             return userIds[0];
         }
         // Generate cryptographically secure random bytes
-        // We need enough bytes to represent the array length
-        const maxIndex = userIds.length - 1;
         const bytesNeeded = Math.ceil(Math.log2(userIds.length) / 8);
-        // Use rejection sampling to avoid modulo bias
+        const maxValue = Math.pow(256, bytesNeeded);
+        const threshold = maxValue - (maxValue % userIds.length);
+        // Use rejection sampling to avoid modulo bias (no fallback)
         let randomIndex;
         let attempts = 0;
-        const maxAttempts = 100; // Prevent infinite loop
         do {
             const randomBytesBuffer = randomBytes(bytesNeeded);
             randomIndex = 0;
@@ -99,13 +102,13 @@ export class RerollHandler {
                 randomIndex = (randomIndex << 8) | randomBytesBuffer[i];
             }
             attempts++;
-            if (attempts >= maxAttempts) {
-                // Fallback to simple modulo if rejection sampling takes too long
-                randomIndex = randomIndex % userIds.length;
-                break;
+            // For reasonable array sizes, this should succeed quickly
+            // Log warning if taking too many attempts (shouldn't happen)
+            if (attempts > 1000) {
+                throw new Error(`Rejection sampling failed after ${attempts} attempts - this should never happen`);
             }
-        } while (randomIndex > maxIndex);
-        // Ensure index is within bounds
+        } while (randomIndex >= threshold);
+        // Final index calculation
         randomIndex = randomIndex % userIds.length;
         return userIds[randomIndex];
     }

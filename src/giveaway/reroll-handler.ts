@@ -32,6 +32,11 @@ export class RerollHandler {
         throw new Error(`Giveaway not found: ${giveawayId}`);
       }
 
+      // Verify giveaway has ended
+      if (giveaway.status !== 'ended') {
+        throw new Error('Can only reroll winners from ended giveaways');
+      }
+
       // Get all winner records for this giveaway
       const winners = await this.winnerStateRepository.getWinners(giveawayId);
 
@@ -102,14 +107,13 @@ export class RerollHandler {
     }
 
     // Generate cryptographically secure random bytes
-    // We need enough bytes to represent the array length
-    const maxIndex = userIds.length - 1;
     const bytesNeeded = Math.ceil(Math.log2(userIds.length) / 8);
+    const maxValue = Math.pow(256, bytesNeeded);
+    const threshold = maxValue - (maxValue % userIds.length);
 
-    // Use rejection sampling to avoid modulo bias
+    // Use rejection sampling to avoid modulo bias (no fallback)
     let randomIndex: number;
     let attempts = 0;
-    const maxAttempts = 100; // Prevent infinite loop
 
     do {
       const randomBytesBuffer = randomBytes(bytesNeeded);
@@ -122,14 +126,14 @@ export class RerollHandler {
 
       attempts++;
 
-      if (attempts >= maxAttempts) {
-        // Fallback to simple modulo if rejection sampling takes too long
-        randomIndex = randomIndex % userIds.length;
-        break;
+      // For reasonable array sizes, this should succeed quickly
+      // Log warning if taking too many attempts (shouldn't happen)
+      if (attempts > 1000) {
+        throw new Error(`Rejection sampling failed after ${attempts} attempts - this should never happen`);
       }
-    } while (randomIndex > maxIndex);
+    } while (randomIndex >= threshold);
 
-    // Ensure index is within bounds
+    // Final index calculation
     randomIndex = randomIndex % userIds.length;
 
     return userIds[randomIndex];

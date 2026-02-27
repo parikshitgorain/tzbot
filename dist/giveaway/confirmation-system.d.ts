@@ -2,6 +2,7 @@ import { Client, User } from 'discord.js';
 import { WinnerStateRepository } from '../core/database/repositories/WinnerStateRepository.js';
 import { GiveawayRepository } from '../core/database/repositories/GiveawayRepository.js';
 import { ConfigManager } from './config-manager.js';
+import { type WinnerRecord } from '../types/models.js';
 /**
  * ConfirmationSystem orchestrates the winner confirmation workflow
  *
@@ -15,6 +16,7 @@ export declare class ConfirmationSystem {
     private rerollHandler;
     private messageListener;
     private client;
+    private confirmationLocks;
     constructor(winnerStateRepo: WinnerStateRepository, giveawayRepo: GiveawayRepository, _configManager: ConfigManager);
     /**
      * Initialize the confirmation system with Discord client
@@ -41,10 +43,18 @@ export declare class ConfirmationSystem {
      */
     private handleExpiry;
     /**
+     * Get winner state for validation
+     */
+    getWinnerState(giveawayId: string, userId: string): Promise<WinnerRecord | null>;
+    /**
      * Handle manual reroll command
      * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
      */
     manualReroll(giveawayId: string, userId: string, guildId: string): Promise<void>;
+    /**
+     * Send disqualification DM to a user
+     */
+    private sendDisqualificationDM;
     /**
      * Restore active confirmations on system startup
      * Requirements: 9.4, 10.4, 10.5
@@ -71,8 +81,12 @@ export declare class ConfirmationSystem {
      */
     private sendRerollAnnouncement;
     /**
-     * Announce giveaway complete (no eligible participants)
+     * Announce giveaway complete (no eligible participants remaining for reroll)
      */
     private announceGiveawayComplete;
+    /**
+     * Update the ended giveaway message with new winners after reroll
+     */
+    private updateEndedGiveawayMessage;
 }
 //# sourceMappingURL=confirmation-system.d.ts.map

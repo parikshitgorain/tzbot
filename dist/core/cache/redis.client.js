@@ -200,6 +200,33 @@ export class RedisClient {
         }
     }
     /**
+     * Set a value only if it doesn't exist (atomic operation)
+     * Returns true if the key was set, false if it already existed
+     */
+    async setnx(key, value, ttlSeconds) {
+        if (!this.client || !this.isConnected) {
+            // Return false when Redis is not connected (fail-safe)
+            return false;
+        }
+        try {
+            if (ttlSeconds) {
+                // Use SET with NX and EX options for atomic operation
+                const result = await this.client.set(key, value, 'EX', ttlSeconds, 'NX');
+                return result === 'OK';
+            }
+            else {
+                const result = await this.client.setnx(key, value);
+                return result === 1;
+            }
+        }
+        catch (error) {
+            logError('Redis SETNX operation failed', error, {
+                additionalContext: { key, ttlSeconds },
+            });
+            throw error;
+        }
+    }
+    /**
      * Delete a key from Redis
      */
     async del(key) {

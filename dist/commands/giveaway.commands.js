@@ -30,10 +30,10 @@ function createGiveawayCommand(_client, giveawayManager) {
         .setRequired(true)
         .setMaxLength(256))
         .addStringOption((option) => option
-        .setName('description')
-        .setDescription('Description of the giveaway')
+        .setName('prize')
+        .setDescription('Prize amount (e.g., 10$, $50, 10CAD) - max 5 characters')
         .setRequired(true)
-        .setMaxLength(1024))
+        .setMaxLength(5))
         .addIntegerOption((option) => option
         .setName('duration')
         .setDescription('Duration in minutes (1-10080 = 7 days max)')
@@ -46,6 +46,11 @@ function createGiveawayCommand(_client, giveawayManager) {
         .setRequired(true)
         .setMinValue(1)
         .setMaxValue(10))
+        .addStringOption((option) => option
+        .setName('description')
+        .setDescription('Description of the giveaway')
+        .setRequired(true)
+        .setMaxLength(1024))
         .addUserOption((option) => option
         .setName('hosted_by')
         .setDescription('User who is hosting this giveaway (optional)')
@@ -200,12 +205,15 @@ async function handleCreateGiveaway(interaction, giveawayManager) {
     const description = interaction.options.getString('description', true);
     const durationMinutes = interaction.options.getInteger('duration', true);
     const winnerCount = interaction.options.getInteger('winners', true);
+    const prize = interaction.options.getString('prize', true);
     const hostedByUser = interaction.options.getUser('hosted_by');
     const channel = interaction.options.getChannel('channel') || interaction.channel;
     const condition = interaction.options.getString('condition');
     const role1 = interaction.options.getRole('role1');
     const role2 = interaction.options.getRole('role2');
     const role3 = interaction.options.getRole('role3');
+    // Build display title with prize
+    const displayTitle = `${title} (${prize})`;
     if (!channel || !('send' in channel)) {
         await interaction.reply({
             content: '❌ Invalid channel selected. Please select a text channel.',
@@ -237,7 +245,7 @@ async function handleCreateGiveaway(interaction, giveawayManager) {
         const durationMs = durationMinutes * 60 * 1000;
         // Create giveaway
         const giveaway = await giveawayManager.createGiveaway({
-            title,
+            title: displayTitle,
             description,
             channelId: channel.id,
             guildId: interaction.guildId,
@@ -249,7 +257,8 @@ async function handleCreateGiveaway(interaction, giveawayManager) {
         });
         logger.info('Giveaway created via command', {
             giveawayId: giveaway.id,
-            title,
+            title: displayTitle,
+            prize,
             channelId: channel.id,
             moderator: interaction.user.username,
             moderatorId: interaction.user.id,
@@ -297,6 +306,14 @@ async function handleCreateGiveaway(interaction, giveawayManager) {
  */
 async function handleCancelGiveaway(interaction, giveawayManager) {
     const giveawayId = interaction.options.getString('giveaway_id', true);
+    // Validate giveaway ID format
+    if (!validateGiveawayId(giveawayId)) {
+        await interaction.reply({
+            content: '❌ Invalid giveaway ID format. Expected format: GW-XX-XXXXXXXXXXXXX',
+            ephemeral: true,
+        });
+        return;
+    }
     try {
         await interaction.deferReply({ ephemeral: true });
         // Cancel the giveaway
@@ -323,6 +340,13 @@ async function handleCancelGiveaway(interaction, giveawayManager) {
             await interaction.reply({ content: errorMessage, ephemeral: true });
         }
     }
+}
+/**
+ * Validate giveaway ID format
+ */
+function validateGiveawayId(id) {
+    // Format: GW-XX-XXXXXXXXXXXXX (GW- prefix, 2 digits, dash, 13 digits)
+    return /^GW-\d{2}-\d{13}$/.test(id);
 }
 /**
  * Handle /giveaway list subcommand
@@ -390,6 +414,14 @@ async function handleListGiveaways(interaction, giveawayManager) {
 async function handleRerollWinner(interaction, giveawayManager) {
     const giveawayId = interaction.options.getString('giveaway_id', true);
     const winner = interaction.options.getUser('winner', true);
+    // Validate giveaway ID format
+    if (!validateGiveawayId(giveawayId)) {
+        await interaction.reply({
+            content: '❌ Invalid giveaway ID format. Expected format: GW-XX-XXXXXXXXXXXXX',
+            ephemeral: true,
+        });
+        return;
+    }
     if (!interaction.guildId) {
         await interaction.reply({
             content: '❌ This command can only be used in a server.',

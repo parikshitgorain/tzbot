@@ -34,12 +34,14 @@ export class TimerManager {
         const now = Date.now();
         const elapsed = now - startTime.getTime();
         const timerRefs = {};
+        let hasActiveTimers = false;
         // Schedule reminder timer if not yet elapsed
         if (elapsed < this.REMINDER_DELAY_MS) {
             const reminderDelay = this.REMINDER_DELAY_MS - elapsed;
             timerRefs.reminderTimer = setTimeout(() => {
                 this.handleReminderCallback(giveawayId, userId);
             }, reminderDelay);
+            hasActiveTimers = true;
         }
         // Schedule expiry timer if not yet elapsed
         if (elapsed < this.EXPIRY_DELAY_MS) {
@@ -47,15 +49,20 @@ export class TimerManager {
             timerRefs.expiryTimer = setTimeout(() => {
                 this.handleExpiryCallback(giveawayId, userId);
             }, expiryDelay);
+            hasActiveTimers = true;
         }
         else {
             // Timer already expired - trigger immediately
             setImmediate(() => {
                 this.handleExpiryCallback(giveawayId, userId);
             });
+            // Don't store timer refs since expiry will clean up immediately
+            return;
         }
-        // Store timer references
-        this.timers.set(key, timerRefs);
+        // Only store timer references if we have active timers
+        if (hasActiveTimers) {
+            this.timers.set(key, timerRefs);
+        }
     }
     /**
      * Stop all timers for a winner
