@@ -195,11 +195,11 @@ describe('validateConfig()', () => {
 
   describe('enum validations', () => {
     it('accepts valid aiProvider values', () => {
-      const cfg1 = { ...validConfig, aiProvider: 'local' };
+      const cfg1 = { ...validConfig, aiProvider: 'ollama' };
       const cfg2 = { ...validConfig, aiProvider: 'openai' };
       const cfg3 = { ...validConfig, aiProvider: 'anthropic' };
       
-      expect(validateConfig(cfg1).aiProvider).toBe('local');
+      expect(validateConfig(cfg1).aiProvider).toBe('ollama');
       expect(validateConfig(cfg2).aiProvider).toBe('openai');
       expect(validateConfig(cfg3).aiProvider).toBe('anthropic');
     });
