@@ -52,6 +52,8 @@ export default defineConfig({
         'src/managers/**',
         'src/commands/**',
         'src/webhooks/**',
+        // AI modules - external service integrations requiring live connections
+        'src/ai/**',
         'src/giveaway/confirmation-system.ts',
         'src/giveaway/message-listener.ts',
         'src/giveaway/reroll-handler.ts',
