@@ -4,11 +4,14 @@ on:
   push:
     branches:
       - Development
-      - development
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/BRANCHING_STRATEGY.md'
+      - '.github/DEPLOYMENT_GUIDE.md'
   pull_request:
     branches:
       - Development
-      - development
 
 permissions:
   contents: write
@@ -18,8 +21,8 @@ env:
   NODE_VERSION: '20'
   
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: false
+  group: ci-development-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
 
 jobs:
   # ============================================================================
