@@ -160,10 +160,24 @@ jobs:
     timeout-minutes: 15
     
     steps:
+      - name: Determine checkout ref
+        id: ref
+        run: |
+          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            echo "ref=release" >> $GITHUB_OUTPUT
+            echo "Using release branch for repository_dispatch"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "ref=${{ github.ref }}" >> $GITHUB_OUTPUT
+            echo "Using tag: ${{ github.ref }}"
+          else
+            echo "ref=release" >> $GITHUB_OUTPUT
+            echo "Using release branch"
+          fi
+      
       - name: Checkout release
         uses: actions/checkout@v4
         with:
-          ref: release
+          ref: ${{ steps.ref.outputs.ref }}
       
       - name: Debug - List files
         run: |
