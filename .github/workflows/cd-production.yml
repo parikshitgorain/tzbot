@@ -197,9 +197,27 @@ jobs:
       
       - name: Build application
         run: |
-          echo "🔨 Building application..."
-          npm run build
-          echo "✅ Build completed"
+          echo "🔨 Checking build status..."
+          
+          if [ -d "dist" ] && [ -f "dist/index.js" ]; then
+            echo "✅ Pre-built dist directory found (clean release branch)"
+            echo "📂 Dist contents:"
+            ls -lh dist/ | head -10
+            DIST_SIZE=$(du -sh dist | cut -f1)
+            echo "✅ Build verified (size: $DIST_SIZE)"
+          else
+            echo "📦 No pre-built dist found, building from source..."
+            echo "Node version: $(node --version)"
+            echo "NPM version: $(npm --version)"
+            echo "TypeScript version: $(npx tsc --version)"
+            
+            if npm run build; then
+              echo "✅ Build completed successfully"
+            else
+              echo "❌ Build failed"
+              exit 1
+            fi
+          fi
       
       - name: Verify build output
         run: |
