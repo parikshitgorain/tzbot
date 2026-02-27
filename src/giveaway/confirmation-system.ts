@@ -480,7 +480,21 @@ export class ConfirmationSystem {
 
     const channel = await this.client.channels.fetch(channelId);
     if (channel && 'send' in channel) {
-      await channel.send({ content: winnerMentions, embeds: [embed] });
+      const message = await channel.send({ content: winnerMentions, embeds: [embed] });
+      
+      // Auto-delete this message after 5 minutes (300000ms)
+      setTimeout(async () => {
+        try {
+          await message.delete();
+          logger.info('Auto-deleted winner announcement message', { giveawayId, messageId: message.id });
+        } catch (error) {
+          logger.debug('Failed to auto-delete winner announcement (may already be deleted)', {
+            giveawayId,
+            messageId: message.id,
+            error: (error as Error).message,
+          });
+        }
+      }, 300000); // 5 minutes
     }
 
     // Rate limit: 1 second delay before sending DMs
@@ -549,7 +563,22 @@ export class ConfirmationSystem {
 
     const channel = await this.client.channels.fetch(giveaway.channelId);
     if (channel && 'send' in channel) {
-      await channel.send({ content: `<@${userId}>`, embeds: [embed] });
+      const message = await channel.send({ content: `<@${userId}>`, embeds: [embed] });
+      
+      // Auto-delete this message after 5 minutes (300000ms)
+      setTimeout(async () => {
+        try {
+          await message.delete();
+          logger.info('Auto-deleted confirmation message', { giveawayId, userId, messageId: message.id });
+        } catch (error) {
+          logger.debug('Failed to auto-delete confirmation message (may already be deleted)', {
+            giveawayId,
+            userId,
+            messageId: message.id,
+            error: (error as Error).message,
+          });
+        }
+      }, 300000); // 5 minutes
     }
 
     // Rate limit: 1 second delay before sending DM
@@ -608,7 +637,22 @@ export class ConfirmationSystem {
 
     const channel = await this.client.channels.fetch(giveaway.channelId);
     if (channel && 'send' in channel) {
-      await channel.send({ content: `<@${userId}>`, embeds: [embed] });
+      const message = await channel.send({ content: `<@${userId}>`, embeds: [embed] });
+      
+      // Auto-delete this message after 5 minutes (300000ms)
+      setTimeout(async () => {
+        try {
+          await message.delete();
+          logger.info('Auto-deleted reminder message', { giveawayId, userId, messageId: message.id });
+        } catch (error) {
+          logger.debug('Failed to auto-delete reminder message (may already be deleted)', {
+            giveawayId,
+            userId,
+            messageId: message.id,
+            error: (error as Error).message,
+          });
+        }
+      }, 300000); // 5 minutes
     }
 
     // Rate limit: 1 second delay before sending DM
@@ -695,7 +739,22 @@ export class ConfirmationSystem {
 
     const channel = await this.client.channels.fetch(giveaway.channelId);
     if (channel && 'send' in channel) {
-      await channel.send({ content: `<@${newWinnerId}>`, embeds: [embed] });
+      const message = await channel.send({ content: `<@${newWinnerId}>`, embeds: [embed] });
+      
+      // Auto-delete this message after 5 minutes (300000ms)
+      setTimeout(async () => {
+        try {
+          await message.delete();
+          logger.info('Auto-deleted reroll announcement', { giveawayId, newWinnerId, messageId: message.id });
+        } catch (error) {
+          logger.debug('Failed to auto-delete reroll announcement (may already be deleted)', {
+            giveawayId,
+            newWinnerId,
+            messageId: message.id,
+            error: (error as Error).message,
+          });
+        }
+      }, 300000); // 5 minutes
     }
 
     // Rate limit: 1 second delay before sending DM

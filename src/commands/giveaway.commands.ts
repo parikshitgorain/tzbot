@@ -52,10 +52,10 @@ function createGiveawayCommand(
         )
         .addStringOption((option) =>
           option
-            .setName('description')
-            .setDescription('Description of the giveaway')
+            .setName('prize')
+            .setDescription('Prize amount (e.g., 10$, $50, 10CAD) - max 5 characters')
             .setRequired(true)
-            .setMaxLength(1024),
+            .setMaxLength(5),
         )
         .addIntegerOption((option) =>
           option
@@ -75,10 +75,10 @@ function createGiveawayCommand(
         )
         .addStringOption((option) =>
           option
-            .setName('prize')
-            .setDescription('Prize amount (e.g., 10$, $50, 10CAD) - max 5 characters')
+            .setName('description')
+            .setDescription('Description of the giveaway')
             .setRequired(true)
-            .setMaxLength(5),
+            .setMaxLength(1024),
         )
         .addUserOption((option) =>
           option

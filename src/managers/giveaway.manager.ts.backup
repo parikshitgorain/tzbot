@@ -1,4 +1,4 @@
-﻿﻿/**
+﻿/**
  * @file giveaway.manager.ts
  * @description Giveaway manager for creating and managing role-gated giveaways
  * @module managers
@@ -102,9 +102,8 @@ export class GiveawayManager {
       const now = new Date();
       const endsAt = new Date(now.getTime() + options.durationMs);
 
-      // Create giveaway embed with the generated ID
+      // Create giveaway embed
       const embed = this.createGiveawayEmbed(
-        giveawayId,
         options.title,
         options.description,
         endsAt,
@@ -113,14 +112,14 @@ export class GiveawayManager {
         options.hostedBy,
       );
 
-      // Create entry button - Design 6
+      // Create entry button - clean and simple
       const enterButton = new ButtonBuilder()
         .setCustomId(`giveaway_enter_${giveawayId}`)
         .setLabel('Enter')
         .setStyle(ButtonStyle.Success)
         .setEmoji('🎉');
 
-      // Create view participants button - Design 6
+      // Create view participants button - clean and simple
       const viewButton = new ButtonBuilder()
         .setCustomId(`giveaway_view_${giveawayId}`)
         .setLabel('Participants')
@@ -209,19 +208,19 @@ export class GiveawayManager {
       const giveaway = await this.giveawayRepository.get(giveawayId);
 
       if (!giveaway) {
-        await this.queueResponse(interaction, '❌ **Giveaway Not Found**\nThis giveaway no longer exists.');
+        await this.queueResponse(interaction, '❌ This giveaway no longer exists.');
         return;
       }
 
       // Check if giveaway is still active and not expired
       if (giveaway.status !== 'active') {
-        await this.queueResponse(interaction, '❌ **Giveaway Ended**\nThis giveaway has already ended.');
+        await this.queueResponse(interaction, '❌ This giveaway has ended.');
         return;
       }
 
       // Check if giveaway has expired (even if status is still 'active')
       if (giveaway.endsAt.getTime() <= Date.now()) {
-        await this.queueResponse(interaction, '❌ **Giveaway Ended**\nThis giveaway has already ended.');
+        await this.queueResponse(interaction, '❌ This giveaway has ended.');
         // Trigger end process if not already ended
         void this.endGiveaway(giveaway.id, guildId);
         return;
@@ -253,7 +252,7 @@ export class GiveawayManager {
         
         if (!wasSet) {
           // Entry already exists
-          await this.queueResponse(interaction, '✅ **Already Entered**\nYou\'re already participating in this giveaway. Good luck!');
+          await this.queueResponse(interaction, '✅ Already entered!');
           return;
         }
         
@@ -284,7 +283,7 @@ export class GiveawayManager {
         void this.updateGiveawayMessage(giveaway, entryCount);
 
         // Queue the response (1 second delay between responses)
-        await this.queueResponse(interaction, '🎉 **Entry Confirmed**\nYou\'re now entered in the giveaway. Good luck!');
+        await this.queueResponse(interaction, '🎉 Entered!');
 
         logger.info('Giveaway entry recorded', {
           giveawayId,
@@ -306,7 +305,7 @@ export class GiveawayManager {
         // Check database for duplicate
         const hasEntry = await this.giveawayRepository.hasEntry(giveawayId, interaction.user.id);
         if (hasEntry) {
-          await this.queueResponse(interaction, '✅ **Already Entered**\nYou\'re already participating in this giveaway. Good luck!');
+          await this.queueResponse(interaction, '✅ Already entered!');
           return;
         }
         
@@ -314,7 +313,7 @@ export class GiveawayManager {
         const entries = await this.giveawayRepository.getEntries(giveawayId);
         void this.updateGiveawayMessage(giveaway, entries.length);
         
-        await this.queueResponse(interaction, '🎉 **Entry Confirmed**\nYou\'re now entered in the giveaway. Good luck!');
+        await this.queueResponse(interaction, '🎉 Entered!');
       }
     } catch (error) {
       logError('Failed to handle giveaway entry', error as Error, {
@@ -322,7 +321,7 @@ export class GiveawayManager {
         customId: interaction.customId,
       });
 
-      await this.queueResponse(interaction, '❌ **Error Occurred**\nSomething went wrong. Please try again.').catch(() => {});
+      await this.queueResponse(interaction, '❌ Error. Please try again.').catch(() => {});
     }
   }
 
@@ -339,7 +338,7 @@ export class GiveawayManager {
       
       try {
         await interaction.editReply({
-          content: '❌ **Server Busy**\nThe server is currently processing many requests. Please try again in a moment.',
+          content: '❌ Server is busy. Please try again in a moment.',
         });
       } catch (error) {
         logger.error('Failed to send queue full message', { error });
@@ -416,7 +415,7 @@ export class GiveawayManager {
 
       if (!giveaway) {
         await interaction.editReply({
-          content: '❌ **Giveaway Not Found**\nThis giveaway no longer exists.',
+          content: '❌ This giveaway no longer exists.',
         });
         return;
       }
@@ -452,7 +451,7 @@ export class GiveawayManager {
 
       if (entries.length === 0) {
         await interaction.editReply({
-          content: '📋 **No Participants Yet**\nBe the first to enter this giveaway!',
+          content: '📋 No participants yet. Be the first to enter!',
         });
         return;
       }
@@ -535,11 +534,11 @@ export class GiveawayManager {
       // Check if we can still reply
       if (interaction.deferred) {
         await interaction.editReply({
-          content: '❌ **Error Loading Participants**\nAn error occurred while loading participants. Please try again.',
+          content: '❌ An error occurred while loading participants. Please try again.',
         });
       } else if (!interaction.replied) {
         await interaction.reply({
-          content: '❌ **Error Loading Participants**\nAn error occurred while loading participants. Please try again.',
+          content: '❌ An error occurred while loading participants. Please try again.',
           ephemeral: true,
         });
       }
@@ -722,37 +721,41 @@ export class GiveawayManager {
 
       const embed = EmbedBuilder.from(message.embeds[0]);
 
-      // Calculate progress percentage
-      const totalDuration = giveaway.endsAt.getTime() - giveaway.createdAt.getTime();
-      const elapsed = totalDuration - timeRemainingMs;
-      const progressPercentage = Math.min(100, Math.max(0, Math.floor((elapsed / totalDuration) * 100)));
+      // Format countdown
+      const totalSeconds = Math.floor(timeRemainingMs / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
 
-      // Create progress bar
-      const progressBar = this.createProgressBar(progressPercentage);
-
-      // Format time remaining
-      const timeDisplay = this.formatTimeRemaining(timeRemainingMs);
-
-      // Format prize
-      const prizeDisplay = this.formatPrize(giveaway.title, giveaway.winnerCount);
-
-      // Build updated description
-      let embedDescription = `${prizeDisplay}\n\n`;
-      embedDescription += `${giveaway.description}\n\n`;
-      embedDescription += `${progressBar}\n`;
-      embedDescription += `Ends in ${timeDisplay}\n\n`;
-      embedDescription += `👥 ${entryCount} ${entryCount === 1 ? 'Participant' : 'Participants'}\n`;
-      embedDescription += `🎁 ${giveaway.winnerCount} ${giveaway.winnerCount === 1 ? 'Winner' : 'Winners'}\n\n`;
-
-      if (giveaway.hostedBy) {
-        embedDescription += `🎤 Hosted by <@${giveaway.hostedBy}>\n\n`;
+      let countdown = '';
+      if (hours > 0) {
+        countdown = `${hours}h ${minutes}m ${seconds}s`;
+      } else if (minutes > 0) {
+        countdown = `${minutes}m ${seconds}s`;
+      } else {
+        countdown = `${seconds}s`;
       }
 
-      embedDescription += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      embedDescription += `🆔 Giveaway ID: \`${giveaway.id}\`\n`;
-      embedDescription += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+      // Update description with countdown
+      const timestamp = Math.floor(giveaway.endsAt.getTime() / 1000);
+      let embedDescription = `${giveaway.description}\n\n`;
+      embedDescription += `✨ **Click the button below to enter!**\n\n`;
+      embedDescription += `⏰ **Ends:** in ${countdown} (<t:${timestamp}:f>)\n`;
+
+      if (giveaway.hostedBy) {
+        embedDescription += `🎤 **Hosted by** <@${giveaway.hostedBy}>\n`;
+      }
 
       embed.setDescription(embedDescription);
+
+      // Update entries field
+      const fields = embed.data.fields || [];
+      const entriesIndex = fields.findIndex(f => f.name === 'Entries');
+      if (entriesIndex !== -1) {
+        fields[entriesIndex].value = `👥 ${entryCount}`;
+        embed.setFields(fields);
+      }
+
       await message.edit({ embeds: [embed] });
     } catch (error) {
       // If message not found, stop the countdown
@@ -1038,28 +1041,23 @@ export class GiveawayManager {
       const winnerMentions = winners.map((id) => `<@${id}>`).join(', ');
 
       // Build announcement description
-      let description = '🎊 **Congratulations to the winners!**\n\n';
-      description += '**🏆 Winners:**\n';
+      let description = `🎊 Congratulations to the winners!\n\n**🏆 Winners:**\n`;
       
       // List each winner on a separate line
-      winners.forEach((id, index) => {
-        description += `${index + 1}. <@${id}>\n`;
+      winners.forEach((id) => {
+        description += `<@${id}>\n`;
       });
 
-      description += '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-
       if (giveaway.hostedBy) {
-        description += `**🎤 Hosted by:** <@${giveaway.hostedBy}>\n`;
+        description += `\n**🎤 Hosted by:** <@${giveaway.hostedBy}>`;
       }
 
-      description += `**🎁 Prize:** ${giveaway.title}`;
-
       const embed = new EmbedBuilder()
-        .setTitle('🏆 WINNER ANNOUNCED')
+        .setTitle(`🎉 ${giveaway.title} - Winners Announced!`)
         .setDescription(description)
-        .setColor(0xFFD700) // Gold for winner announcement
+        .setColor(0x00ff00)
         .setTimestamp()
-        .setFooter({ text: '🎉 Congratulations to all winners!' });
+        .setFooter({ text: '🎁 Congratulations to all winners!' });
 
       // Add reroll commands as separate fields (easier to copy on mobile)
       if (winners.length > 0) {
@@ -1106,34 +1104,15 @@ export class GiveawayManager {
         try {
           const member = await this.discordClient.getMember(guildId, winnerId);
           if (member) {
-            const winnerEmbed = new EmbedBuilder()
-              .setTitle('🎉 YOU WON!')
-              .setDescription(
-                `**Congratulations!** You won the giveaway:\n\n` +
-                `**🏆 Prize:** ${giveaway.title}\n\n` +
-                `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
-              )
-              .setColor(0xFFD700)
-              .setTimestamp()
-              .setFooter({ text: '🎁 Check the giveaway channel for details' });
+            let dmMessage = `<@${winnerId}> 🎉 You Won!\n\nCongratulations! You won the giveaway: **${giveaway.title}**`;
 
             if (giveaway.condition) {
-              winnerEmbed.addFields({
-                name: '📋 Next Steps',
-                value: giveaway.condition,
-                inline: false,
-              });
+              dmMessage += `\n\n**Next Steps:**\n${giveaway.condition}`;
+            } else {
+              dmMessage += '\n\nCheck the giveaway channel for more details!';
             }
 
-            if (giveaway.hostedBy) {
-              winnerEmbed.addFields({
-                name: '🎤 Hosted By',
-                value: `<@${giveaway.hostedBy}>`,
-                inline: false,
-              });
-            }
-
-            await member.send({ embeds: [winnerEmbed] });
+            await member.send(dmMessage);
           }
         } catch (error) {
           logger.debug('Failed to send DM to winner', {
@@ -1158,20 +1137,19 @@ export class GiveawayManager {
   private async announceNoWinners(giveaway: Giveaway): Promise<void> {
     try {
       const embed = new EmbedBuilder()
-        .setTitle('🏁 GIVEAWAY ENDED')
+        .setTitle(`🎉 ${giveaway.title} - Ended`)
         .setDescription(
-          '**No Winner Selected**\n\n' +
-          'This giveaway ended with no participants.\n\n' +
-          '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
+          '❌ **No Winner**\n\n' +
+          'This giveaway ended with no entries.\n\n' +
           'Better luck next time!'
         )
-        .setColor(0x808080) // Gray for ended
+        .setColor(0xff0000)
         .setTimestamp()
         .setFooter({ text: '🎁 No participants entered' });
 
       if (giveaway.hostedBy) {
         embed.addFields({
-          name: '🎤 Hosted By',
+          name: '🎤 Hosted by',
           value: `<@${giveaway.hostedBy}>`,
           inline: false,
         });
@@ -1195,105 +1173,57 @@ export class GiveawayManager {
    * Uses Discord's native timestamp feature - updates automatically on client side
    */
   private createGiveawayEmbed(
-        giveawayId: string,
-        title: string,
-        description: string,
-        endsAt: Date,
-        winnerCount: number,
-        requiredRoles: string[],
-        hostedBy?: string,
-      ): EmbedBuilder {
-        const now = Date.now();
-        const timeRemaining = endsAt.getTime() - now;
-        const progressPercentage = 0; // Just started
+      title: string,
+      description: string,
+      endsAt: Date,
+      winnerCount: number,
+      requiredRoles: string[],
+      hostedBy?: string,
+    ): EmbedBuilder {
+      const timestamp = Math.floor(endsAt.getTime() / 1000);
+      
+      // Clean, professional description with dynamic countdown
+      let embedDescription = `${description}\n\n`;
+      embedDescription += `✨ **Click the button below to enter!**\n\n`;
+      
+      // Add countdown that updates automatically
+      embedDescription += `⏰ **Ends:** <t:${timestamp}:R> (<t:${timestamp}:f>)\n`;
 
-        // Create progress bar (10 blocks with ▰▱)
-        const progressBar = this.createProgressBar(progressPercentage);
-
-        // Format time remaining
-        const timeDisplay = this.formatTimeRemaining(timeRemaining);
-
-        // Format prize display
-        const prizeDisplay = this.formatPrize(title, winnerCount);
-
-        // Build description (NO "Description" label)
-        let embedDescription = `${prizeDisplay}\n\n`;
-        embedDescription += `${description}\n\n`;
-        embedDescription += `${progressBar}\n`;
-        embedDescription += `Ends in ${timeDisplay}\n\n`;
-        embedDescription += `👥 0 Participants\n`;
-        embedDescription += `🎁 ${winnerCount} ${winnerCount === 1 ? 'Winner' : 'Winners'}\n\n`;
-
-        if (hostedBy) {
-          embedDescription += `🎤 Hosted by <@${hostedBy}>\n\n`;
-        }
-
-        embedDescription += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-        embedDescription += `🆔 Giveaway ID: \`${giveawayId}\`\n`;
-        embedDescription += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
-
-        const embed = new EmbedBuilder()
-          .setTitle('💰 GIVEAWAY TIME 💰')
-          .setDescription(embedDescription)
-          .setColor(0x2ECC71) // Money green
-          .setTimestamp();
-
-        // Add required roles if present
-        if (requiredRoles.length > 0) {
-          embed.addFields({
-            name: '🔒 Required Roles',
-            value: requiredRoles.map((id) => `<@&${id}>`).join(', '),
-            inline: false,
-          });
-        }
-
-        return embed;
+      // Add hosted by in description if present
+      if (hostedBy) {
+        embedDescription += `🎤 **Hosted by** <@${hostedBy}>\n`;
       }
 
-    /**
-     * Create progress bar with ▰▱ symbols
-     */
-    private createProgressBar(percentage: number): string {
-      const blocks = 10;
-      const filled = Math.floor((percentage / 100) * blocks);
-      const empty = blocks - filled;
-      return '▰'.repeat(filled) + '▱'.repeat(empty) + ` ${percentage}%`;
-    }
+      const embed = new EmbedBuilder()
+        .setTitle(`🎉 ${title}`)
+        .setDescription(embedDescription)
+        .setColor(0x5865f2) // Discord blurple
+        .addFields(
+          { 
+            name: 'Winners', 
+            value: `🏆 ${winnerCount}`, 
+            inline: true 
+          },
+          { 
+            name: 'Entries', 
+            value: `👥 0`, 
+            inline: true 
+          },
+        )
+        .setTimestamp()
+        .setFooter({ text: '🎁 Good luck to all participants!' });
 
-    /**
-     * Format prize display
-     */
-    private formatPrize(title: string, winnerCount: number): string {
-      // Check if title contains a prize amount (e.g., "10$", "$50", "10CAD")
-      const prizeMatch = title.match(/(\d+)\s*(\$|CAD|USD|EUR|GBP)/i);
-
-      if (prizeMatch && winnerCount > 1) {
-        const amount = prizeMatch[1];
-        const symbol = prizeMatch[2];
-        const total = parseInt(amount) * winnerCount;
-        return `💵 ${amount}${symbol} x ${winnerCount} (${total}${symbol} total)`;
-      } else if (prizeMatch) {
-        return `💵 ${prizeMatch[1]}${prizeMatch[2]}`;
+      // Add required roles if present
+      if (requiredRoles.length > 0) {
+        embed.addFields({
+          name: 'Required Roles',
+          value: `🔒 ${requiredRoles.map((id) => `<@&${id}>`).join(', ')}`,
+          inline: false,
+        });
       }
 
-      return `🏆 ${title}`;
+      return embed;
     }
-
-    /**
-     * Format time remaining
-     */
-    private formatTimeRemaining(ms: number): string {
-      const seconds = Math.floor(ms / 1000);
-      const minutes = Math.floor(seconds / 60);
-      const hours = Math.floor(minutes / 60);
-      const days = Math.floor(hours / 24);
-
-      if (days > 0) return `${days}d ${hours % 24}h`;
-      if (hours > 0) return `${hours}h ${minutes % 60}m`;
-      if (minutes > 0) return `${minutes}m`;
-      return `${seconds}s`;
-    }
-
 
 
   /**
@@ -1348,38 +1278,31 @@ export class GiveawayManager {
 
       const endTimestamp = Math.floor(giveaway.endsAt.getTime() / 1000);
 
-      // Format prize display
-      const prizeDisplay = this.formatPrize(giveaway.title, giveaway.winnerCount);
-
-      // Clean professional ended message
-      let embedDescription = `${prizeDisplay}\n\n`;
-      embedDescription += `${giveaway.description}\n\n`;
-      embedDescription += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-      embedDescription += `⏰ **Ended:** <t:${endTimestamp}:R>\n`;
-      embedDescription += `📅 **End Date:** <t:${endTimestamp}:f>\n`;
+      // Clean ended message description with "ended X ago" timestamp
+      let embedDescription = `${giveaway.description}\n\n`;
+      embedDescription += `⏰ **Ended:** <t:${endTimestamp}:R> (<t:${endTimestamp}:f>)\n`;
       
       if (giveaway.hostedBy) {
-        embedDescription += `🎤 **Hosted By:** <@${giveaway.hostedBy}>\n`;
+        embedDescription += `🎤 **Hosted by** <@${giveaway.hostedBy}>\n`;
       }
 
       const embed = new EmbedBuilder()
-        .setTitle('🏁 GIVEAWAY ENDED')
+        .setTitle(`🎉 ${giveaway.title} - Ended`)
         .setDescription(embedDescription)
         .setColor(0x808080) // Gray for ended
         .setTimestamp()
-        .setFooter({ text: '🎁 This giveaway has ended' });
+        .setFooter({ text: '🎁 Giveaway has ended' });
 
       if (winners.length > 0) {
-        const winnersList = winners.map((id, index) => `${index + 1}. <@${id}>`).join('\n');
         embed.addFields({
           name: '🏆 Winners',
-          value: winnersList,
+          value: winners.map((id) => `<@${id}>`).join('\n'),
           inline: false,
         });
       } else {
         embed.addFields({
-          name: '❌ No Winners',
-          value: 'No participants entered',
+          name: '❌ Winners',
+          value: 'No entries',
           inline: false,
         });
       }
@@ -1569,17 +1492,15 @@ export class GiveawayManager {
         const disqualifiedMember = await this.discordClient.getMember(guildId, oldWinnerId);
         if (disqualifiedMember) {
           const disqualifyEmbed = new EmbedBuilder()
-            .setTitle('❌ WINNER REROLLED')
+            .setTitle('❌ Disqualified - Rerolled by Moderator')
             .setDescription(
-              `Your win for **${giveaway.title}** has been rerolled by a moderator.\n\n` +
-              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-              `**Reason:** Manually rerolled by server staff\n\n` +
-              `**Result:** Your win has been given to another participant\n\n` +
-              `Better luck next time!`
+              `<@${oldWinnerId}> Your win for **${giveaway.title}** has been rerolled by a moderator.\n\n` +
+              '**Reason:** Manually rerolled by server staff.\n\n' +
+              '**Result:** Your win has been given to another participant.\n\n' +
+              'Better luck next time!',
             )
-            .setColor(0xff6b6b)
-            .setTimestamp()
-            .setFooter({ text: '🎁 Giveaway System' });
+            .setColor(0xff0000)
+            .setTimestamp();
 
           await disqualifiedMember.send({ embeds: [disqualifyEmbed] });
           logger.info('Disqualification DM sent to rerolled winner', { 
@@ -1599,34 +1520,15 @@ export class GiveawayManager {
       try {
         const member = await this.discordClient.getMember(guildId, newWinnerId);
         if (member) {
-          const winnerEmbed = new EmbedBuilder()
-            .setTitle('🎉 YOU WON!')
-            .setDescription(
-              `**Congratulations!** You won the giveaway:\n\n` +
-              `**🏆 Prize:** ${giveaway.title}\n\n` +
-              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
-            )
-            .setColor(0xFFD700)
-            .setTimestamp()
-            .setFooter({ text: '🎁 Check the giveaway channel for details' });
+          let dmMessage = `<@${newWinnerId}> 🎉 You Won!\n\nCongratulations! You won the giveaway: **${giveaway.title}**`;
 
           if (giveaway.condition) {
-            winnerEmbed.addFields({
-              name: '📋 Next Steps',
-              value: giveaway.condition,
-              inline: false,
-            });
+            dmMessage += `\n\n**Next Steps:**\n${giveaway.condition}`;
+          } else {
+            dmMessage += '\n\nCheck the giveaway channel for more details!';
           }
 
-          if (giveaway.hostedBy) {
-            winnerEmbed.addFields({
-              name: '🎤 Hosted By',
-              value: `<@${giveaway.hostedBy}>`,
-              inline: false,
-            });
-          }
-
-          await member.send({ embeds: [winnerEmbed] });
+          await member.send(dmMessage);
         }
       } catch (error) {
         logger.debug('Failed to send DM to new winner', {
@@ -1637,40 +1539,30 @@ export class GiveawayManager {
 
       // Announce reroll in channel
       const embed = new EmbedBuilder()
-        .setTitle('🔄 WINNER REROLLED')
+        .setTitle(`🔄 ${giveaway.title} - Winner Rerolled`)
         .setDescription(
-          '**A winner has been rerolled!**\n\n' +
-          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-          `**Previous Winner:** <@${oldWinnerId}>\n` +
-          `**Reason:** Did not respond in time\n\n` +
+          '🎲 A winner has been rerolled!\n\n' +
+          `<@${oldWinnerId}> did not respond in time.\n\n` +
           `**New Winner:** <@${newWinnerId}>\n\n` +
-          `🎊 Congratulations to the new winner!`
+          '🎊 Congratulations to the new winner!',
         )
         .setColor(0xffa500)
         .setTimestamp()
         .setFooter({ text: '🎁 Winner rerolled by moderators' });
-
-      if (giveaway.hostedBy) {
-        embed.addFields({
-          name: '🎤 Hosted By',
-          value: `<@${giveaway.hostedBy}>`,
-          inline: false,
-        });
-      }
 
       try {
         const member = await this.discordClient.getMember(guildId, newWinnerId);
         if (member) {
           // Use @username format for better Discord auto-detection
           embed.addFields({
-            name: '🔄 Reroll Command',
+            name: 'Reroll Command',
             value: `\`gw.reroll ${giveawayId} @${member.user.username}\``,
             inline: false,
           });
         } else {
           // Fallback to user ID if member not found
           embed.addFields({
-            name: '🔄 Reroll Command',
+            name: 'Reroll Command',
             value: `\`gw.reroll ${giveawayId} <@${newWinnerId}>\``,
             inline: false,
           });
@@ -1678,7 +1570,7 @@ export class GiveawayManager {
       } catch {
         // Fallback to user ID if fetch fails
         embed.addFields({
-          name: '🔄 Reroll Command',
+          name: 'Reroll Command',
           value: `\`gw.reroll ${giveawayId} <@${newWinnerId}>\``,
           inline: false,
         });
@@ -1723,20 +1615,15 @@ export class GiveawayManager {
       const message = await this.discordClient.getMessage(giveaway.channelId, giveaway.messageId);
 
       const embed = new EmbedBuilder()
-        .setTitle('❌ GIVEAWAY CANCELLED')
-        .setDescription(
-          `**${giveaway.title}**\n\n` +
-          `${giveaway.description}\n\n` +
-          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-          `This giveaway has been cancelled by moderators.`
-        )
-        .setColor(0xff6b6b)
+        .setTitle(`🎉 ${giveaway.title} - Cancelled`)
+        .setDescription('❌ This giveaway has been cancelled.')
+        .setColor(0xff0000)
         .setTimestamp()
-        .setFooter({ text: '🎁 Giveaway cancelled' });
+        .setFooter({ text: '🎁 Giveaway cancelled by moderators' });
 
       if (giveaway.hostedBy) {
         embed.addFields({
-          name: '🎤 Hosted By',
+          name: '🎤 Hosted by',
           value: `<@${giveaway.hostedBy}>`,
           inline: false,
         });

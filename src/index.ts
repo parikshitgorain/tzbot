@@ -44,7 +44,7 @@ import { createAnnouncementCommands } from '@/commands/announcement.commands.js'
 import type { Message, ButtonInteraction } from 'discord.js';
 import { EmbedBuilder } from 'discord.js';
 import type { NotificationEvent } from '@/types/models.js';
-import { EventType } from '@/types/models.js';
+import { EventType, WinnerStatus } from '@/types/models.js';
 
 /**
  * Batched spam notification data
@@ -1052,8 +1052,8 @@ class TZBotApplication {
       if (confirmationSystem) {
         const winnerState = await confirmationSystem.getWinnerState(giveaway.id, userId);
         
-        // Check if user is a current winner (not rerolled or disqualified)
-        if (!winnerState || winnerState.status === 'rerolled' || winnerState.status === 'disqualified') {
+        // Check if user is a current winner (not rerolled)
+        if (!winnerState || winnerState.status === WinnerStatus.REROLLED) {
           const reply = await message.reply('❌ This user is not a current winner of this giveaway.');
           setTimeout(() => {
             reply.delete().catch(() => {/* ignore */});
