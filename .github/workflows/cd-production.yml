@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches-ignore:
+      - '**'
   repository_dispatch:
     types: [deploy-release]
   workflow_dispatch:
