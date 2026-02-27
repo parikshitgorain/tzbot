@@ -118,6 +118,10 @@ export declare class GiveawayManager {
      */
     private selectWinners;
     /**
+     * Shuffle array using Fisher-Yates algorithm with CSPRNG
+     */
+    private shuffleArray;
+    /**
      * Generate cryptographically secure random integer in range [min, max)
      */
     private secureRandomInt;

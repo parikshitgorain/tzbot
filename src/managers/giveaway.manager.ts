@@ -925,21 +925,28 @@ export class GiveawayManager {
       return [];
     }
 
+    // EXTRA SAFETY: Shuffle the input array first to eliminate any ordering bias
+    const shuffled = this.shuffleArray([...userIds]);
+    
     // Log selection details for transparency
     logger.info('Starting winner selection with CSPRNG', {
-      totalParticipants: userIds.length,
+      totalParticipants: shuffled.length,
       winnersToSelect: count,
-      participants: userIds,
+      originalOrder: userIds,
+      shuffledOrder: shuffled,
     });
 
     const winners: string[] = [];
-    const available = [...userIds]; // Create a copy
+    const available = [...shuffled]; // Create a copy of shuffled array
     const selectionLog: Array<{ round: number; poolSize: number; randomIndex: number; winner: string }> = [];
 
     for (let i = 0; i < count && available.length > 0; i++) {
       // Generate cryptographically secure random index
       const randomIndex = this.secureRandomInt(0, available.length);
       const selectedWinner = available[randomIndex];
+      
+      // CRITICAL DEBUG: Log the actual random generation
+      logger.warn(`[DEBUG] Winner selection round ${i + 1}: poolSize=${available.length}, randomIndex=${randomIndex}, winner=${selectedWinner}, available=${JSON.stringify(available)}`);
       
       winners.push(selectedWinner);
       
@@ -956,13 +963,25 @@ export class GiveawayManager {
 
     // Log complete selection process
     logger.info('Winner selection completed', {
-      totalParticipants: userIds.length,
+      totalParticipants: shuffled.length,
       winnersSelected: winners.length,
       winners,
       selectionProcess: selectionLog,
     });
 
     return winners;
+  }
+
+  /**
+   * Shuffle array using Fisher-Yates algorithm with CSPRNG
+   */
+  private shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = this.secureRandomInt(0, i + 1);
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
   }
 
   /**
