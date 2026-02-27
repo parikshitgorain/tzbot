@@ -2,16 +2,9 @@ name: CI - Development Pipeline
 
 on:
   push:
-    branches:
-      - Development
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.github/BRANCHING_STRATEGY.md'
-      - '.github/DEPLOYMENT_GUIDE.md'
+    branches: [Development]
   pull_request:
-    branches:
-      - Development
+    branches: [Development]
 
 permissions:
   contents: write
@@ -21,7 +14,7 @@ env:
   NODE_VERSION: '20'
   
 concurrency:
-  group: ci-development-${{ github.ref }}-${{ github.event_name }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
