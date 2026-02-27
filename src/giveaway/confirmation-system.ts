@@ -247,6 +247,9 @@ export class ConfirmationSystem {
           oldWinners: giveaway.winners,
           newWinners: updatedWinners,
         });
+        
+        // Update the ended giveaway message with new winner
+        await this.updateEndedGiveawayMessage(giveaway, updatedWinners);
       }
 
       // Send reroll announcement (automatic - user didn't respond)
@@ -340,6 +343,9 @@ export class ConfirmationSystem {
           oldWinners: giveaway.winners,
           newWinners: updatedWinners,
         });
+        
+        // Update the ended giveaway message with new winner
+        await this.updateEndedGiveawayMessage(giveaway, updatedWinners);
       }
 
       // Step 7: Send DM to disqualified user
@@ -811,6 +817,79 @@ export class ConfirmationSystem {
     const channel = await this.client.channels.fetch(giveaway.channelId);
     if (channel && 'send' in channel) {
       await channel.send({ embeds: [embed] });
+    }
+  }
+
+  /**
+   * Update the ended giveaway message with new winners after reroll
+   */
+  private async updateEndedGiveawayMessage(
+    giveaway: { id: string; channelId: string; messageId: string; title: string; description: string; endsAt: Date; hostedBy?: string; winnerCount: number },
+    winners: string[],
+  ): Promise<void> {
+    if (!this.client) {
+      return;
+    }
+
+    try {
+      const channel = await this.client.channels.fetch(giveaway.channelId);
+      if (!channel || !('messages' in channel)) {
+        return;
+      }
+
+      const message = await channel.messages.fetch(giveaway.messageId);
+      const endTimestamp = Math.floor(giveaway.endsAt.getTime() / 1000);
+
+      // Format prize display
+      const prizeMatch = giveaway.title.match(/(\d+)\s*(\$|CAD|USD|EUR|GBP)/i);
+      let prizeDisplay = `🏆 ${giveaway.title}`;
+      
+      if (prizeMatch && giveaway.winnerCount > 1) {
+        const amount = prizeMatch[1];
+        const symbol = prizeMatch[2];
+        const total = parseInt(amount) * giveaway.winnerCount;
+        prizeDisplay = `💵 ${amount}${symbol} x ${giveaway.winnerCount} (${total}${symbol} total)`;
+      } else if (prizeMatch) {
+        prizeDisplay = `💵 ${prizeMatch[1]}${prizeMatch[2]}`;
+      }
+
+      // Build updated description
+      let embedDescription = `${prizeDisplay}\n\n`;
+      embedDescription += `${giveaway.description}\n\n`;
+      embedDescription += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      embedDescription += `⏰ **Ended:** <t:${endTimestamp}:R>\n`;
+      embedDescription += `📅 **End Date:** <t:${endTimestamp}:f>\n`;
+      
+      if (giveaway.hostedBy) {
+        embedDescription += `🎤 **Hosted By:** <@${giveaway.hostedBy}>\n`;
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle('🏁 GIVEAWAY ENDED')
+        .setDescription(embedDescription)
+        .setColor(0x808080) // Gray for ended
+        .setTimestamp()
+        .setFooter({ text: '🎁 This giveaway has ended' });
+
+      if (winners.length > 0) {
+        const winnersList = winners.map((id, index) => `${index + 1}. <@${id}>`).join('\n');
+        embed.addFields({
+          name: '🏆 Winners',
+          value: winnersList,
+          inline: false,
+        });
+      }
+
+      await message.edit({ embeds: [embed], components: [] });
+      logger.info('Updated ended giveaway message with new winners', {
+        giveawayId: giveaway.id,
+        winners,
+      });
+    } catch (error) {
+      logger.warn('Failed to update ended giveaway message', {
+        giveawayId: giveaway.id,
+        error: (error as Error).message,
+      });
     }
   }
 }
