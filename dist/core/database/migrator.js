@@ -1,10 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { readFile } from 'fs/promises';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { getPool } from './pool.js';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { EMBEDDED_MIGRATIONS } from './migrations-embedded.js';
 // Fallback logger
 const fallbackLogger = {
     info: (message, meta) => console.log(`[INFO] ${message}`, meta || ''),
@@ -23,53 +19,8 @@ try {
 catch {
     // Use fallback logger
 }
-/**
- * Available migrations in order
- */
-const MIGRATIONS = [
-    {
-        version: 1,
-        name: '001_initial_schema',
-        upPath: join(__dirname, 'schema', '001_initial_schema.sql'),
-        downPath: join(__dirname, 'schema', '001_initial_schema_down.sql'),
-    },
-    {
-        version: 2,
-        name: '002_offense_tracking',
-        upPath: join(__dirname, 'schema', '002_offense_tracking.sql'),
-        downPath: join(__dirname, 'schema', '002_offense_tracking_down.sql'),
-    },
-    {
-        version: 3,
-        name: '003_giveaway_enhancements',
-        upPath: join(__dirname, 'schema', '003_giveaway_enhancements.sql'),
-        downPath: join(__dirname, 'schema', '003_giveaway_enhancements_down.sql'),
-    },
-    {
-        version: 4,
-        name: '004_giveaway_winner_confirmation',
-        upPath: join(__dirname, 'schema', '004_giveaway_winner_confirmation.sql'),
-        downPath: join(__dirname, 'schema', '004_giveaway_winner_confirmation_down.sql'),
-    },
-    {
-        version: 5,
-        name: '005_add_guild_id_to_giveaways',
-        upPath: join(__dirname, 'schema', '005_add_guild_id_to_giveaways.sql'),
-        downPath: join(__dirname, 'schema', '005_add_guild_id_to_giveaways_down.sql'),
-    },
-    {
-        version: 6,
-        name: '006_add_hosted_by_to_giveaways',
-        upPath: join(__dirname, 'schema', '006_add_hosted_by_to_giveaways.sql'),
-        downPath: join(__dirname, 'schema', '006_add_hosted_by_to_giveaways_down.sql'),
-    },
-    {
-        version: 7,
-        name: '007_change_giveaway_id_to_varchar',
-        upPath: join(__dirname, 'schema', '007_change_giveaway_id_to_varchar.sql'),
-        downPath: join(__dirname, 'schema', '007_change_giveaway_id_to_varchar_down.sql'),
-    },
-];
+// Use embedded migrations (no file I/O needed)
+const MIGRATIONS = EMBEDDED_MIGRATIONS;
 /**
  * Ensure schema_migrations table exists
  */
@@ -112,9 +63,10 @@ async function applyMigration(migration) {
             version: migration.version,
             name: migration.name,
         });
-        // Read and execute migration SQL
-        const sql = await readFile(migration.upPath, 'utf-8');
-        await client.query(sql);
+        // Execute embedded migration SQL (no file I/O needed)
+        await client.query(migration.up);
+        // Record migration in schema_migrations table
+        await client.query('INSERT INTO schema_migrations (version, name) VALUES ($1, $2) ON CONFLICT (version) DO NOTHING', [migration.version, migration.name]);
         logger.info('Migration applied successfully', {
             version: migration.version,
             name: migration.name,
@@ -146,9 +98,10 @@ async function rollbackMigration(migration) {
             version: migration.version,
             name: migration.name,
         });
-        // Read and execute rollback SQL
-        const sql = await readFile(migration.downPath, 'utf-8');
-        await client.query(sql);
+        // Execute embedded rollback SQL (no file I/O needed)
+        await client.query(migration.down);
+        // Remove migration record
+        await client.query('DELETE FROM schema_migrations WHERE version = $1', [migration.version]);
         logger.info('Migration rolled back successfully', {
             version: migration.version,
             name: migration.name,

@@ -1,9 +1,4 @@
-export interface Migration {
-    version: number;
-    name: string;
-    upPath: string;
-    downPath: string;
-}
+import { type EmbeddedMigration } from './migrations-embedded.js';
 /**
  * Run all pending migrations
  * Automatically runs on startup per requirements
@@ -21,6 +16,6 @@ export declare function getMigrationStatus(): Promise<{
     currentVersion: number;
     latestVersion: number;
     pendingMigrations: number;
-    appliedMigrations: Migration[];
+    appliedMigrations: EmbeddedMigration[];
 }>;
 //# sourceMappingURL=migrator.d.ts.map

@@ -24,7 +24,8 @@
  * ```
  */
 export { createPool, getPool, testConnection, closePool, getPoolStats, type DatabaseConfig, } from './pool.js';
-export { runMigrations, rollbackTo, getMigrationStatus, type Migration, } from './migrator.js';
+export { runMigrations, rollbackTo, getMigrationStatus, } from './migrator.js';
+export type { EmbeddedMigration } from './migrations-embedded.js';
 export { Database, createDatabase, } from './Database.js';
 export { UserRepository, ViolationRepository, GiveawayRepository, ChatActivityRepository, ConfigRepository, } from './repositories/index.js';
 import { type DatabaseConfig } from './pool.js';

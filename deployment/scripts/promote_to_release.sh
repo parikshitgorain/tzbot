@@ -47,8 +47,12 @@ fi
 
 # Merge Development into release
 echo "🔀 Merging $SOURCE_BRANCH into release..."
+
+# Get the latest commit message from Development for better context
+LATEST_DEV_MSG=$(git log --format=%s -n 1 "origin/$SOURCE_BRANCH" 2>/dev/null || echo "")
+
 MERGE_SUCCESS=false
-if git merge "origin/$SOURCE_BRANCH" -X theirs --no-ff -m "chore: sync with $SOURCE_BRANCH
+if git merge "origin/$SOURCE_BRANCH" -X theirs --no-ff -m "chore: sync with $SOURCE_BRANCH - $LATEST_DEV_MSG
 
 Syncing release branch with Development commits.
 Using theirs strategy to prefer Development changes.
@@ -128,11 +132,25 @@ fi
 if git diff --cached --quiet; then
   echo "ℹ️ No changes to commit"
 else
-  git commit -m "chore: clean dev artifacts from release
+  # Get the original commit message from Development
+  ORIGINAL_MSG=$(git log --format=%B -n 1 "origin/$SOURCE_BRANCH" 2>/dev/null || echo "")
+  
+  if [ -n "$ORIGINAL_MSG" ]; then
+    # Use original commit message with additional context
+    git commit -m "$ORIGINAL_MSG
+
+[Release Preparation]
+- Cleaned dev artifacts (tests/, coverage/, dev configs)
+- Source commit: ${SOURCE_SHA:0:7}
+- Version: $CLEAN_VERSION"
+  else
+    # Fallback to generic message if we can't get original
+    git commit -m "chore: clean dev artifacts from release
 
 - Removed: tests/, coverage/, dev configs
 - Source commit: ${SOURCE_SHA:0:7}
 - Version: $CLEAN_VERSION"
+  fi
 fi
 
 # Push to release

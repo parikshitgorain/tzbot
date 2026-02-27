@@ -1,0 +1,1 @@
+{"version":3,"file":"migrations-embedded.d.ts","sourceRoot":"","sources":["../../../src/core/database/migrations-embedded.ts"],"names":[],"mappings":"AAAA;;;;;GAKG;AAEH,MAAM,WAAW,iBAAiB;IAChC,OAAO,EAAE,MAAM,CAAC;IAChB,IAAI,EAAE,MAAM,CAAC;IACb,EAAE,EAAE,MAAM,CAAC;IACX,IAAI,EAAE,MAAM,CAAC;CACd;AAED,eAAO,MAAM,mBAAmB,EAAE,iBAAiB,EA8iBlD,CAAC"}

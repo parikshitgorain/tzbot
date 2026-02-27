@@ -120,13 +120,15 @@ while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
         pm2 delete tzbot || true
         sleep 2
         
-        # Restart from ecosystem file
-        if [ -f "ecosystem.config.cjs" ]; then
-          pm2 start ecosystem.config.cjs
-        elif [ -f "ecosystem.config.js" ]; then
-          pm2 start ecosystem.config.js
+        # Restart from ecosystem file in current release directory
+        APP_DIR="/var/www/tzbot/current"
+        if [ -f "$APP_DIR/ecosystem.config.cjs" ]; then
+          cd "$APP_DIR" && pm2 start ecosystem.config.cjs
+        elif [ -f "$APP_DIR/ecosystem.config.js" ]; then
+          cd "$APP_DIR" && pm2 start ecosystem.config.js
         else
-          echo "❌ No ecosystem config file found"
+          echo "❌ No ecosystem config file found in $APP_DIR"
+          ls -la "$APP_DIR" || true
           exit 1
         fi
         
