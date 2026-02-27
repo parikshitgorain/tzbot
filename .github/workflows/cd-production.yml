@@ -381,6 +381,30 @@ ENV_EOF
           command -v pm2 >/dev/null 2>&1 || { echo "❌ PM2 not installed"; exit 1; }
           command -v jq >/dev/null 2>&1 || { echo "❌ jq not installed"; exit 1; }
           
+          # Verify Node.js version (require v18+)
+          NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
+          if [ "$NODE_VERSION" -lt 18 ]; then
+            echo "❌ Node.js version too old: v$NODE_VERSION (require v18+)"
+            exit 1
+          fi
+          echo "✅ Node.js version: v$NODE_VERSION"
+          
+          # Check PostgreSQL connectivity
+          if ! command -v psql >/dev/null 2>&1; then
+            echo "⚠️ psql not installed (database check skipped)"
+          else
+            # Load DATABASE_URL from .env
+            export $(grep -v '^#' /var/www/tzbot/shared/.env | grep DATABASE_URL | xargs)
+            if [ -n "$DATABASE_URL" ]; then
+              if psql "$DATABASE_URL" -c "SELECT 1" >/dev/null 2>&1; then
+                echo "✅ Database connection successful"
+              else
+                echo "❌ Cannot connect to database"
+                exit 1
+              fi
+            fi
+          fi
+          
           echo "✅ All required commands available"
           echo "✅ VPS environment verified"
           SCRIPT_EOF
