@@ -94,10 +94,21 @@ function loadConfig(): BotConfig {
 
     // AI settings
     aiEnabled: parseBoolean(process.env.AI_ENABLED, false),
-    aiProvider: (process.env.AI_PROVIDER as 'local' | 'openai' | 'anthropic') || 'openai',
+    aiProvider: (process.env.AI_PROVIDER as 'ollama' | 'openai' | 'anthropic') || 'ollama',
     aiApiKey: process.env.AI_API_KEY,
     aiModelName: process.env.AI_MODEL_NAME,
+    aiBaseUrl: process.env.AI_BASE_URL,
     aiChannels: parseArray(process.env.AI_CHANNELS),
+    
+    // AI Search settings
+    aiSearchEnabled: parseBoolean(process.env.AI_SEARCH_ENABLED, false),
+    aiSearchProvider: (process.env.AI_SEARCH_PROVIDER as 'duckduckgo' | 'searxng' | 'google') || 'duckduckgo',
+    aiSearchSearxngUrl: process.env.AI_SEARCH_SEARXNG_URL || 'https://searx.be',
+    aiSearchGoogleApiKey: process.env.AI_SEARCH_GOOGLE_API_KEY,
+    aiSearchGoogleEngineId: process.env.AI_SEARCH_GOOGLE_ENGINE_ID,
+    
+    // Unsplash image search
+    unsplashAccessKey: process.env.UNSPLASH_ACCESS_KEY,
 
     // Chat rain settings
     chatRainEnabled: parseBoolean(process.env.CHAT_RAIN_ENABLED, false),
