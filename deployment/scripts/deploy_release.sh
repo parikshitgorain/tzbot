@@ -4,7 +4,53 @@
 
 set -e
 
-APP_DIR="/var/www/tzbot"
+# Configuration
+LOG_LEVEL="${LOG_LEVEL:-INFO}"  # DEBUG, INFO, WARN, ERROR
+
+# Logging functions
+log_debug() {
+  [ "$LOG_LEVEL" = "DEBUG" ] && echo "[DEBUG] $1"
+}
+
+log_info() {
+  echo "[INFO] $1"
+}
+
+log_warn() {
+  echo "[WARN] $1"
+}
+
+log_error() {
+  echo "[ERROR] $1" >&2
+}
+
+# Deployment lock to prevent concurrent deployments
+LOCK_FILE="/tmp/tzbot-deploy.lock"
+LOCK_TIMEOUT=900  # 15 minutes
+
+# Check for existing lock
+if [ -f "$LOCK_FILE" ]; then
+  LOCK_AGE=$(($(date +%s) - $(stat -c %Y "$LOCK_FILE" 2>/dev/null || stat -f %m "$LOCK_FILE" 2>/dev/null || echo 0)))
+  
+  if [ "$LOCK_AGE" -lt "$LOCK_TIMEOUT" ]; then
+    echo "❌ Another deployment is in progress (started ${LOCK_AGE}s ago)"
+    echo "   If this is a stale lock, remove: $LOCK_FILE"
+    exit 1
+  else
+    echo "⚠️ Removing stale lock file (${LOCK_AGE}s old)"
+    rm -f "$LOCK_FILE"
+  fi
+fi
+
+# Create lock file and ensure cleanup on exit
+trap "rm -f $LOCK_FILE" EXIT INT TERM
+echo "$$" > "$LOCK_FILE"
+
+# Track deployment timing
+DEPLOY_START_TIME=$(date +%s)
+
+# Configurable paths
+APP_DIR="${TZBOT_APP_DIR:-/var/www/tzbot}"
 RELEASES_DIR="$APP_DIR/releases"
 SHARED_DIR="$APP_DIR/shared"
 CURRENT_LINK="$APP_DIR/current"
@@ -12,6 +58,8 @@ RELEASE_NAME="release-$(date +%Y%m%d-%H%M%S)"
 RELEASE_DIR="$RELEASES_DIR/$RELEASE_NAME"
 MAX_START_ATTEMPTS=3
 STARTUP_WAIT=30
+
+log_info "Using APP_DIR: $APP_DIR"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🚀 Starting Enhanced Deployment"
@@ -33,6 +81,13 @@ if [ "$AVAILABLE_KB" -lt 512000 ]; then
 fi
 
 echo "✅ Sufficient disk space: ${AVAILABLE_MB}MB available"
+
+# Log deployment to audit trail
+echo ""
+echo "📝 Recording deployment..."
+AUDIT_LOG="$APP_DIR/deployment-audit.log"
+mkdir -p "$(dirname "$AUDIT_LOG")"
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) | $RELEASE_NAME | $(whoami) | Deployment started" >> "$AUDIT_LOG"
 
 # Create directories
 echo ""
@@ -367,6 +422,28 @@ cd "$RELEASES_DIR"
 ls -t | tail -n +6 | xargs -r rm -rf
 echo "✅ Cleanup completed"
 
+# Create weekly backup
+echo ""
+echo "💾 Creating weekly backup..."
+WEEK=$(date +%Y-W%V)
+BACKUP_DIR="$APP_DIR/backups/$WEEK"
+
+if [ ! -d "$BACKUP_DIR" ]; then
+  mkdir -p "$BACKUP_DIR"
+  BACKUP_NAME="backup-$(date +%Y%m%d-%H%M%S)"
+  
+  echo "Creating backup: $BACKUP_NAME"
+  cp -r "$CURRENT_LINK" "$BACKUP_DIR/$BACKUP_NAME"
+  
+  # Keep only last 4 weeks of backups
+  cd "$APP_DIR/backups"
+  ls -t | tail -n +5 | xargs -r rm -rf
+  
+  echo "✅ Weekly backup created"
+else
+  echo "ℹ️ Weekly backup already exists for week $WEEK"
+fi
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✅ Deployment Completed Successfully"
@@ -374,3 +451,20 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "Release: $RELEASE_NAME"
 echo "Location: $RELEASE_DIR"
 echo "Current: $CURRENT_LINK"
+
+# Calculate and display deployment time
+DEPLOY_END_TIME=$(date +%s)
+DEPLOY_DURATION=$((DEPLOY_END_TIME - DEPLOY_START_TIME))
+DEPLOY_MINUTES=$((DEPLOY_DURATION / 60))
+DEPLOY_SECONDS=$((DEPLOY_DURATION % 60))
+
+if [ $DEPLOY_MINUTES -gt 0 ]; then
+  echo "⏱️  Deployment time: ${DEPLOY_MINUTES}m ${DEPLOY_SECONDS}s"
+else
+  echo "⏱️  Deployment time: ${DEPLOY_SECONDS}s"
+fi
+
+# Log successful deployment
+AUDIT_LOG="$APP_DIR/deployment-audit.log"
+VERSION=$(cat "$RELEASE_DIR/package.json" 2>/dev/null | grep '"version"' | cut -d'"' -f4 || echo "unknown")
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) | $RELEASE_NAME | $(whoami) | v$VERSION | SUCCESS | ${DEPLOY_DURATION}s" >> "$AUDIT_LOG"

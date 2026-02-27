@@ -216,19 +216,44 @@ jobs:
           tar -czf /tmp/deployment-package.tar.gz .
           mv /tmp/deployment-package.tar.gz $GITHUB_WORKSPACE/
           
-          echo "✅ Package created: $(du -h $GITHUB_WORKSPACE/deployment-package.tar.gz | cut -f1)"
+          # Create checksum for verification
+          cd $GITHUB_WORKSPACE
+          sha256sum deployment-package.tar.gz > deployment-package.sha256
+          
+          echo "✅ Package created: $(du -h deployment-package.tar.gz | cut -f1)"
+          echo "🔐 Checksum: $(cat deployment-package.sha256 | cut -d' ' -f1)"
       
       - name: Upload package to VPS
         timeout-minutes: 5
         run: |
           echo "📤 Uploading deployment package..."
+          
+          # Upload package
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             -o LogLevel=ERROR \
             -o ConnectTimeout=30 \
             deployment-package.tar.gz \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deployment-package.tar.gz
-          echo "✅ Package uploaded"
+          
+          # Upload checksum
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
+            deployment-package.sha256 \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deployment-package.sha256
+          
+          # Verify checksum on VPS
+          ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
+            "cd /tmp && sha256sum -c deployment-package.sha256" || {
+              echo "❌ Checksum verification failed!"
+              exit 1
+            }
+          
+          echo "✅ Package uploaded and verified"
       
       - name: Update environment variables
         timeout-minutes: 2
@@ -449,6 +474,26 @@ ENV_EOF
             -o LogLevel=ERROR \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "bash /tmp/health_check.sh 10 10 && rm /tmp/health_check.sh"
+      
+      - name: Run smoke tests
+        if: success()
+        timeout-minutes: 2
+        run: |
+          echo "🧪 Running smoke tests..."
+          
+          # Copy smoke test script
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
+            deployment/scripts/smoke_test.sh \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/smoke_test.sh
+          
+          # Run smoke tests
+          ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
+            "bash /tmp/smoke_test.sh && rm /tmp/smoke_test.sh"
       
       - name: Send test notification from VPS
         if: success()
