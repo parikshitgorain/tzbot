@@ -58,11 +58,32 @@ ln -sfn "$TARGET_DIR" "$CURRENT_LINK"
 # Restart application
 echo "🔄 Restarting application..."
 cd "$CURRENT_LINK"
-if pm2 describe tzbot > /dev/null 2>&1; then
-  pm2 reload ecosystem.config.cjs --update-env
-else
-  pm2 start ecosystem.config.cjs
+
+# Verify ecosystem config exists
+if [ ! -f "ecosystem.config.cjs" ] && [ ! -f "ecosystem.config.js" ]; then
+  echo "❌ No ecosystem config file found in $CURRENT_LINK"
+  echo "📂 Directory contents:"
+  ls -la "$CURRENT_LINK" || true
+  exit 1
 fi
+
+# Restart with PM2
+if pm2 describe tzbot > /dev/null 2>&1; then
+  echo "🔄 Reloading existing PM2 process..."
+  if [ -f "ecosystem.config.cjs" ]; then
+    pm2 reload ecosystem.config.cjs --update-env
+  else
+    pm2 reload ecosystem.config.js --update-env
+  fi
+else
+  echo "🚀 Starting new PM2 process..."
+  if [ -f "ecosystem.config.cjs" ]; then
+    pm2 start ecosystem.config.cjs
+  else
+    pm2 start ecosystem.config.js
+  fi
+fi
+
 pm2 save
 
 echo "✅ Rollback completed successfully"

@@ -38,8 +38,9 @@ export {
   runMigrations,
   rollbackTo,
   getMigrationStatus,
-  type Migration,
 } from './migrator.js';
+
+export type { EmbeddedMigration } from './migrations-embedded.js';
 
 export {
   Database,
