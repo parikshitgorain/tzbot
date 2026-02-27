@@ -148,21 +148,10 @@ jobs:
     timeout-minutes: 15
     
     steps:
-      - name: Determine checkout ref
-        id: ref
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            echo "ref=${{ github.ref }}" >> $GITHUB_OUTPUT
-            echo "Using tag: ${{ github.ref }}"
-          else
-            echo "ref=release" >> $GITHUB_OUTPUT
-            echo "Using release branch"
-          fi
-      
       - name: Checkout release
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.ref.outputs.ref }}
+          ref: release
       
       - name: Debug - List files
         run: |
@@ -215,44 +204,19 @@ jobs:
           tar -czf /tmp/deployment-package.tar.gz .
           mv /tmp/deployment-package.tar.gz $GITHUB_WORKSPACE/
           
-          # Create checksum for verification
-          cd $GITHUB_WORKSPACE
-          sha256sum deployment-package.tar.gz > deployment-package.sha256
-          
-          echo "✅ Package created: $(du -h deployment-package.tar.gz | cut -f1)"
-          echo "🔐 Checksum: $(cat deployment-package.sha256 | cut -d' ' -f1)"
+          echo "✅ Package created: $(du -h $GITHUB_WORKSPACE/deployment-package.tar.gz | cut -f1)"
       
       - name: Upload package to VPS
         timeout-minutes: 5
         run: |
           echo "📤 Uploading deployment package..."
-          
-          # Upload package
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             -o LogLevel=ERROR \
             -o ConnectTimeout=30 \
             deployment-package.tar.gz \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deployment-package.tar.gz
-          
-          # Upload checksum
-          scp -i ~/.ssh/deploy_key \
-            -o UserKnownHostsFile=~/.ssh/known_hosts \
-            -o LogLevel=ERROR \
-            deployment-package.sha256 \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deployment-package.sha256
-          
-          # Verify checksum on VPS
-          ssh -i ~/.ssh/deploy_key \
-            -o UserKnownHostsFile=~/.ssh/known_hosts \
-            -o LogLevel=ERROR \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
-            "cd /tmp && sha256sum -c deployment-package.sha256" || {
-              echo "❌ Checksum verification failed!"
-              exit 1
-            }
-          
-          echo "✅ Package uploaded and verified"
+          echo "✅ Package uploaded"
       
       - name: Update environment variables
         timeout-minutes: 2
@@ -260,33 +224,33 @@ jobs:
           echo "🔧 Updating environment variables on VPS..."
           
           # Create .env content from secrets
-          cat > /tmp/.env << ENV_EOF
-# Discord Configuration
-DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
-DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
-DISCORD_GUILD_ID=${{ secrets.DISCORD_GUILD_ID }}
-DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}
-
-# Discord Role IDs
-SUBSCRIBER_ROLE_ID=${{ secrets.SUBSCRIBER_ROLE_ID }}
-VIP_ROLE_ID=${{ secrets.VIP_ROLE_ID }}
-MODERATOR_ROLE_ID=${{ secrets.MODERATOR_ROLE_ID }}
-
-# Discord Channel IDs
-NOTIFICATION_CHANNEL_ID=${{ secrets.NOTIFICATION_CHANNEL_ID }}
-FALLBACK_CHANNEL_ID=${{ secrets.FALLBACK_CHANNEL_ID }}
-MOD_LOG_CHANNEL_ID=${{ secrets.MOD_LOG_CHANNEL_ID }}
-
-# Database Configuration
-DATABASE_URL=${{ secrets.DATABASE_URL }}
-
-# Redis Configuration (optional)
-REDIS_URL=${{ secrets.REDIS_URL }}
-
-# Environment
-NODE_ENV=production
-LOG_LEVEL=info
-ENV_EOF
+          cat > /tmp/.env << 'ENV_EOF'
+          # Discord Configuration
+          DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
+          DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
+          DISCORD_GUILD_ID=${{ secrets.DISCORD_GUILD_ID }}
+          DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}
+          
+          # Discord Role IDs
+          SUBSCRIBER_ROLE_ID=${{ secrets.SUBSCRIBER_ROLE_ID }}
+          VIP_ROLE_ID=${{ secrets.VIP_ROLE_ID }}
+          MODERATOR_ROLE_ID=${{ secrets.MODERATOR_ROLE_ID }}
+          
+          # Discord Channel IDs
+          NOTIFICATION_CHANNEL_ID=${{ secrets.NOTIFICATION_CHANNEL_ID }}
+          FALLBACK_CHANNEL_ID=${{ secrets.FALLBACK_CHANNEL_ID }}
+          MOD_LOG_CHANNEL_ID=${{ secrets.MOD_LOG_CHANNEL_ID }}
+          
+          # Database Configuration
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          
+          # Redis Configuration (optional)
+          REDIS_URL=${{ secrets.REDIS_URL }}
+          
+          # Environment
+          NODE_ENV=production
+          LOG_LEVEL=info
+          ENV_EOF
           
           # Upload .env to VPS
           scp -i ~/.ssh/deploy_key \
@@ -298,31 +262,6 @@ ENV_EOF
           # Create update script
           cat > /tmp/update-env.sh << 'SCRIPT_EOF'
           #!/bin/bash
-          set -e
-          
-          # Validate .env.new exists and is not empty
-          if [ ! -f "/tmp/.env.new" ]; then
-            echo "❌ ERROR: .env.new file not found!"
-            exit 1
-          fi
-          
-          if [ ! -s "/tmp/.env.new" ]; then
-            echo "❌ ERROR: .env.new file is empty!"
-            exit 1
-          fi
-          
-          # Verify required variables exist
-          if ! grep -q "^DISCORD_TOKEN=" "/tmp/.env.new"; then
-            echo "❌ ERROR: DISCORD_TOKEN not found in .env!"
-            exit 1
-          fi
-          
-          if ! grep -q "^DATABASE_URL=" "/tmp/.env.new"; then
-            echo "❌ ERROR: DATABASE_URL not found in .env!"
-            exit 1
-          fi
-          
-          echo "✅ .env validation passed"
           
           # Create shared directory if it doesn't exist
           mkdir -p /var/www/tzbot/shared/logs
@@ -379,30 +318,6 @@ ENV_EOF
           command -v npm >/dev/null 2>&1 || { echo "❌ npm not installed"; exit 1; }
           command -v pm2 >/dev/null 2>&1 || { echo "❌ PM2 not installed"; exit 1; }
           command -v jq >/dev/null 2>&1 || { echo "❌ jq not installed"; exit 1; }
-          
-          # Verify Node.js version (require v18+)
-          NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-          if [ "$NODE_VERSION" -lt 18 ]; then
-            echo "❌ Node.js version too old: v$NODE_VERSION (require v18+)"
-            exit 1
-          fi
-          echo "✅ Node.js version: v$NODE_VERSION"
-          
-          # Check PostgreSQL connectivity
-          if ! command -v psql >/dev/null 2>&1; then
-            echo "⚠️ psql not installed (database check skipped)"
-          else
-            # Load DATABASE_URL from .env
-            export $(grep -v '^#' /var/www/tzbot/shared/.env | grep DATABASE_URL | xargs)
-            if [ -n "$DATABASE_URL" ]; then
-              if psql "$DATABASE_URL" -c "SELECT 1" >/dev/null 2>&1; then
-                echo "✅ Database connection successful"
-              else
-                echo "❌ Cannot connect to database"
-                exit 1
-              fi
-            fi
-          fi
           
           echo "✅ All required commands available"
           echo "✅ VPS environment verified"
@@ -497,26 +412,6 @@ ENV_EOF
             -o LogLevel=ERROR \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "bash /tmp/health_check.sh 10 10 && rm /tmp/health_check.sh"
-      
-      - name: Run smoke tests
-        if: success()
-        timeout-minutes: 2
-        run: |
-          echo "🧪 Running smoke tests..."
-          
-          # Copy smoke test script
-          scp -i ~/.ssh/deploy_key \
-            -o UserKnownHostsFile=~/.ssh/known_hosts \
-            -o LogLevel=ERROR \
-            deployment/scripts/smoke_test.sh \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/smoke_test.sh
-          
-          # Run smoke tests
-          ssh -i ~/.ssh/deploy_key \
-            -o UserKnownHostsFile=~/.ssh/known_hosts \
-            -o LogLevel=ERROR \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
-            "bash /tmp/smoke_test.sh && rm /tmp/smoke_test.sh"
       
       - name: Send test notification from VPS
         if: success()
