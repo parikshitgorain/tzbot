@@ -274,6 +274,31 @@ ENV_EOF
           # Create update script
           cat > /tmp/update-env.sh << 'SCRIPT_EOF'
           #!/bin/bash
+          set -e
+          
+          # Validate .env.new exists and is not empty
+          if [ ! -f "/tmp/.env.new" ]; then
+            echo "❌ ERROR: .env.new file not found!"
+            exit 1
+          fi
+          
+          if [ ! -s "/tmp/.env.new" ]; then
+            echo "❌ ERROR: .env.new file is empty!"
+            exit 1
+          fi
+          
+          # Verify required variables exist
+          if ! grep -q "^DISCORD_TOKEN=" "/tmp/.env.new"; then
+            echo "❌ ERROR: DISCORD_TOKEN not found in .env!"
+            exit 1
+          fi
+          
+          if ! grep -q "^DATABASE_URL=" "/tmp/.env.new"; then
+            echo "❌ ERROR: DATABASE_URL not found in .env!"
+            exit 1
+          fi
+          
+          echo "✅ .env validation passed"
           
           # Create shared directory if it doesn't exist
           mkdir -p /var/www/tzbot/shared/logs

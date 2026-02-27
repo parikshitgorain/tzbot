@@ -19,6 +19,21 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "Release: $RELEASE_NAME"
 echo "Target: $APP_DIR"
 
+# Check available disk space (need at least 500MB)
+echo ""
+echo "💾 Checking disk space..."
+AVAILABLE_KB=$(df "$APP_DIR" 2>/dev/null | awk 'NR==2 {print $4}' || echo "0")
+AVAILABLE_MB=$((AVAILABLE_KB / 1024))
+
+if [ "$AVAILABLE_KB" -lt 512000 ]; then
+  echo "❌ Insufficient disk space!"
+  echo "   Available: ${AVAILABLE_MB}MB"
+  echo "   Required: 500MB minimum"
+  exit 1
+fi
+
+echo "✅ Sufficient disk space: ${AVAILABLE_MB}MB available"
+
 # Create directories
 echo ""
 echo "📁 Creating release directory structure..."
@@ -120,10 +135,19 @@ stop_pm2_process() {
       pm2 delete "$process_name" --force 2>/dev/null || true
     fi
     
-    # Wait for complete cleanup
+    # Wait for complete cleanup with verification
     sleep 3
     
     # Verify deletion
+    for i in {1..5}; do
+      if ! pm2 describe "$process_name" > /dev/null 2>&1; then
+        break
+      fi
+      echo "⏳ Waiting for process cleanup... ($i/5)"
+      sleep 1
+    done
+    
+    # Final verification
     if pm2 describe "$process_name" > /dev/null 2>&1; then
       echo "⚠️ Process still exists, forcing cleanup..."
       pm2 kill 2>/dev/null || true
