@@ -40,10 +40,17 @@ export interface BotConfig {
     rateLimiterWarningDeleteDelayMs?: number;
     rateLimiterCleanupIntervalMs?: number;
     aiEnabled: boolean;
-    aiProvider: 'local' | 'openai' | 'anthropic';
+    aiProvider: 'ollama' | 'openai' | 'anthropic';
     aiApiKey?: string;
     aiModelName?: string;
+    aiBaseUrl?: string;
     aiChannels: string[];
+    aiSearchEnabled: boolean;
+    aiSearchProvider: 'duckduckgo' | 'searxng' | 'google';
+    aiSearchSearxngUrl: string;
+    aiSearchGoogleApiKey?: string;
+    aiSearchGoogleEngineId?: string;
+    unsplashAccessKey?: string;
     chatRainEnabled: boolean;
     chatRainMinDelay: number;
     chatRainActiveWindow: number;

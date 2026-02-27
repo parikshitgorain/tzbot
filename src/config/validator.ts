@@ -54,12 +54,23 @@ const configSchema = z.object({
   linkScanningEnabled: z.boolean().default(true),
   googleSafeBrowsingApiKey: z.string().optional(),
 
-  // AI settings
+  // AI settings (optional - AI disabled if not configured)
   aiEnabled: z.boolean().default(false),
-  aiProvider: z.enum(['local', 'openai', 'anthropic']).default('openai'),
-  aiApiKey: z.string().optional(),
-  aiModelName: z.string().optional(),
-  aiChannels: z.array(z.string()).default([]),
+  aiProvider: z.enum(['ollama', 'openai', 'anthropic']).default('ollama'),
+  aiApiKey: z.string().optional(), // Not needed for Ollama
+  aiModelName: z.string().optional(), // e.g., 'llama3.2:1b', 'phi3:mini', 'gemma2:2b'
+  aiBaseUrl: z.string().optional(), // Ollama base URL (default: http://localhost:11434)
+  aiChannels: z.array(z.string()).default([]), // Empty array = all channels
+  
+  // AI Search settings (optional - web search disabled if not configured)
+  aiSearchEnabled: z.boolean().default(false),
+  aiSearchProvider: z.enum(['duckduckgo', 'searxng', 'google']).default('duckduckgo'),
+  aiSearchSearxngUrl: z.string().default('https://searx.be'),
+  aiSearchGoogleApiKey: z.string().optional(), // Google Custom Search API key
+  aiSearchGoogleEngineId: z.string().optional(), // Google Custom Search Engine ID
+  
+  // Unsplash image search (optional)
+  unsplashAccessKey: z.string().optional(),
 
   // Chat rain settings
   chatRainEnabled: z.boolean().default(false),

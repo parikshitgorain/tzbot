@@ -61,10 +61,21 @@ export interface BotConfig {
 
   // AI settings
   aiEnabled: boolean;
-  aiProvider: 'local' | 'openai' | 'anthropic';
+  aiProvider: 'ollama' | 'openai' | 'anthropic';
   aiApiKey?: string;
   aiModelName?: string;
+  aiBaseUrl?: string;
   aiChannels: string[];
+  
+  // AI Search settings
+  aiSearchEnabled: boolean;
+  aiSearchProvider: 'duckduckgo' | 'searxng' | 'google';
+  aiSearchSearxngUrl: string;
+  aiSearchGoogleApiKey?: string;
+  aiSearchGoogleEngineId?: string;
+  
+  // Unsplash image search
+  unsplashAccessKey?: string;
 
   // Chat rain settings
   chatRainEnabled: boolean;

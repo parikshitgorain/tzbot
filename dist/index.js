@@ -40,6 +40,8 @@ import { createModerationCommands } from './commands/moderation.commands.js';
 import { createUtilityCommands } from './commands/utility.commands.js';
 import { createGiveawayCommands } from './commands/giveaway.commands.js';
 import { createAnnouncementCommands } from './commands/announcement.commands.js';
+import { createAICommands } from './commands/ai.commands.js';
+import { imageCommand } from './commands/image.commands.js';
 import { EmbedBuilder } from 'discord.js';
 import { EventType, WinnerStatus } from './types/models.js';
 /**
@@ -61,6 +63,7 @@ class TZBotApplication {
     // private chatRainManager!: ChatRainManager; // Initialized but not actively used in event routing yet
     announcementRelay = null; // Optional - only if configured
     // private rewardSystem!: RewardSystem;
+    aiManager; // AI auto-reply manager
     // Moderation
     spamDetector;
     linkScanner;
@@ -302,27 +305,29 @@ class TZBotApplication {
         logger.info('Starting TZBOT services...');
         // 1. Start Discord client
         await this.discordClient.connect(config.discordToken);
-        // 2. Deploy commands to Discord
+        // 2. Initialize AI manager (after Discord client is connected)
+        await this.initializeAIManager();
+        // 3. Deploy commands to Discord
         await this.deployCommandsToDiscord();
-        // 3. Start event manager
+        // 4. Start event manager
         this.eventManager.start();
-        // 4. Start Kick chat monitoring (if configured)
+        // 5. Start Kick chat monitoring (if configured)
         if (config.kickChannelId) {
             await this.startKickChatMonitoring();
         }
-        // 5. Start webhook server (if configured)
+        // 6. Start webhook server (if configured)
         if (config.kickWebhookSecret) {
             await this.webhookServer.start();
         }
-        // 6. Start polling fallback system (if initialized)
+        // 7. Start polling fallback system (if initialized)
         // if (this.pollingFallback) {
         //   this.pollingFallback.start();
         // }
-        // 7. Start health check system
+        // 8. Start health check system
         this.healthCheck.startPeriodicChecks();
-        // 8. Start state persistence
+        // 9. Start state persistence
         this.statePersistence.startAutoPersistence();
-        // 9. Send startup notification to Discord notification channel
+        // 10. Send startup notification to Discord notification channel
         await this.sendStartupNotification();
         logger.info('TZBOT started successfully', {
             discordConnected: this.discordClient.isConnected(),
@@ -594,6 +599,34 @@ class TZBotApplication {
             // Don't throw - announcement relay is optional
         }
         logger.info('Managers initialized');
+    }
+    /**
+     * Initialize AI manager
+     */
+    async initializeAIManager() {
+        logger.info('Initializing AI manager...');
+        const { AIManager } = await import('./ai/ai-manager.js');
+        // Wait for Discord client to be ready
+        if (!this.discordClient.isConnected()) {
+            logger.warn('Discord client not ready, waiting...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        // Get bot user ID
+        const botUserId = this.discordClient.client.user?.id || '';
+        if (!botUserId) {
+            logger.error('Failed to get bot user ID - AI mentions will not work');
+        }
+        else {
+            logger.info('Bot user ID obtained', { botUserId });
+        }
+        this.aiManager = new AIManager(config, botUserId);
+        await this.aiManager.initialize();
+        if (this.aiManager.isAvailable()) {
+            logger.info('AI manager initialized and ready');
+        }
+        else {
+            logger.info('AI manager initialized but not enabled');
+        }
     }
     /**
      * Initialize moderation systems
@@ -1555,6 +1588,33 @@ class TZBotApplication {
                         return;
                     }
                 }
+                // AI Auto-Reply: Check if bot should respond
+                if (this.aiManager && this.aiManager.shouldRespond(message)) {
+                    try {
+                        // Show typing indicator (if channel supports it)
+                        if ('sendTyping' in message.channel) {
+                            await message.channel.sendTyping();
+                        }
+                        // Generate AI response
+                        const aiResponse = await this.aiManager.generateResponse(message);
+                        if (aiResponse) {
+                            // Send response as a reply to the user's message
+                            await message.reply(aiResponse);
+                            logger.info('AI response sent', {
+                                userId: message.author.id,
+                                channelId: message.channelId,
+                                messageLength: aiResponse.length,
+                            });
+                        }
+                    }
+                    catch (error) {
+                        logger.error('Failed to generate AI response', {
+                            error: error instanceof Error ? error.message : String(error),
+                            userId: message.author.id,
+                            channelId: message.channelId,
+                        });
+                    }
+                }
                 // Announcement relay handles its own messageCreate events
                 // No need to call it here - it's already listening via discordClient.on('messageCreate')
             }
@@ -1571,7 +1631,21 @@ class TZBotApplication {
             try {
                 // Handle slash commands
                 if (interaction.isCommand()) {
-                    await this.commandManager.handleInteraction(interaction);
+                    // Special handling for AI commands that need access to aiManager
+                    if (interaction.commandName === 'ai-clear-history' && this.aiManager) {
+                        await interaction.deferReply({ ephemeral: true });
+                        this.aiManager.clearHistory(interaction.channelId);
+                        await interaction.editReply({
+                            content: '✅ AI conversation history cleared for this channel.',
+                        });
+                        logger.info('AI history cleared via command', {
+                            userId: interaction.user.id,
+                            channelId: interaction.channelId,
+                        });
+                    }
+                    else {
+                        await this.commandManager.handleInteraction(interaction);
+                    }
                 }
                 // Handle button interactions (giveaway entries)
                 if (interaction.isButton()) {
@@ -1612,6 +1686,14 @@ class TZBotApplication {
         // Register announcement commands
         const announcementCommands = createAnnouncementCommands(this.discordClient, this.database, this.announcementRelay);
         this.commandManager.registerCommands(announcementCommands);
+        // Register AI commands
+        const aiCommands = createAICommands();
+        this.commandManager.registerCommands(aiCommands);
+        // Register image command (if Unsplash is configured)
+        if (config.unsplashAccessKey) {
+            this.commandManager.registerCommands([imageCommand]);
+            logger.info('Image search command registered');
+        }
         logger.info('Slash commands registered');
     }
     /**

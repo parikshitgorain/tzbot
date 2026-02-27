@@ -183,6 +183,38 @@ jobs:
           chmod +x deployment/scripts/setup_ssh.sh
           deployment/scripts/setup_ssh.sh "${{ secrets.VPS_SSH_KEY }}" "${{ secrets.VPS_HOSTNAME }}"
       
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: |
+          echo "📦 Installing dependencies..."
+          npm ci --production
+          echo "✅ Dependencies installed"
+      
+      - name: Build application
+        run: |
+          echo "🔨 Building application..."
+          npm run build
+          echo "✅ Build completed"
+      
+      - name: Verify build output
+        run: |
+          echo "🔍 Verifying build output..."
+          if [ ! -d "dist" ]; then
+            echo "❌ dist directory not found!"
+            exit 1
+          fi
+          
+          echo "📂 Build output:"
+          ls -lh dist/
+          
+          DIST_SIZE=$(du -sh dist | cut -f1)
+          echo "✅ Build verified (size: $DIST_SIZE)"
+      
       - name: Create deployment package
         run: |
           echo "📦 Creating deployment package..."
@@ -190,14 +222,27 @@ jobs:
           # Create a staging directory
           mkdir -p /tmp/deploy-staging
           
-          # Copy files to staging (excluding what we don't need)
-          rsync -av --exclude='.git' \
-            --exclude='node_modules' \
-            --exclude='tests' \
-            --exclude='*.test.*' \
-            --exclude='*.spec.*' \
-            --exclude='coverage' \
-            . /tmp/deploy-staging/
+          # Copy ONLY what's needed for production
+          echo "Copying production files..."
+          cp -r dist /tmp/deploy-staging/
+          cp package.json /tmp/deploy-staging/
+          cp package-lock.json /tmp/deploy-staging/
+          
+          # Copy ecosystem config
+          if [ -f ecosystem.config.cjs ]; then
+            cp ecosystem.config.cjs /tmp/deploy-staging/
+          fi
+          if [ -f ecosystem.config.js ]; then
+            cp ecosystem.config.js /tmp/deploy-staging/
+          fi
+          
+          # Copy deployment scripts
+          mkdir -p /tmp/deploy-staging/deployment/scripts
+          cp -r deployment/scripts/* /tmp/deploy-staging/deployment/scripts/
+          
+          # Copy node_modules (already production-only)
+          echo "Copying node_modules..."
+          cp -r node_modules /tmp/deploy-staging/
           
           # Create tar from staging directory
           cd /tmp/deploy-staging

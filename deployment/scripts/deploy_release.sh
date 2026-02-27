@@ -82,6 +82,55 @@ fi
 
 echo "✅ Sufficient disk space: ${AVAILABLE_MB}MB available"
 
+# Check available memory (need at least 1GB free)
+echo ""
+echo "🧠 Checking available memory..."
+AVAILABLE_MEM_KB=$(free | awk '/^Mem:/ {print $7}' || echo "0")
+AVAILABLE_MEM_MB=$((AVAILABLE_MEM_KB / 1024))
+
+if [ "$AVAILABLE_MEM_KB" -lt 1048576 ]; then
+  echo "⚠️ Low memory warning!"
+  echo "   Available: ${AVAILABLE_MEM_MB}MB"
+  echo "   Recommended: 1GB+ free"
+  
+  # Try to free up memory
+  echo "🧹 Attempting to free memory..."
+  sync
+  echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
+  
+  # Check again
+  AVAILABLE_MEM_KB=$(free | awk '/^Mem:/ {print $7}' || echo "0")
+  AVAILABLE_MEM_MB=$((AVAILABLE_MEM_KB / 1024))
+  echo "   After cleanup: ${AVAILABLE_MEM_MB}MB"
+  
+  if [ "$AVAILABLE_MEM_KB" -lt 524288 ]; then
+    echo "❌ Critical: Less than 512MB free memory!"
+    echo "   Deployment may fail. Consider:"
+    echo "   1. Stopping other services"
+    echo "   2. Upgrading VPS RAM"
+    echo "   3. Using swap space"
+    exit 1
+  fi
+else
+  echo "✅ Sufficient memory: ${AVAILABLE_MEM_MB}MB available"
+fi
+
+# Check system load
+echo ""
+echo "📊 Checking system load..."
+LOAD_AVG=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | tr -d ',')
+CPU_COUNT=$(nproc)
+echo "   Load average: $LOAD_AVG"
+echo "   CPU cores: $CPU_COUNT"
+
+# Warning if load is high
+LOAD_INT=$(echo "$LOAD_AVG" | cut -d'.' -f1)
+if [ "$LOAD_INT" -gt "$CPU_COUNT" ]; then
+  echo "⚠️ High system load detected!"
+  echo "   Waiting 30s for load to decrease..."
+  sleep 30
+fi
+
 # Log deployment to audit trail
 echo ""
 echo "📝 Recording deployment..."
@@ -110,6 +159,15 @@ tar -xzf /tmp/deployment-package.tar.gz -C "$RELEASE_DIR"
 rm /tmp/deployment-package.tar.gz
 echo "✅ Package extracted"
 
+# Verify dist directory exists (pre-built on GitHub Actions)
+echo ""
+echo "🔍 Verifying pre-built application..."
+if [ ! -d "$RELEASE_DIR/dist" ]; then
+  echo "❌ dist directory not found! Build should happen on GitHub Actions."
+  exit 1
+fi
+echo "✅ Pre-built application verified"
+
 # Create symlinks to shared resources
 echo ""
 echo "🔗 Creating symlinks to shared resources..."
@@ -130,12 +188,57 @@ else
   exit 1
 fi
 
-# Install dependencies
+# Verify node_modules exists (should be included in package)
 echo ""
-echo "📦 Installing production dependencies..."
-cd "$RELEASE_DIR"
-npm ci --production --no-audit --prefer-offline
-echo "✅ Dependencies installed"
+echo "📦 Verifying dependencies..."
+if [ ! -d "$RELEASE_DIR/node_modules" ]; then
+  echo "⚠️ node_modules not found in package, installing..."
+  cd "$RELEASE_DIR"
+  npm ci --production --no-audit --prefer-offline
+  echo "✅ Dependencies installed"
+else
+  echo "✅ Dependencies included in package"
+fi
+
+# Setup AI if enabled
+echo ""
+echo "🤖 Checking AI configuration..."
+if grep -q "^AI_ENABLED=true" "$SHARED_DIR/.env" 2>/dev/null; then
+  echo "AI is enabled, checking Ollama setup..."
+  
+  # Check if Ollama is installed
+  if command -v ollama &> /dev/null; then
+    echo "✅ Ollama is installed"
+    
+    # Check if Ollama service is running
+    if systemctl is-active --quiet ollama 2>/dev/null; then
+      echo "✅ Ollama service is running"
+    else
+      echo "⚠️ Ollama service is not running"
+      echo "Run: sudo systemctl start ollama"
+    fi
+    
+    # Check if model is downloaded
+    AI_MODEL=$(grep "^AI_MODEL_NAME=" "$SHARED_DIR/.env" | cut -d'=' -f2 || echo "llama3.2:1b")
+    if ollama list | grep -q "$AI_MODEL"; then
+      echo "✅ Model $AI_MODEL is available"
+    else
+      echo "⚠️ Model $AI_MODEL not found"
+      echo "Downloading model (this may take a few minutes)..."
+      if timeout 600 ollama pull "$AI_MODEL"; then
+        echo "✅ Model downloaded successfully"
+      else
+        echo "❌ Failed to download model"
+        echo "You can download it manually: ollama pull $AI_MODEL"
+      fi
+    fi
+  else
+    echo "⚠️ Ollama is not installed but AI is enabled"
+    echo "Run setup script: sudo bash deployment/scripts/setup-ai-vps.sh"
+  fi
+else
+  echo "ℹ️ AI is disabled in configuration"
+fi
 
 # Update current symlink (atomic switch)
 echo ""
