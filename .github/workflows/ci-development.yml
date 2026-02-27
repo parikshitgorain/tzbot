@@ -34,6 +34,13 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Debug workflow trigger
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "SHA: ${{ github.sha }}"
+          echo "Concurrency group: ci-development-${{ github.ref }}-${{ github.event_name }}"
+      
       - name: Checkout code
         uses: actions/checkout@v4
       
