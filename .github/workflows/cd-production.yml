@@ -216,19 +216,44 @@ jobs:
           tar -czf /tmp/deployment-package.tar.gz .
           mv /tmp/deployment-package.tar.gz $GITHUB_WORKSPACE/
           
-          echo "✅ Package created: $(du -h $GITHUB_WORKSPACE/deployment-package.tar.gz | cut -f1)"
+          # Create checksum for verification
+          cd $GITHUB_WORKSPACE
+          sha256sum deployment-package.tar.gz > deployment-package.sha256
+          
+          echo "✅ Package created: $(du -h deployment-package.tar.gz | cut -f1)"
+          echo "🔐 Checksum: $(cat deployment-package.sha256 | cut -d' ' -f1)"
       
       - name: Upload package to VPS
         timeout-minutes: 5
         run: |
           echo "📤 Uploading deployment package..."
+          
+          # Upload package
           scp -i ~/.ssh/deploy_key \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             -o LogLevel=ERROR \
             -o ConnectTimeout=30 \
             deployment-package.tar.gz \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deployment-package.tar.gz
-          echo "✅ Package uploaded"
+          
+          # Upload checksum
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
+            deployment-package.sha256 \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/deployment-package.sha256
+          
+          # Verify checksum on VPS
+          ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
+            "cd /tmp && sha256sum -c deployment-package.sha256" || {
+              echo "❌ Checksum verification failed!"
+              exit 1
+            }
+          
+          echo "✅ Package uploaded and verified"
       
       - name: Update environment variables
         timeout-minutes: 2
@@ -236,33 +261,33 @@ jobs:
           echo "🔧 Updating environment variables on VPS..."
           
           # Create .env content from secrets
-          cat > /tmp/.env << 'ENV_EOF'
-          # Discord Configuration
-          DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
-          DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
-          DISCORD_GUILD_ID=${{ secrets.DISCORD_GUILD_ID }}
-          DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}
-          
-          # Discord Role IDs
-          SUBSCRIBER_ROLE_ID=${{ secrets.SUBSCRIBER_ROLE_ID }}
-          VIP_ROLE_ID=${{ secrets.VIP_ROLE_ID }}
-          MODERATOR_ROLE_ID=${{ secrets.MODERATOR_ROLE_ID }}
-          
-          # Discord Channel IDs
-          NOTIFICATION_CHANNEL_ID=${{ secrets.NOTIFICATION_CHANNEL_ID }}
-          FALLBACK_CHANNEL_ID=${{ secrets.FALLBACK_CHANNEL_ID }}
-          MOD_LOG_CHANNEL_ID=${{ secrets.MOD_LOG_CHANNEL_ID }}
-          
-          # Database Configuration
-          DATABASE_URL=${{ secrets.DATABASE_URL }}
-          
-          # Redis Configuration (optional)
-          REDIS_URL=${{ secrets.REDIS_URL }}
-          
-          # Environment
-          NODE_ENV=production
-          LOG_LEVEL=info
-          ENV_EOF
+          cat > /tmp/.env << ENV_EOF
+# Discord Configuration
+DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
+DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
+DISCORD_GUILD_ID=${{ secrets.DISCORD_GUILD_ID }}
+DISCORD_WEBHOOK_URL=${{ secrets.DISCORD_WEBHOOK_URL }}
+
+# Discord Role IDs
+SUBSCRIBER_ROLE_ID=${{ secrets.SUBSCRIBER_ROLE_ID }}
+VIP_ROLE_ID=${{ secrets.VIP_ROLE_ID }}
+MODERATOR_ROLE_ID=${{ secrets.MODERATOR_ROLE_ID }}
+
+# Discord Channel IDs
+NOTIFICATION_CHANNEL_ID=${{ secrets.NOTIFICATION_CHANNEL_ID }}
+FALLBACK_CHANNEL_ID=${{ secrets.FALLBACK_CHANNEL_ID }}
+MOD_LOG_CHANNEL_ID=${{ secrets.MOD_LOG_CHANNEL_ID }}
+
+# Database Configuration
+DATABASE_URL=${{ secrets.DATABASE_URL }}
+
+# Redis Configuration (optional)
+REDIS_URL=${{ secrets.REDIS_URL }}
+
+# Environment
+NODE_ENV=production
+LOG_LEVEL=info
+ENV_EOF
           
           # Upload .env to VPS
           scp -i ~/.ssh/deploy_key \
@@ -274,6 +299,31 @@ jobs:
           # Create update script
           cat > /tmp/update-env.sh << 'SCRIPT_EOF'
           #!/bin/bash
+          set -e
+          
+          # Validate .env.new exists and is not empty
+          if [ ! -f "/tmp/.env.new" ]; then
+            echo "❌ ERROR: .env.new file not found!"
+            exit 1
+          fi
+          
+          if [ ! -s "/tmp/.env.new" ]; then
+            echo "❌ ERROR: .env.new file is empty!"
+            exit 1
+          fi
+          
+          # Verify required variables exist
+          if ! grep -q "^DISCORD_TOKEN=" "/tmp/.env.new"; then
+            echo "❌ ERROR: DISCORD_TOKEN not found in .env!"
+            exit 1
+          fi
+          
+          if ! grep -q "^DATABASE_URL=" "/tmp/.env.new"; then
+            echo "❌ ERROR: DATABASE_URL not found in .env!"
+            exit 1
+          fi
+          
+          echo "✅ .env validation passed"
           
           # Create shared directory if it doesn't exist
           mkdir -p /var/www/tzbot/shared/logs
@@ -424,6 +474,26 @@ jobs:
             -o LogLevel=ERROR \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
             "bash /tmp/health_check.sh 10 10 && rm /tmp/health_check.sh"
+      
+      - name: Run smoke tests
+        if: success()
+        timeout-minutes: 2
+        run: |
+          echo "🧪 Running smoke tests..."
+          
+          # Copy smoke test script
+          scp -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
+            deployment/scripts/smoke_test.sh \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }}:/tmp/smoke_test.sh
+          
+          # Run smoke tests
+          ssh -i ~/.ssh/deploy_key \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o LogLevel=ERROR \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOSTNAME }} \
+            "bash /tmp/smoke_test.sh && rm /tmp/smoke_test.sh"
       
       - name: Send test notification from VPS
         if: success()
