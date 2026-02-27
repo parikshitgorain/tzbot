@@ -204,7 +204,7 @@ fi
 echo ""
 echo "🤖 Checking AI configuration..."
 if grep -q "^AI_ENABLED=true" "$SHARED_DIR/.env" 2>/dev/null; then
-  echo "AI is enabled, checking Ollama setup..."
+  echo "AI is enabled, verifying Ollama..."
   
   # Check if Ollama is installed
   if command -v ollama &> /dev/null; then
@@ -213,28 +213,46 @@ if grep -q "^AI_ENABLED=true" "$SHARED_DIR/.env" 2>/dev/null; then
     # Check if Ollama service is running
     if systemctl is-active --quiet ollama 2>/dev/null; then
       echo "✅ Ollama service is running"
-    else
-      echo "⚠️ Ollama service is not running"
-      echo "Run: sudo systemctl start ollama"
-    fi
-    
-    # Check if model is downloaded
-    AI_MODEL=$(grep "^AI_MODEL_NAME=" "$SHARED_DIR/.env" | cut -d'=' -f2 || echo "llama3.2:1b")
-    if ollama list | grep -q "$AI_MODEL"; then
-      echo "✅ Model $AI_MODEL is available"
-    else
-      echo "⚠️ Model $AI_MODEL not found"
-      echo "Downloading model (this may take a few minutes)..."
-      if timeout 600 ollama pull "$AI_MODEL"; then
-        echo "✅ Model downloaded successfully"
+      
+      # Verify API is accessible
+      if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+        echo "✅ Ollama API is accessible"
+        
+        # Check if model is available (just verify, don't download)
+        AI_MODEL=$(grep "^AI_MODEL_NAME=" "$SHARED_DIR/.env" | cut -d'=' -f2 || echo "llama3.2:1b")
+        if ollama list 2>/dev/null | grep -q "$AI_MODEL"; then
+          echo "✅ Model $AI_MODEL is ready"
+        else
+          echo "⚠️ Model $AI_MODEL not found"
+          echo "   Please run: ollama pull $AI_MODEL"
+          echo "   Or run setup script: sudo bash deployment/scripts/setup-ai-vps.sh"
+        fi
       else
-        echo "❌ Failed to download model"
-        echo "You can download it manually: ollama pull $AI_MODEL"
+        echo "⚠️ Ollama API not responding"
+        echo "   Restarting Ollama service..."
+        systemctl restart ollama 2>/dev/null || true
+        sleep 3
+        if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+          echo "✅ Ollama API is now accessible"
+        else
+          echo "❌ Ollama API still not responding"
+          echo "   Check logs: journalctl -u ollama -n 50"
+        fi
+      fi
+    else
+      echo "⚠️ Ollama service is not running, starting it..."
+      systemctl start ollama 2>/dev/null || true
+      sleep 3
+      if systemctl is-active --quiet ollama 2>/dev/null; then
+        echo "✅ Ollama service started"
+      else
+        echo "❌ Failed to start Ollama service"
+        echo "   Run: sudo systemctl start ollama"
       fi
     fi
   else
     echo "⚠️ Ollama is not installed but AI is enabled"
-    echo "Run setup script: sudo bash deployment/scripts/setup-ai-vps.sh"
+    echo "   Run setup script: sudo bash deployment/scripts/setup-ai-vps.sh"
   fi
 else
   echo "ℹ️ AI is disabled in configuration"
