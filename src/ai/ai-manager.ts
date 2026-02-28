@@ -261,13 +261,14 @@ export class AIManager {
         'porn', 'sex', 'nude', 'naked', 'boob', 'tit', 'penis', 'vagina',
         // Insults
         'idiot', 'stupid', 'dumb', 'loser', 'trash', 'garbage',
-        // Variations with symbols
-        'f*ck', 'sh*t', 'b*tch', 'a**', 'd*mn', 'h*ll',
-        'f**k', 's**t', 'b**ch', 'a**hole',
+        // Variations with symbols (asterisks escaped)
+        'f\\*ck', 'sh\\*t', 'b\\*tch', 'a\\*\\*', 'd\\*mn', 'h\\*ll',
+        'f\\*\\*k', 's\\*\\*t', 'b\\*\\*ch', 'a\\*\\*hole',
       ];
       
       const hasProfanity = profanityWords.some(word => {
         // Check for exact word match with word boundaries
+        // Word already has escaped asterisks if needed
         const regex = new RegExp(`\\b${word}\\b`, 'i');
         return regex.test(lowerContent);
       });
