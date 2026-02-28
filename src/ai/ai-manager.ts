@@ -407,6 +407,15 @@ export class AIManager {
         return "Yes! Max wins happen every day on Rainbet slots. Every spin has a chance - good luck! 🎰";
       }
       
+      // Quick response for stream schedule questions
+      if (lowerContent.includes('when') && (lowerContent.includes('tony') || lowerContent.includes('stream') || lowerContent.includes('live') || lowerContent.includes('going live'))) {
+        logger.info('Stream schedule question detected', {
+          channelId,
+          userId: message.author.id,
+        });
+        return "Check Tony's stream schedule here: <https://tzbetz.com/schedule> 📅";
+      }
+      
       // Quick response for time/date questions - redirect to search
       if ((lowerContent.includes('what time') || lowerContent.includes('current time') || lowerContent.includes('time in')) && !lowerContent.includes('rainbet') && !lowerContent.includes('tzbetz')) {
         logger.info('Time question detected - not answering', {
@@ -460,11 +469,11 @@ ${TZBETZ_INFO}
 ${SAFETY_GUIDELINES}
 
 CRITICAL RESPONSE RULES - FOLLOW STRICTLY:
-- MAXIMUM 2-3 sentences (50-80 words ONLY)
+- MAXIMUM 1-2 sentences (30-50 words ONLY)
 - Answer ONLY what was asked - nothing extra
-- NO long explanations, NO bullet points, NO lists
+- NO long explanations, NO bullet points, NO numbered lists
 - Use 1 emoji max
-- Direct answer first, then 1 short follow-up sentence if needed
+- Direct answer with link if available
 - When sharing links, wrap them in angle brackets like <https://tzbetz.com> to prevent embeds
 - Be friendly but EXTREMELY concise
 - NO toxic language, profanity, or sexual content
@@ -478,6 +487,9 @@ A: "Use code 'tzbetz' at <https://rainbet.com/?r=tzbetz> 🎰"
 
 Q: "How to get VIP?"
 A: "Subscribe on Kick with $10 tip OR finish top 10 on Rainbet leaderboard. 🎉"
+
+Q: "When is Tony going live?"
+A: "Check Tony's stream schedule here: <https://tzbetz.com/schedule> 📅"
 
 CASINO & STREAMER RESTRICTIONS:
 - ONLY talk about Rainbet casino - do NOT mention other casinos (Stake, Roobet, etc.)

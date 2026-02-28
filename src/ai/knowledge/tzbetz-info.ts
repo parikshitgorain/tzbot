@@ -12,12 +12,20 @@ TZBetz is Tony's streaming channel and community brand. Tony (username: Tonyz, T
 
 ## Website & Links
 - Main Website: <https://tzbetz.com>
+- Stream Schedule: <https://tzbetz.com/schedule>
 - Rainbet Leaderboard: <https://tzbetz.com/leaderboards/rainbet>
 - Kick Points Leaderboard: <https://tzbetz.com/leaderboards/kick>
 - Kick Stream: <https://kick.com/tzbetz>
-- YouTube: <https://www.youtube.com/@tzbetz>
-- Instagram: <https://www.instagram.com/tzbetz>
-- Twitter/X: <https://x.com/tzbetz>
+- YouTube: <https://www.youtube.com/@tzbetz> - IRL posts, live stream highlights, casino wins
+- Instagram: <https://www.instagram.com/tzbetz> - IRL posts, live stream highlights, casino wins
+- Twitter/X: <https://x.com/tzbetz> - Giveaway announcements, posts, updates
+
+## Social Media Content
+**YouTube (@tzbetz):** IRL posts, live stream highlights, and casino wins
+**Instagram (@tzbetz):** IRL posts, live stream highlights, and casino wins  
+**Twitter/X (@tzbetz):** Giveaway announcements, posts, and community updates
+
+All social media channels feature content from Tony's streams and community events.
 
 ## Rainbet Partnership
 - Rainbet Link: <https://rainbet.com/?r=tzbetz>
