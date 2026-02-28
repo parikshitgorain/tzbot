@@ -414,33 +414,55 @@ export class AIManager {
         return "Yes! Max wins happen every day on Rainbet slots. Every spin has a chance - good luck! 🎰";
       }
       
-      // Quick response for image requests - fetch and send image directly
+      // Quick response for image requests - use AI to refine query, then fetch image
       if ((lowerContent.includes('give me') || lowerContent.includes('show me') || lowerContent.includes('send me') || lowerContent.includes('get me')) && (lowerContent.includes('image') || lowerContent.includes('picture') || lowerContent.includes('photo'))) {
-        logger.info('Image request detected - fetching image', {
+        logger.info('Image request detected - using AI to refine query', {
           channelId,
           userId: message.author.id,
         });
         
-        // Extract what kind of image they want - be more aggressive with cleanup
-        let imageQuery = message.content
-          .toLowerCase()
-          // Remove bot mentions
-          .replace(/<@!?\d+>/g, '')
-          // Remove common phrases
-          .replace(/give me|show me|send me|get me/gi, '')
-          .replace(/an?|the|image|picture|photo|of/gi, '')
-          // Remove bot name variations
-          .replace(/tzbot|tz bot|@tzbot/gi, '')
-          // Clean up extra spaces
-          .replace(/\s+/g, ' ')
-          .trim();
-        
-        // If query is empty or too short, use a default
-        if (!imageQuery || imageQuery.length < 2) {
-          imageQuery = 'random nature';
-        }
-        
         try {
+          // Use AI to extract and refine the image search query
+          const aiPrompt: AIMessage[] = [
+            {
+              role: 'system',
+              content: 'You are a search query optimizer. Extract the main subject from the user\'s image request and return ONLY 2-4 keywords for image search. No explanations, no sentences, just keywords separated by spaces. Examples: "funny dog" → "funny dog", "give me a cat image" → "cute cat", "show me sunset" → "beautiful sunset"',
+            },
+            {
+              role: 'user',
+              content: message.content,
+            },
+          ];
+          
+          const aiResponse = await this.provider.generateResponse(aiPrompt, 20);
+          let imageQuery = aiResponse.content.trim().toLowerCase();
+          
+          // Clean up the AI response (remove quotes, extra punctuation)
+          imageQuery = imageQuery.replace(/['".,!?]/g, '').trim();
+          
+          // If AI returned empty or too long, fall back to basic extraction
+          if (!imageQuery || imageQuery.length < 2 || imageQuery.length > 50) {
+            imageQuery = message.content
+              .toLowerCase()
+              .replace(/<@!?\d+>/g, '')
+              .replace(/give me|show me|send me|get me/gi, '')
+              .replace(/an?|the|image|picture|photo|of/gi, '')
+              .replace(/tzbot|tz bot|@tzbot/gi, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+          }
+          
+          // Final fallback
+          if (!imageQuery || imageQuery.length < 2) {
+            imageQuery = 'random nature';
+          }
+          
+          logger.info('AI refined image query', {
+            original: message.content,
+            refined: imageQuery,
+          });
+          
+          // Search Unsplash with the refined query
           const { UnsplashProvider } = await import('@/ai/image/unsplash-provider.js');
           const unsplash = new UnsplashProvider(this.config.unsplashAccessKey || '');
           const images = await unsplash.searchImages(imageQuery, 1);
