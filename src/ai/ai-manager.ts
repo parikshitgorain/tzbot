@@ -500,13 +500,20 @@ export class AIManager {
           
           if (images.length > 0) {
             const image = images[0];
+            
+            // Generate a friendly message based on the query
+            const emojis = ['✨', '🎨', '📸', '🖼️', '🌟', '💫'];
+            const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+            const caption = `Here's your ${imageQuery} image! ${randomEmoji}`;
+            
             await message.reply({
+              content: caption,
               embeds: [{
                 title: image.description || imageQuery,
                 image: { url: image.url },
                 color: 0x00d4ff,
                 footer: {
-                  text: `Photo by ${image.photographer} on Unsplash`,
+                  text: `Photo by ${image.photographer}`,
                 },
                 url: image.photographerUrl,
               }],
