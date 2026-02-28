@@ -553,6 +553,28 @@ export class AIManager {
         }
       }
       
+      // Quick response for "who is" questions about people
+      if (lowerContent.includes('who is') || lowerContent.includes('who\'s')) {
+        // List of known community members (lowercase)
+        const knownPeople = ['tony', 'tonyz', 'ark', 'boboc', 'elurb', 'chaco', 'hantainee', 'hannah', 'keegz'];
+        
+        // Extract the name being asked about
+        const nameMatch = lowerContent.match(/who\s+is\s+(\w+)|who'?s\s+(\w+)/i);
+        if (nameMatch) {
+          const askedName = (nameMatch[1] || nameMatch[2]).toLowerCase();
+          
+          // If asking about someone not in our knowledge base
+          if (!knownPeople.includes(askedName)) {
+            logger.info('Unknown person asked about', {
+              channelId,
+              userId: message.author.id,
+              askedName,
+            });
+            return `I don't know ${askedName} personally, but they're part of the community! 😊`;
+          }
+        }
+      }
+      
       // Quick response for stream schedule questions
       if (lowerContent.includes('when') && (lowerContent.includes('tony') || lowerContent.includes('stream') || lowerContent.includes('live') || lowerContent.includes('going live'))) {
         logger.info('Stream schedule question detected', {
