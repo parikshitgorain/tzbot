@@ -1998,24 +1998,61 @@ class TZBotApplication {
                 // Apply punishment if needed
                 const member = message.member;
                 if (member) {
-                  if (punishment.type === PunishmentType.TIMEOUT && punishment.duration) {
-                    const durationMs = punishment.duration * 60 * 60 * 1000;
-                    await member.timeout(durationMs, profanityInfo.reason);
-                    logger.info('User timed out for profanity', {
+                  try {
+                    if (punishment.type === PunishmentType.TIMEOUT && punishment.duration) {
+                      const durationMs = punishment.duration * 60 * 60 * 1000;
+                      await member.timeout(durationMs, profanityInfo.reason);
+                      logger.info('User timed out for profanity', {
+                        userId: profanityInfo.userId,
+                        duration: punishment.duration,
+                        offenseCount: newOffenseCount,
+                      });
+                    } else if (punishment.type === PunishmentType.PERMANENT_BAN) {
+                      await member.ban({ reason: profanityInfo.reason });
+                      logger.info('User banned for profanity', {
+                        userId: profanityInfo.userId,
+                        offenseCount: newOffenseCount,
+                      });
+                    }
+                  } catch (punishmentError) {
+                    logger.error('Failed to apply punishment (check bot permissions)', {
+                      error: punishmentError,
                       userId: profanityInfo.userId,
-                      duration: punishment.duration,
-                      offenseCount: newOffenseCount,
-                    });
-                  } else if (punishment.type === PunishmentType.PERMANENT_BAN) {
-                    await member.ban({ reason: profanityInfo.reason });
-                    logger.info('User banned for profanity', {
-                      userId: profanityInfo.userId,
-                      offenseCount: newOffenseCount,
+                      punishmentType: punishment.type,
+                      requiredPermissions: punishment.type === PunishmentType.TIMEOUT ? 'MODERATE_MEMBERS (Timeout Members)' : 'BAN_MEMBERS',
                     });
                   }
                 }
                 
-                // Send short warning message and auto-delete
+                // Send DM notification to user
+                try {
+                  let dmMessage = `<@${profanityInfo.userId}> ⚠️ **Warning Issued**\n\n`;
+                  dmMessage += `**Reason:** ${profanityInfo.reason}\n`;
+                  dmMessage += `**Offense Count:** ${newOffenseCount}\n`;
+                  dmMessage += `**Next Offense:** ${punishment.nextPunishment}\n\n`;
+
+                  if (punishment.type === PunishmentType.WARNING) {
+                    dmMessage += 'You have been warned. Please follow the server rules to avoid further action.';
+                  } else if (punishment.type === PunishmentType.TIMEOUT && punishment.duration) {
+                    dmMessage += `You have been timed out for ${punishment.duration} hour${punishment.duration > 1 ? 's' : ''}.`;
+                  } else if (punishment.type === PunishmentType.PERMANENT_BAN) {
+                    dmMessage += 'You have been permanently banned from the server.';
+                  }
+
+                  await message.author.send(dmMessage);
+                  
+                  logger.debug('Profanity warning DM sent', {
+                    userId: profanityInfo.userId,
+                    punishmentType: punishment.type,
+                  });
+                } catch (dmError) {
+                  logger.warn('Failed to send profanity warning DM to user', {
+                    userId: profanityInfo.userId,
+                    error: (dmError as Error).message,
+                  });
+                }
+                
+                // Send short warning message in channel and auto-delete
                 if ('send' in message.channel) {
                   let warningText = `⚠️ <@${profanityInfo.userId}> Watch your language! `;
                   
