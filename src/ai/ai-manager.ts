@@ -555,13 +555,13 @@ export class AIManager {
       
       // Quick response for "who is" questions about people
       if (lowerContent.includes('who is') || lowerContent.includes('who\'s')) {
-        // List of known community members (lowercase)
-        const knownPeople = ['tony', 'tonyz', 'ark', 'boboc', 'elurb', 'chaco', 'hantainee', 'hannah', 'keegz'];
+        // List of known community members (lowercase) - including all aliases
+        const knownPeople = ['tony', 'tonyz', 'ark', 'parik', 'p arik', 'p_arik', 'arik', 'boboc', 'elurb', 'chaco', 'hantainee', 'hannah', 'keegz'];
         
         // Extract the name being asked about
-        const nameMatch = lowerContent.match(/who\s+is\s+(\w+)|who'?s\s+(\w+)/i);
+        const nameMatch = lowerContent.match(/who\s+is\s+([\w\s_]+?)(?:\s+tzbot|\s*$)|who'?s\s+([\w\s_]+?)(?:\s+tzbot|\s*$)/i);
         if (nameMatch) {
-          const askedName = (nameMatch[1] || nameMatch[2]).toLowerCase();
+          const askedName = (nameMatch[1] || nameMatch[2]).trim().toLowerCase();
           
           // If asking about someone not in our knowledge base
           if (!knownPeople.includes(askedName)) {
@@ -572,6 +572,8 @@ export class AIManager {
             });
             return `I don't know ${askedName} personally, but they're part of the community! 😊`;
           }
+          // If asking about someone we know, let AI handle it with the knowledge base
+          // but don't return here - let it go to the AI
         }
       }
       
@@ -639,11 +641,12 @@ ${SAFETY_GUIDELINES}
 HOW TO TALK - BE NATURAL AND FRIENDLY:
 - Talk like you're texting a friend - casual, relaxed, friendly
 - Use "hey", "yeah", "nah", "btw", "lol" when it fits naturally
-- Keep it super short - 1-2 sentences max (30-50 words)
+- Keep it SUPER short - 1 sentence max for simple questions (20-40 words)
 - Use emojis naturally but don't overdo it (1 emoji is enough)
 - Don't sound robotic - no "I am here to assist" or "feel free to ask"
 - Be helpful but chill about it
 - When sharing links, wrap them in angle brackets like <https://tzbetz.com>
+- For "who is" questions, give ONE short sentence about them
 
 GOOD EXAMPLES (natural and friendly):
 Q: "Can we win max win today?"
@@ -657,6 +660,15 @@ A: "Two ways: tip $10 on Kick OR finish top 10 on the leaderboard. VIP gets you 
 
 Q: "When is Tony going live?"
 A: "Check the schedule here: <https://tzbetz.com/schedule> 📅"
+
+Q: "Who is Ark?"
+A: "Ark is the Discord and Kick admin - one of the main guys running the community! 🛡️"
+
+Q: "Who is Hantainee?"
+A: "Lol Hantainee is the greediest guy here! Always asking Tony for tips and spinning the VIP wheel 😂"
+
+Q: "Who is Boboc?"
+A: "Boboc is one of the mods - the golf man! Really good guy 🏌️"
 
 Q: "How are you?"
 A: "I'm good! Just here hanging out and helping the community. What's up? 😊"
@@ -693,7 +705,7 @@ ${searchContext ? '\n\nWEB SEARCH RESULTS: Use ONLY the data below. Extract exac
 
       // Generate response with timeout protection
       const timeoutMs = 30000; // 30 second timeout
-      const responsePromise = this.provider.generateResponse(messages, 150);
+      const responsePromise = this.provider.generateResponse(messages, 80); // Reduced from 150 to 80 tokens for shorter responses
       const timeoutPromise = new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('AI response timeout')), timeoutMs)
       );

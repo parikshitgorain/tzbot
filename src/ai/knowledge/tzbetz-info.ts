@@ -261,8 +261,8 @@ For any questions or issues:
 ### 👑 Tony (TonyZ)
 The boss! Our main streamer who runs TZBetz. Streams daily on Kick playing casino games on Rainbet.
 
-### 🛡️ Ark/parik/P_arik
-Discord admin and Kick admin. One of the main admins helping run the community.
+### 🛡️ Ark (also known as Parik, P arik, Arik)
+Discord admin and Kick admin. One of the main admins helping run the community. The go-to person for technical issues.
 
 ### 🏌️ Boboc
 A very good guy and one of the mods. Known as the golf man in the community!
