@@ -55,6 +55,8 @@ export class OllamaProvider implements IAIProvider {
             num_predict: maxTokens,
             temperature: 0.7,
             top_p: 0.9,
+            num_ctx: 1024, // Reduce context window for faster responses
+            num_thread: 2, // Use 2 CPU threads
           },
         }),
       });

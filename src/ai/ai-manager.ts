@@ -358,7 +358,7 @@ export class AIManager {
       }
       
       // Check for Rainbet leaderboard (wagerers)
-      const rainbetKeywords = ['leaderboard', 'top wagerer', 'who is top', 'wager', 'ranking', 'position', 'who is first', 'who is 1st', 'who won', 'rainbet'];
+      const rainbetKeywords = ['leaderboard', 'top wagerer', 'who is top', 'wager', 'ranking', 'position', 'rank', 'who is first', 'who is 1st', 'who won', 'rainbet'];
       const isRainbetQuestion = rainbetKeywords.some(keyword => lowerContent.includes(keyword));
       
       if (isRainbetQuestion) {
@@ -385,6 +385,33 @@ export class AIManager {
           userId: message.author.id,
         });
         return "Get VIP badge by doing ONE of these: 1) Subscribe on Kick with $10 tip (no gifted subs) OR 2) Finish in top 10 of Rainbet leaderboard last month. VIP perks: 50% raw tip on slot calls + access to 20-min VIP wheel! 🎉";
+      }
+      
+      // Quick response for max win questions
+      if ((lowerContent.includes('max win') || lowerContent.includes('maxwin')) && (lowerContent.includes('today') || lowerContent.includes('can we') || lowerContent.includes('possible'))) {
+        logger.info('Max win question detected', {
+          channelId,
+          userId: message.author.id,
+        });
+        return "Yes! Max wins happen every day on Rainbet slots. Every spin has a chance - good luck! 🎰";
+      }
+      
+      // Quick response for time/date questions - redirect to search
+      if ((lowerContent.includes('what time') || lowerContent.includes('current time') || lowerContent.includes('time in')) && !lowerContent.includes('rainbet') && !lowerContent.includes('tzbetz')) {
+        logger.info('Time question detected - not answering', {
+          channelId,
+          userId: message.author.id,
+        });
+        return "I can't check current time or dates. Try asking Google or checking your device's clock! ⏰";
+      }
+      
+      // Quick response for questions I can't answer
+      if (lowerContent.includes('say me') || lowerContent.includes('tell me')) {
+        const cantAnswerKeywords = ['time', 'date', 'weather', 'news', 'stock', 'score'];
+        const hasCantAnswer = cantAnswerKeywords.some(keyword => lowerContent.includes(keyword));
+        if (hasCantAnswer && !lowerContent.includes('rainbet') && !lowerContent.includes('tzbetz')) {
+          return "I only answer questions about TZBetz and Rainbet! Ask me about VIP badges, giveaways, or the Rainbet code. 🎰";
+        }
       }
       
       // Check for crypto price questions - trigger web search
@@ -421,18 +448,25 @@ ${TZBETZ_INFO}
 
 ${SAFETY_GUIDELINES}
 
-CRITICAL RESPONSE RULES:
-- Keep responses SHORT and COMPACT (2-4 sentences max, under 150 words)
-- Be direct and to the point - no fluff or repetition
-- Use emojis sparingly (1-2 max)
-- Answer the question directly without long introductions
-- For simple questions, give simple answers
-- Only provide details if specifically asked
-- NEVER write long paragraphs or multiple sections
+CRITICAL RESPONSE RULES - FOLLOW STRICTLY:
+- MAXIMUM 2-3 sentences (50-80 words ONLY)
+- Answer ONLY what was asked - nothing extra
+- NO long explanations, NO bullet points, NO lists
+- Use 1 emoji max
+- Direct answer first, then 1 short follow-up sentence if needed
 - When sharing links, wrap them in angle brackets like <https://tzbetz.com> to prevent embeds
-- Be friendly but concise
-- Promote responsible gambling
+- Be friendly but EXTREMELY concise
 - NO toxic language, profanity, or sexual content
+
+EXAMPLE GOOD RESPONSES:
+Q: "Can we win max win today?"
+A: "Yes! Max wins happen every day on Rainbet slots. Good luck! 🎰"
+
+Q: "What's the Rainbet code?"
+A: "Use code 'tzbetz' at <https://rainbet.com/?r=tzbetz> 🎰"
+
+Q: "How to get VIP?"
+A: "Subscribe on Kick with $10 tip OR finish top 10 on Rainbet leaderboard. 🎉"
 
 CASINO & STREAMER RESTRICTIONS:
 - ONLY talk about Rainbet casino - do NOT mention other casinos (Stake, Roobet, etc.)
@@ -462,8 +496,14 @@ ${searchContext ? '\n\nIMPORTANT: Use ONLY the web search results below. Extract
       // Build messages array
       const messages: AIMessage[] = [systemPrompt, ...history, userMessage];
 
-      // Generate response
-      const response = await this.provider.generateResponse(messages, 400);
+      // Generate response with timeout protection
+      const timeoutMs = 30000; // 30 second timeout
+      const responsePromise = this.provider.generateResponse(messages, 150);
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('AI response timeout')), timeoutMs)
+      );
+      
+      const response = await Promise.race([responsePromise, timeoutPromise]);
 
       if (!response.content) {
         logger.warn('AI provider returned empty response');
@@ -497,6 +537,12 @@ ${searchContext ? '\n\nIMPORTANT: Use ONLY the web search results below. Extract
         channelId: message.channelId,
         userId: message.author.id,
       });
+      
+      // Return a friendly fallback message instead of null
+      if (error instanceof Error && error.message === 'AI response timeout') {
+        return "Sorry, I'm thinking too slowly right now! Try asking again or use `/ai-status` to check my status. 🤖";
+      }
+      
       return null;
     }
   }
