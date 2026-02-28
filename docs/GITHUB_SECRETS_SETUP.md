@@ -2,9 +2,11 @@
 
 This guide explains how to configure the required GitHub secrets for the CI/CD deployment system.
 
-## Required Secrets
+> **📋 Complete Reference:** For a comprehensive list of ALL available secrets (including optional features), see [GitHub Secrets Reference](./GITHUB_SECRETS_REFERENCE.md)
 
-The following secrets must be configured in your GitHub repository for the deployment workflows to function:
+## Minimum Required Secrets
+
+The following secrets are **required** for basic deployment functionality:
 
 ### 1. VPS_HOSTNAME
 **Description:** The hostname or dynamic DNS address of your VPS server.
@@ -79,6 +81,29 @@ chmod 600 ~/.ssh/authorized_keys
 
 **Optional:** If you don't want Discord notifications, you can skip this secret. The workflow will continue without it (notifications are set to `continue-on-error: true`).
 
+## Application Secrets
+
+These secrets are required for the bot to function properly:
+
+### Discord Bot Configuration
+- `DISCORD_TOKEN` - Your Discord bot token
+- `DISCORD_CLIENT_ID` - Discord application client ID
+- `DISCORD_GUILD_ID` - Your Discord server ID
+
+### Discord Roles & Channels
+- `SUBSCRIBER_ROLE_ID` - Subscriber role ID
+- `VIP_ROLE_ID` - VIP role ID
+- `MODERATOR_ROLE_ID` - Moderator role ID
+- `NOTIFICATION_CHANNEL_ID` - Notification channel ID
+- `FALLBACK_CHANNEL_ID` - Fallback channel ID
+- `MOD_LOG_CHANNEL_ID` - Moderation log channel ID
+
+### Database
+- `DATABASE_URL` - PostgreSQL connection string (format: `postgresql://user:password@host:port/database`)
+
+### Optional Features
+For additional features (AI, Kick.com integration, Redis, etc.), see the [complete secrets reference](./GITHUB_SECRETS_REFERENCE.md).
+
 ## How to Add Secrets to GitHub
 
 1. Go to your GitHub repository
@@ -95,11 +120,41 @@ chmod 600 ~/.ssh/authorized_keys
 After adding all secrets, you can verify they're configured correctly:
 
 1. Go to Settings → Secrets and variables → Actions
-2. You should see all four secrets listed:
+2. You should see all required secrets listed
+3. Minimum required for deployment:
    - VPS_HOSTNAME
    - VPS_SSH_KEY
    - VPS_USER
-   - DISCORD_WEBHOOK_URL
+   - DISCORD_WEBHOOK_URL (optional but recommended)
+4. Application secrets (see [complete list](./GITHUB_SECRETS_REFERENCE.md))
+
+## Quick Setup Script
+
+You can use the GitHub CLI to set multiple secrets at once:
+
+```bash
+# Install GitHub CLI if not already installed
+# https://cli.github.com/
+
+# Authenticate
+gh auth login
+
+# Set secrets from your .env file (be careful with this!)
+while IFS='=' read -r key value; do
+  # Skip comments and empty lines
+  [[ $key =~ ^#.*$ ]] && continue
+  [[ -z $key ]] && continue
+  
+  # Remove quotes from value if present
+  value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+  
+  # Set the secret
+  echo "Setting $key..."
+  echo "$value" | gh secret set "$key"
+done < .env
+
+echo "✅ All secrets set!"
+```
 
 ## Security Best Practices
 

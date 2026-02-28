@@ -346,6 +346,8 @@ For detailed structure documentation, see [Project Structure](docs/project-struc
 - [Deployment Guide](docs/DEPLOYMENT.md) - Complete production deployment instructions
 - [CI/CD Setup Guide](docs/CICD_SETUP.md) - Configure automated deployment pipeline
 - [Database Setup](docs/DATABASE_SETUP.md) - Database configuration and migrations
+- [GitHub Secrets Setup](docs/GITHUB_SECRETS_SETUP.md) - Configure deployment secrets
+- [Secrets Quick Reference](docs/SECRETS_QUICK_REFERENCE.md) - Quick secrets setup guide
 
 ### User Documentation
 - [User Guide](docs/USER_GUIDE.md) - Complete guide for end users
@@ -358,6 +360,7 @@ For detailed structure documentation, see [Project Structure](docs/project-struc
 - [Log Retention Policy](docs/LOG_RETENTION_POLICY.md) - Log management and retention
 - [VPS Monitoring](docs/VPS_MONITORING.md) - Runtime monitoring and alerting system
 - [Monitoring Quick Reference](docs/MONITORING_QUICK_REFERENCE.md) - Quick monitoring commands
+- [GitHub Secrets Reference](docs/GITHUB_SECRETS_REFERENCE.md) - Complete secrets documentation
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
 
 ### Specifications
