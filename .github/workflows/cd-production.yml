@@ -153,6 +153,30 @@ jobs:
         with:
           ref: release
       
+      - name: Validate GitHub Secrets
+        run: |
+          echo "🔍 Validating required secrets are configured..."
+          chmod +x deployment/scripts/validate-secrets.sh
+          
+          # Export secrets as environment variables for validation
+          export VPS_SSH_KEY="${{ secrets.VPS_SSH_KEY }}"
+          export VPS_HOSTNAME="${{ secrets.VPS_HOSTNAME }}"
+          export VPS_USER="${{ secrets.VPS_USER }}"
+          export DISCORD_TOKEN="${{ secrets.DISCORD_TOKEN }}"
+          export DISCORD_CLIENT_ID="${{ secrets.DISCORD_CLIENT_ID }}"
+          export DISCORD_GUILD_ID="${{ secrets.DISCORD_GUILD_ID }}"
+          export DISCORD_WEBHOOK_URL="${{ secrets.DISCORD_WEBHOOK_URL }}"
+          export SUBSCRIBER_ROLE_ID="${{ secrets.SUBSCRIBER_ROLE_ID }}"
+          export VIP_ROLE_ID="${{ secrets.VIP_ROLE_ID }}"
+          export MODERATOR_ROLE_ID="${{ secrets.MODERATOR_ROLE_ID }}"
+          export NOTIFICATION_CHANNEL_ID="${{ secrets.NOTIFICATION_CHANNEL_ID }}"
+          export FALLBACK_CHANNEL_ID="${{ secrets.FALLBACK_CHANNEL_ID }}"
+          export MOD_LOG_CHANNEL_ID="${{ secrets.MOD_LOG_CHANNEL_ID }}"
+          export DATABASE_URL="${{ secrets.DATABASE_URL }}"
+          
+          # Run validation
+          deployment/scripts/validate-secrets.sh
+      
       - name: Debug - List files
         run: |
           echo "📂 Current directory: $(pwd)"
@@ -303,16 +327,68 @@ jobs:
           NOTIFICATION_CHANNEL_ID=${{ secrets.NOTIFICATION_CHANNEL_ID }}
           FALLBACK_CHANNEL_ID=${{ secrets.FALLBACK_CHANNEL_ID }}
           MOD_LOG_CHANNEL_ID=${{ secrets.MOD_LOG_CHANNEL_ID }}
+          PRIVATE_ANNOUNCEMENT_CHANNEL_ID=${{ secrets.PRIVATE_ANNOUNCEMENT_CHANNEL_ID }}
+          PUBLIC_ANNOUNCEMENT_CHANNEL_IDS=${{ secrets.PUBLIC_ANNOUNCEMENT_CHANNEL_IDS }}
+          
+          # Kick.com Configuration
+          KICK_API_KEY=${{ secrets.KICK_API_KEY }}
+          KICK_CHANNEL_ID=${{ secrets.KICK_CHANNEL_ID }}
+          KICK_WEBHOOK_SECRET=${{ secrets.KICK_WEBHOOK_SECRET }}
+          KICK_OAUTH_CLIENT_ID=${{ secrets.KICK_OAUTH_CLIENT_ID }}
+          KICK_OAUTH_CLIENT_SECRET=${{ secrets.KICK_OAUTH_CLIENT_SECRET }}
           
           # Database Configuration
           DATABASE_URL=${{ secrets.DATABASE_URL }}
+          DATABASE_MAX_CONNECTIONS=${{ secrets.DATABASE_MAX_CONNECTIONS }}
           
-          # Redis Configuration (optional)
+          # Redis Configuration
           REDIS_URL=${{ secrets.REDIS_URL }}
+          REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+          
+          # Google Safe Browsing API
+          GOOGLE_SAFE_BROWSING_API_KEY=${{ secrets.GOOGLE_SAFE_BROWSING_API_KEY }}
+          
+          # Rate Limiter Configuration
+          RATE_LIMITER_RESTRICTED_CHANNELS=${{ secrets.RATE_LIMITER_RESTRICTED_CHANNELS }}
+          RATE_LIMITER_WINDOW_MS=${{ secrets.RATE_LIMITER_WINDOW_MS }}
+          RATE_LIMITER_VIOLATION_WINDOW_MS=${{ secrets.RATE_LIMITER_VIOLATION_WINDOW_MS }}
+          RATE_LIMITER_WARNING_DELETE_DELAY_MS=${{ secrets.RATE_LIMITER_WARNING_DELETE_DELAY_MS }}
+          RATE_LIMITER_CLEANUP_INTERVAL_MS=${{ secrets.RATE_LIMITER_CLEANUP_INTERVAL_MS }}
+          
+          # AI Configuration
+          AI_ENABLED=${{ secrets.AI_ENABLED }}
+          AI_PROVIDER=${{ secrets.AI_PROVIDER }}
+          AI_API_KEY=${{ secrets.AI_API_KEY }}
+          AI_MODEL_NAME=${{ secrets.AI_MODEL_NAME }}
+          AI_BASE_URL=${{ secrets.AI_BASE_URL }}
+          AI_CHANNELS=${{ secrets.AI_CHANNELS }}
+          
+          # AI Web Search Configuration
+          AI_SEARCH_ENABLED=${{ secrets.AI_SEARCH_ENABLED }}
+          AI_SEARCH_PROVIDER=${{ secrets.AI_SEARCH_PROVIDER }}
+          AI_SEARCH_SEARXNG_URL=${{ secrets.AI_SEARCH_SEARXNG_URL }}
+          AI_SEARCH_GOOGLE_API_KEY=${{ secrets.AI_SEARCH_GOOGLE_API_KEY }}
+          AI_SEARCH_GOOGLE_ENGINE_ID=${{ secrets.AI_SEARCH_GOOGLE_ENGINE_ID }}
+          
+          # Unsplash Image Search
+          UNSPLASH_ACCESS_KEY=${{ secrets.UNSPLASH_ACCESS_KEY }}
+          
+          # Chat Rain Configuration
+          CHAT_RAIN_ENABLED=${{ secrets.CHAT_RAIN_ENABLED }}
+          CHAT_RAIN_MIN_DELAY=${{ secrets.CHAT_RAIN_MIN_DELAY }}
+          CHAT_RAIN_ACTIVE_WINDOW=${{ secrets.CHAT_RAIN_ACTIVE_WINDOW }}
+          CHAT_RAIN_MIN_MESSAGES=${{ secrets.CHAT_RAIN_MIN_MESSAGES }}
+          
+          # Webhook Server Configuration
+          WEBHOOK_PORT=${{ secrets.WEBHOOK_PORT }}
+          WEBHOOK_HOST=${{ secrets.WEBHOOK_HOST }}
+          
+          # Logging Configuration
+          LOG_LEVEL=${{ secrets.LOG_LEVEL }}
+          LOG_FILE=${{ secrets.LOG_FILE }}
           
           # Environment
           NODE_ENV=production
-          LOG_LEVEL=info
           ENV_EOF
           
           # Upload .env to VPS

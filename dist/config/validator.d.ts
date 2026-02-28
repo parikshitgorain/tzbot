@@ -45,7 +45,7 @@ declare const configSchema: z.ZodObject<{
     linkScanningEnabled: z.ZodDefault<z.ZodBoolean>;
     googleSafeBrowsingApiKey: z.ZodOptional<z.ZodString>;
     aiEnabled: z.ZodDefault<z.ZodBoolean>;
-    aiProvider: z.ZodDefault<z.ZodEnum<["ollama", "openai", "anthropic"]>>;
+    aiProvider: z.ZodDefault<z.ZodEnum<["ollama", "openai", "anthropic", "groq"]>>;
     aiApiKey: z.ZodOptional<z.ZodString>;
     aiModelName: z.ZodOptional<z.ZodString>;
     aiBaseUrl: z.ZodOptional<z.ZodString>;
@@ -83,7 +83,7 @@ declare const configSchema: z.ZodObject<{
     };
     linkScanningEnabled: boolean;
     aiEnabled: boolean;
-    aiProvider: "ollama" | "openai" | "anthropic";
+    aiProvider: "ollama" | "openai" | "anthropic" | "groq";
     aiChannels: string[];
     aiSearchEnabled: boolean;
     aiSearchProvider: "duckduckgo" | "searxng" | "google";
@@ -151,7 +151,7 @@ declare const configSchema: z.ZodObject<{
     linkScanningEnabled?: boolean | undefined;
     googleSafeBrowsingApiKey?: string | undefined;
     aiEnabled?: boolean | undefined;
-    aiProvider?: "ollama" | "openai" | "anthropic" | undefined;
+    aiProvider?: "ollama" | "openai" | "anthropic" | "groq" | undefined;
     aiApiKey?: string | undefined;
     aiModelName?: string | undefined;
     aiBaseUrl?: string | undefined;

@@ -2,6 +2,12 @@
 
 Use this checklist to ensure smooth deployment of AI features.
 
+## Documentation References
+
+- 📋 [Complete GitHub Secrets Reference](../docs/GITHUB_SECRETS_REFERENCE.md) - All available secrets
+- 🔧 [GitHub Secrets Setup Guide](../docs/GITHUB_SECRETS_SETUP.md) - Step-by-step setup
+- 🤖 [AI Setup Guide](../docs/AI_SETUP_GUIDE.md) - AI configuration details
+
 ## Pre-Deployment
 
 - [ ] VPS has at least 4GB RAM (8GB recommended)

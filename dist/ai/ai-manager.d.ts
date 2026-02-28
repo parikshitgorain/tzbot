@@ -14,6 +14,8 @@ export declare class AIManager {
     private maxHistoryLength;
     private activeConversations;
     private conversationTimeoutMs;
+    private imageRequestCounts;
+    private readonly MAX_IMAGES_PER_DAY;
     constructor(config: ConfigSchema, botUserId: string);
     /**
      * Initialize the AI provider (must be called after constructor)

@@ -12,12 +12,20 @@ TZBetz is Tony's streaming channel and community brand. Tony (username: Tonyz, T
 
 ## Website & Links
 - Main Website: <https://tzbetz.com>
+- Stream Schedule: <https://tzbetz.com/schedule>
 - Rainbet Leaderboard: <https://tzbetz.com/leaderboards/rainbet>
 - Kick Points Leaderboard: <https://tzbetz.com/leaderboards/kick>
 - Kick Stream: <https://kick.com/tzbetz>
-- YouTube: <https://www.youtube.com/@tzbetz>
-- Instagram: <https://www.instagram.com/tzbetz>
-- Twitter/X: <https://x.com/tzbetz>
+- YouTube: <https://www.youtube.com/@tzbetz> - IRL posts, live stream highlights, casino wins
+- Instagram: <https://www.instagram.com/tzbetz> - IRL posts, live stream highlights, casino wins
+- Twitter/X: <https://x.com/tzbetz> - Giveaway announcements, posts, updates
+
+## Social Media Content
+**YouTube (@tzbetz):** IRL posts, live stream highlights, and casino wins
+**Instagram (@tzbetz):** IRL posts, live stream highlights, and casino wins  
+**Twitter/X (@tzbetz):** Giveaway announcements, posts, and community updates
+
+All social media channels feature content from Tony's streams and community events.
 
 ## Rainbet Partnership
 - Rainbet Link: <https://rainbet.com/?r=tzbetz>
@@ -247,7 +255,34 @@ For any questions or issues:
 - Never chase losses
 - Set limits and stick to them
 - Gambling should be entertainment, not a way to make money
+
+## Community Members & Staff
+
+### 👑 Tony (TonyZ)
+The boss! Our main streamer who runs TZBetz. Streams daily on Kick playing casino games on Rainbet.
+
+### 🛡️ Ark (also known as Parik, P arik, Arik)
+Discord admin and Kick admin. One of the main admins helping run the community. The go-to person for technical issues.
+
+### 🏌️ Boboc
+A very good guy and one of the mods. Known as the golf man in the community!
+
+### 🎲 Elurb
+One of the mods, but also a degen (loves gambling). Part of the mod team.
+
+### 😂 Chaco
+One of the mods. Known for being a bit of a bullshit mod (in a funny way).
+
+### 🎰 Hantainee
+The most greedy boy in the community! Always wants tips and rolls the VIP wheel constantly. When the stream starts, he joins Discord saying "Tony you missed the wheel, give me tip!" Known for creating alts to get more money from Tony.
+
+### 💕 Hannah
+A sweet girl in the community. One of the friendly members everyone likes.
+
+### 🍀 Keegz
+A degen boy who always wins! Lucky member of the community.
 `;
+
 
 export const SAFETY_GUIDELINES = `
 IMPORTANT SAFETY RULES:

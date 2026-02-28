@@ -6,6 +6,7 @@
 import { OpenAIProvider } from './providers/openai-provider.js';
 import { AnthropicProvider } from './providers/anthropic-provider.js';
 import { OllamaProvider } from './providers/ollama-provider.js';
+import { GroqProvider } from './providers/groq-provider.js';
 import { DuckDuckGoProvider } from './search/duckduckgo-provider.js';
 import { SearXNGProvider } from './search/searxng-provider.js';
 import { GoogleSearchProvider } from './search/google-provider.js';
@@ -20,6 +21,8 @@ export class AIManager {
     maxHistoryLength = 10;
     activeConversations = new Map();
     conversationTimeoutMs = 5 * 60 * 1000; // 5 minutes
+    imageRequestCounts = new Map(); // Track image requests per user
+    MAX_IMAGES_PER_DAY = 10;
     constructor(config, botUserId) {
         this.config = config;
         this.botUserId = botUserId;
@@ -80,6 +83,13 @@ export class AIManager {
         }
         try {
             switch (this.config.aiProvider) {
+                case 'groq':
+                    if (!this.config.aiApiKey) {
+                        logger.warn('Groq is enabled but no API key provided');
+                        return;
+                    }
+                    this.provider = new GroqProvider(this.config.aiApiKey, this.config.aiModelName || 'llama-3.1-8b-instant');
+                    break;
                 case 'ollama':
                     this.provider = new OllamaProvider(this.config.aiBaseUrl || 'http://localhost:11434', this.config.aiModelName || 'llama3.2:1b');
                     // Check if Ollama is available
@@ -219,9 +229,6 @@ export class AIManager {
                 'porn', 'sex', 'nude', 'naked', 'boob', 'tit', 'penis', 'vagina',
                 // Insults
                 'idiot', 'stupid', 'dumb', 'loser', 'trash', 'garbage',
-                // Variations with symbols
-                'f*ck', 'sh*t', 'b*tch', 'a**', 'd*mn', 'h*ll',
-                'f**k', 's**t', 'b**ch', 'a**hole',
             ];
             const hasProfanity = profanityWords.some(word => {
                 // Check for exact word match with word boundaries
@@ -292,6 +299,14 @@ export class AIManager {
                 return "For affiliate, partnership, and business inquiries:\n📧 Email: tzbetz@gmail.com\n🎫 Support Ticket: <#1378172206177194144>\n\nOur team will get back to you as soon as possible!";
             }
             // Check for leaderboard questions - always redirect to website
+            // Quick response for Rainbet signup/code (CHECK THIS FIRST before leaderboard)
+            if (lowerContent.includes('rainbet signup') || lowerContent.includes('rainbet sign up') || lowerContent.includes('signup link') || lowerContent.includes('sign up link') || lowerContent.includes('rainbet link') || lowerContent.includes('rainbet code') || lowerContent.includes('bonus code') || lowerContent.includes('affiliate code')) {
+                logger.info('Rainbet signup/code question detected', {
+                    channelId,
+                    userId: message.author.id,
+                });
+                return "Use code 'tzbetz' on Rainbet! 🎰 Sign up here: <https://rainbet.com/?r=tzbetz>";
+            }
             // Check for Kick Points leaderboard (stream watchers)
             const kickPointsKeywords = ['kick points', 'stream watcher', 'watch', 'viewer', 'watching'];
             const isKickPointsQuestion = kickPointsKeywords.some(keyword => lowerContent.includes(keyword)) &&
@@ -303,23 +318,22 @@ export class AIManager {
                 });
                 return "I don't have access to live Kick Points data. Check the current rankings here: <https://tzbetz.com/leaderboards/kick> 🏆";
             }
-            // Check for Rainbet leaderboard (wagerers)
-            const rainbetKeywords = ['leaderboard', 'top wagerer', 'who is top', 'wager', 'ranking', 'position', 'who is first', 'who is 1st', 'who won', 'rainbet'];
-            const isRainbetQuestion = rainbetKeywords.some(keyword => lowerContent.includes(keyword));
-            if (isRainbetQuestion) {
+            // Check for Rainbet leaderboard (wagerers) - ONLY if asking about leaderboard/rankings
+            const isRainbetLeaderboardQuestion = lowerContent.includes('leaderboard') ||
+                lowerContent.includes('top wagerer') ||
+                lowerContent.includes('who is top') ||
+                lowerContent.includes('ranking') ||
+                lowerContent.includes('position') ||
+                lowerContent.includes('rank') ||
+                lowerContent.includes('who is first') ||
+                lowerContent.includes('who is 1st') ||
+                lowerContent.includes('who won');
+            if (isRainbetLeaderboardQuestion && lowerContent.includes('rainbet')) {
                 logger.info('Rainbet leaderboard question detected - redirecting to website', {
                     channelId,
                     userId: message.author.id,
                 });
                 return "I don't have access to live leaderboard data. Check the current rankings here: <https://tzbetz.com/leaderboards/rainbet> 🏆";
-            }
-            // Quick response for Rainbet code
-            if (lowerContent.includes('rainbet code') || lowerContent.includes('bonus code') || lowerContent.includes('affiliate code') || lowerContent.includes('rainbet signup')) {
-                logger.info('Rainbet code question detected', {
-                    channelId,
-                    userId: message.author.id,
-                });
-                return "Use code 'tzbetz' on Rainbet! 🎰 Sign up here: <https://rainbet.com/?r=tzbetz>";
             }
             // Quick response for VIP badge
             if (lowerContent.includes('vip badge') || lowerContent.includes('how to get vip') || lowerContent.includes('vip system')) {
@@ -328,6 +342,180 @@ export class AIManager {
                     userId: message.author.id,
                 });
                 return "Get VIP badge by doing ONE of these: 1) Subscribe on Kick with $10 tip (no gifted subs) OR 2) Finish in top 10 of Rainbet leaderboard last month. VIP perks: 50% raw tip on slot calls + access to 20-min VIP wheel! 🎉";
+            }
+            // Quick response for max win questions
+            if ((lowerContent.includes('max win') || lowerContent.includes('maxwin')) && (lowerContent.includes('today') || lowerContent.includes('can we') || lowerContent.includes('possible'))) {
+                logger.info('Max win question detected', {
+                    channelId,
+                    userId: message.author.id,
+                });
+                return "Yes! Max wins happen every day on Rainbet slots. Every spin has a chance - good luck! 🎰";
+            }
+            // Quick response for image requests - use AI to refine query, then fetch image
+            if ((lowerContent.includes('give me') || lowerContent.includes('show me') || lowerContent.includes('send me') || lowerContent.includes('get me')) && (lowerContent.includes('image') || lowerContent.includes('picture') || lowerContent.includes('photo'))) {
+                logger.info('Image request detected - checking rate limit', {
+                    channelId,
+                    userId: message.author.id,
+                });
+                // Check rate limit (10 images per user per day)
+                const userId = message.author.id;
+                const now = Date.now();
+                const userLimit = this.imageRequestCounts.get(userId);
+                if (userLimit) {
+                    // Check if we need to reset (24 hours passed)
+                    if (now > userLimit.resetAt) {
+                        // Reset counter
+                        this.imageRequestCounts.set(userId, { count: 0, resetAt: now + 24 * 60 * 60 * 1000 });
+                    }
+                    else if (userLimit.count >= this.MAX_IMAGES_PER_DAY) {
+                        // User exceeded limit
+                        const hoursLeft = Math.ceil((userLimit.resetAt - now) / (60 * 60 * 1000));
+                        return `You've reached your daily limit of ${this.MAX_IMAGES_PER_DAY} images! Try again in ${hoursLeft} hours. 📸`;
+                    }
+                }
+                else {
+                    // First time user
+                    this.imageRequestCounts.set(userId, { count: 0, resetAt: now + 24 * 60 * 60 * 1000 });
+                }
+                try {
+                    // Use AI to extract and refine the image search query
+                    const aiPrompt = [
+                        {
+                            role: 'system',
+                            content: 'Extract ONLY the main subject keywords from the image request. Return 2-3 words maximum. No sentences, no descriptions, just keywords. Examples:\n"give me a funny dog image" → "funny dog"\n"show me a sunset" → "sunset"\n"cat playing" → "cat playing"\n"something cute" → "cute animal"',
+                        },
+                        {
+                            role: 'user',
+                            content: message.content,
+                        },
+                    ];
+                    const aiResponse = await this.provider.generateResponse(aiPrompt, 15);
+                    let imageQuery = aiResponse.content.trim().toLowerCase();
+                    // Clean up the AI response (remove quotes, extra punctuation, newlines)
+                    imageQuery = imageQuery
+                        .replace(/['".,!?\n\r]/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    // Validate: should be short (2-4 words max)
+                    const wordCount = imageQuery.split(' ').length;
+                    if (!imageQuery || imageQuery.length < 2 || wordCount > 4 || imageQuery.length > 30) {
+                        // AI gave bad response, fall back to basic extraction
+                        imageQuery = message.content
+                            .toLowerCase()
+                            .replace(/<@!?\d+>/g, '')
+                            .replace(/give me|show me|send me|get me/gi, '')
+                            .replace(/an?|the|image|picture|photo|of/gi, '')
+                            .replace(/tzbot|tz bot|@tzbot/gi, '')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                        // Take only first 3 words
+                        const words = imageQuery.split(' ').filter(w => w.length > 0);
+                        imageQuery = words.slice(0, 3).join(' ');
+                    }
+                    // Final fallback
+                    if (!imageQuery || imageQuery.length < 2) {
+                        imageQuery = 'nature landscape';
+                    }
+                    logger.info('AI refined image query', {
+                        original: message.content,
+                        refined: imageQuery,
+                    });
+                    // Search Unsplash with the refined query
+                    const { UnsplashProvider } = await import('../ai/image/unsplash-provider.js');
+                    const unsplash = new UnsplashProvider(this.config.unsplashAccessKey || '');
+                    const images = await unsplash.searchImages(imageQuery, 1);
+                    if (images.length > 0) {
+                        const image = images[0];
+                        // Generate a friendly message based on the query
+                        const emojis = ['✨', '🎨', '📸', '🖼️', '🌟', '💫'];
+                        const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+                        const caption = `Here's your ${imageQuery} image! ${randomEmoji}`;
+                        // Clean up the title - remove Unsplash IDs and metadata
+                        let cleanTitle = image.description || imageQuery;
+                        // Remove patterns like "1g35 / " or "{$M}" or other Unsplash metadata
+                        cleanTitle = cleanTitle.replace(/^\d+[a-z]*\s*\/\s*/i, '').replace(/\{\$[A-Z]+\}/g, '').trim();
+                        // If title is too long or looks like metadata, just use the query
+                        if (cleanTitle.length > 100 || cleanTitle.includes('unsplash') || cleanTitle.includes('http')) {
+                            cleanTitle = imageQuery;
+                        }
+                        await message.reply({
+                            content: caption,
+                            embeds: [{
+                                    image: { url: image.url },
+                                    color: 0x00d4ff,
+                                    footer: {
+                                        text: `Photo by ${image.photographer}`,
+                                    },
+                                }],
+                        });
+                        // Track download (required by Unsplash API)
+                        await unsplash.trackDownload(image.downloadUrl);
+                        // Increment user's image count
+                        const currentLimit = this.imageRequestCounts.get(userId);
+                        currentLimit.count++;
+                        this.imageRequestCounts.set(userId, currentLimit);
+                        const remaining = this.MAX_IMAGES_PER_DAY - currentLimit.count;
+                        logger.info('Image sent successfully', {
+                            channelId,
+                            userId: message.author.id,
+                            query: imageQuery,
+                            remaining,
+                        });
+                        return null; // Already replied with image, don't send another message
+                    }
+                    else {
+                        return `Couldn't find an image for "${imageQuery}". Try being more specific! 📸`;
+                    }
+                }
+                catch (error) {
+                    logger.error('Failed to fetch image', { error, channelId, userId: message.author.id });
+                    return "I can't fetch images right now. Use the `/image` command instead! 📸";
+                }
+            }
+            // Quick response for "who is" questions about people
+            if (lowerContent.includes('who is') || lowerContent.includes('who\'s')) {
+                // List of known community members (lowercase) - including all aliases
+                const knownPeople = ['tony', 'tonyz', 'ark', 'parik', 'p arik', 'p_arik', 'arik', 'boboc', 'elurb', 'chaco', 'hantainee', 'hannah', 'keegz'];
+                // Extract the name being asked about
+                const nameMatch = lowerContent.match(/who\s+is\s+([\w\s_]+?)(?:\s+tzbot|\s*$)|who'?s\s+([\w\s_]+?)(?:\s+tzbot|\s*$)/i);
+                if (nameMatch) {
+                    const askedName = (nameMatch[1] || nameMatch[2]).trim().toLowerCase();
+                    // If asking about someone not in our knowledge base
+                    if (!knownPeople.includes(askedName)) {
+                        logger.info('Unknown person asked about', {
+                            channelId,
+                            userId: message.author.id,
+                            askedName,
+                        });
+                        return `I don't know ${askedName} personally, but they're part of the community! 😊`;
+                    }
+                    // If asking about someone we know, let AI handle it with the knowledge base
+                    // but don't return here - let it go to the AI
+                }
+            }
+            // Quick response for stream schedule questions
+            if (lowerContent.includes('when') && (lowerContent.includes('tony') || lowerContent.includes('stream') || lowerContent.includes('live') || lowerContent.includes('going live'))) {
+                logger.info('Stream schedule question detected', {
+                    channelId,
+                    userId: message.author.id,
+                });
+                return "Check Tony's stream schedule here: <https://tzbetz.com/schedule> 📅";
+            }
+            // Quick response for time/date questions - redirect to search
+            if ((lowerContent.includes('what time') || lowerContent.includes('current time') || lowerContent.includes('time in')) && !lowerContent.includes('rainbet') && !lowerContent.includes('tzbetz')) {
+                logger.info('Time question detected - not answering', {
+                    channelId,
+                    userId: message.author.id,
+                });
+                return "I can't check current time or dates. Try asking Google or checking your device's clock! ⏰";
+            }
+            // Quick response for questions I can't answer
+            if (lowerContent.includes('say me') || lowerContent.includes('tell me')) {
+                const cantAnswerKeywords = ['time', 'date', 'weather', 'news', 'stock', 'score'];
+                const hasCantAnswer = cantAnswerKeywords.some(keyword => lowerContent.includes(keyword));
+                if (hasCantAnswer && !lowerContent.includes('rainbet') && !lowerContent.includes('tzbetz')) {
+                    return "I only answer questions about TZBetz and Rainbet! Ask me about VIP badges, giveaways, or the Rainbet code. 🎰";
+                }
             }
             // Check for crypto price questions - trigger web search
             const cryptoKeywords = ['btc price', 'bitcoin price', 'eth price', 'ethereum price', 'crypto price'];
@@ -354,42 +542,66 @@ export class AIManager {
             // System prompt for TZBetz streaming community
             const systemPrompt = {
                 role: 'system',
-                content: `You are TZBot, the friendly AI assistant for TZBetz streaming community.
+                content: `You are TZBot, the friendly helper for TZBetz community! Talk like a chill friend, not a robot.
 
 ${TZBETZ_INFO}
 
 ${SAFETY_GUIDELINES}
 
-CRITICAL RESPONSE RULES:
-- Keep responses SHORT and COMPACT (2-4 sentences max, under 150 words)
-- Be direct and to the point - no fluff or repetition
-- Use emojis sparingly (1-2 max)
-- Answer the question directly without long introductions
-- For simple questions, give simple answers
-- Only provide details if specifically asked
-- NEVER write long paragraphs or multiple sections
-- When sharing links, wrap them in angle brackets like <https://tzbetz.com> to prevent embeds
-- Be friendly but concise
-- Promote responsible gambling
-- NO toxic language, profanity, or sexual content
+HOW TO TALK - BE NATURAL AND FRIENDLY:
+- Talk like you're texting a friend - casual, relaxed, friendly
+- Use "hey", "yeah", "nah", "btw", "lol" when it fits naturally
+- Keep it SUPER short - 1 sentence max for simple questions (20-40 words)
+- Use emojis naturally but don't overdo it (1 emoji is enough)
+- Don't sound robotic - no "I am here to assist" or "feel free to ask"
+- Be helpful but chill about it
+- When sharing links, wrap them in angle brackets like <https://tzbetz.com>
+- For "who is" questions, give ONE short sentence about them
+
+GOOD EXAMPLES (natural and friendly):
+Q: "Can we win max win today?"
+A: "Yeah for sure! Max wins happen every day on Rainbet. Good luck! 🎰"
+
+Q: "What's the Rainbet code?"
+A: "It's 'tzbetz' - use it when you sign up at <https://rainbet.com/?r=tzbetz> 🎰"
+
+Q: "How to get VIP?"
+A: "Two ways: tip $10 on Kick OR finish top 10 on the leaderboard. VIP gets you 50% raw tips! 🎉"
+
+Q: "When is Tony going live?"
+A: "Check the schedule here: <https://tzbetz.com/schedule> 📅"
+
+Q: "Who is Ark?"
+A: "Ark is the Discord and Kick admin - one of the main guys running the community! 🛡️"
+
+Q: "Who is Hantainee?"
+A: "Lol Hantainee is the greediest guy here! Always asking Tony for tips and spinning the VIP wheel 😂"
+
+Q: "Who is Boboc?"
+A: "Boboc is one of the mods - the golf man! Really good guy 🏌️"
+
+Q: "How are you?"
+A: "I'm good! Just here hanging out and helping the community. What's up? 😊"
+
+BAD EXAMPLES (too formal/robotic):
+❌ "I am TZBot, a friendly AI assistant for the TZBetz community."
+❌ "I would be happy to assist you with that information."
+❌ "Please feel free to ask me any questions you may have."
+❌ "I am here to help with: • Item 1 • Item 2 • Item 3"
 
 CASINO & STREAMER RESTRICTIONS:
-- ONLY talk about Rainbet casino - do NOT mention other casinos (Stake, Roobet, etc.)
-- ONLY talk about TZBetz/Tonyz streamer - do NOT mention other streamers
-- If asked about other streamers or casinos, politely say "I only provide info about TZBetz and Rainbet"
-- You CAN talk about game providers (No Limit City, Hacksaw Gaming, Pragmatic Play, etc.)
-- You CAN talk about general casino game mechanics and strategies
+- ONLY talk about Rainbet casino - no other casinos
+- ONLY talk about TZBetz/Tonyz - no other streamers
+- If asked about others, just say "I only know about TZBetz and Rainbet"
+- You CAN talk about game providers (No Limit City, Hacksaw, Pragmatic Play, etc.)
 
-ABSOLUTELY FORBIDDEN - DO NOT DO THIS:
-- NEVER EVER make up leaderboard positions, rankings, or statistics
-- NEVER invent usernames, wager amounts, or percentages
-- NEVER create fake numbered lists like "1st: 1200, 2nd: 980, 3rd: 850"
-- NEVER make up crypto prices or market data
-- If you don't have real data from web search, say "I don't have access to live data"
-- Then provide relevant links or suggest where to check
-- DO NOT guess or estimate - only use actual search results if available
+NEVER MAKE UP DATA:
+- NEVER invent leaderboard positions, rankings, or stats
+- NEVER create fake usernames, wager amounts, or percentages
+- If you don't have real data, say "I don't have live data for that"
+- Then share relevant links where they can check
 
-${searchContext ? '\n\nIMPORTANT: Use ONLY the web search results below. Extract prices, numbers, and data directly from search results. Do not make up any data.' + searchContext : ''}`,
+${searchContext ? '\n\nWEB SEARCH RESULTS: Use ONLY the data below. Extract exact numbers and info from search results. Never guess.' + searchContext : ''}`,
             };
             // Add user message to history
             const userMessage = {
@@ -398,8 +610,11 @@ ${searchContext ? '\n\nIMPORTANT: Use ONLY the web search results below. Extract
             };
             // Build messages array
             const messages = [systemPrompt, ...history, userMessage];
-            // Generate response
-            const response = await this.provider.generateResponse(messages, 400);
+            // Generate response with timeout protection
+            const timeoutMs = 30000; // 30 second timeout
+            const responsePromise = this.provider.generateResponse(messages, 80); // Reduced from 150 to 80 tokens for shorter responses
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI response timeout')), timeoutMs));
+            const response = await Promise.race([responsePromise, timeoutPromise]);
             if (!response.content) {
                 logger.warn('AI provider returned empty response');
                 return null;
@@ -428,6 +643,10 @@ ${searchContext ? '\n\nIMPORTANT: Use ONLY the web search results below. Extract
                 channelId: message.channelId,
                 userId: message.author.id,
             });
+            // Return a friendly fallback message instead of null
+            if (error instanceof Error && error.message === 'AI response timeout') {
+                return "Sorry, I'm thinking too slowly right now! Try asking again or use `/ai-status` to check my status. 🤖";
+            }
             return null;
         }
     }
