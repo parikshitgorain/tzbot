@@ -421,25 +421,35 @@ export class AIManager {
           userId: message.author.id,
         });
         
-        // Extract what kind of image they want
-        const imageQuery = message.content
+        // Extract what kind of image they want - be more aggressive with cleanup
+        let imageQuery = message.content
           .toLowerCase()
+          // Remove bot mentions
+          .replace(/<@!?\d+>/g, '')
+          // Remove common phrases
           .replace(/give me|show me|send me|get me/gi, '')
-          .replace(/an?|image|picture|photo/gi, '')
+          .replace(/an?|the|image|picture|photo|of/gi, '')
+          // Remove bot name variations
+          .replace(/tzbot|tz bot|@tzbot/gi, '')
+          // Clean up extra spaces
+          .replace(/\s+/g, ' ')
           .trim();
         
-        const searchQuery = imageQuery || 'random';
+        // If query is empty or too short, use a default
+        if (!imageQuery || imageQuery.length < 2) {
+          imageQuery = 'random nature';
+        }
         
         try {
           const { UnsplashProvider } = await import('@/ai/image/unsplash-provider.js');
           const unsplash = new UnsplashProvider(this.config.unsplashAccessKey || '');
-          const images = await unsplash.searchImages(searchQuery, 1);
+          const images = await unsplash.searchImages(imageQuery, 1);
           
           if (images.length > 0) {
             const image = images[0];
             await message.reply({
               embeds: [{
-                title: image.description || searchQuery,
+                title: image.description || imageQuery,
                 image: { url: image.url },
                 color: 0x00d4ff,
                 footer: {
@@ -455,12 +465,12 @@ export class AIManager {
             logger.info('Image sent successfully', {
               channelId,
               userId: message.author.id,
-              query: searchQuery,
+              query: imageQuery,
             });
             
-            return null; // Already replied with image
+            return null; // Already replied with image, don't send another message
           } else {
-            return `Couldn't find an image for "${searchQuery}". Try being more specific! 📸`;
+            return `Couldn't find an image for "${imageQuery}". Try being more specific! 📸`;
           }
         } catch (error) {
           logger.error('Failed to fetch image', { error, channelId, userId: message.author.id });
