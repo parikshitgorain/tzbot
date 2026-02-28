@@ -414,6 +414,15 @@ export class AIManager {
         return "Yes! Max wins happen every day on Rainbet slots. Every spin has a chance - good luck! 🎰";
       }
       
+      // Quick response for image requests - redirect to /image command
+      if ((lowerContent.includes('give me') || lowerContent.includes('show me') || lowerContent.includes('send me')) && (lowerContent.includes('image') || lowerContent.includes('picture') || lowerContent.includes('photo'))) {
+        logger.info('Image request detected - redirecting to /image command', {
+          channelId,
+          userId: message.author.id,
+        });
+        return "I can't generate or send images directly! Use the `/image` command to search for images. Example: `/image query:funny cat` 📸";
+      }
+      
       // Quick response for stream schedule questions
       if (lowerContent.includes('when') && (lowerContent.includes('tony') || lowerContent.includes('stream') || lowerContent.includes('live') || lowerContent.includes('going live'))) {
         logger.info('Stream schedule question detected', {
@@ -484,6 +493,7 @@ CRITICAL RESPONSE RULES - FOLLOW STRICTLY:
 - When sharing links, wrap them in angle brackets like <https://tzbetz.com> to prevent embeds
 - Be friendly but EXTREMELY concise
 - NO toxic language, profanity, or sexual content
+- NEVER describe or generate images - redirect to /image command
 
 EXAMPLE GOOD RESPONSES:
 Q: "Can we win max win today?"
@@ -497,6 +507,9 @@ A: "Subscribe on Kick with $10 tip OR finish top 10 on Rainbet leaderboard. 🎉
 
 Q: "When is Tony going live?"
 A: "Check Tony's stream schedule here: <https://tzbetz.com/schedule> 📅"
+
+Q: "Give me a funny image"
+A: "I can't generate images! Use the /image command to search for images. 📸"
 
 CASINO & STREAMER RESTRICTIONS:
 - ONLY talk about Rainbet casino - do NOT mention other casinos (Stake, Roobet, etc.)
