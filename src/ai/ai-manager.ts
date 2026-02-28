@@ -27,6 +27,8 @@ export class AIManager {
   private maxHistoryLength: number = 10;
   private activeConversations: Map<string, { userId: string; expiresAt: number }> = new Map();
   private conversationTimeoutMs: number = 5 * 60 * 1000; // 5 minutes
+  private imageRequestCounts: Map<string, { count: number; resetAt: number }> = new Map(); // Track image requests per user
+  private readonly MAX_IMAGES_PER_DAY = 10;
 
   constructor(config: ConfigSchema, botUserId: string) {
     this.config = config;
@@ -416,17 +418,37 @@ export class AIManager {
       
       // Quick response for image requests - use AI to refine query, then fetch image
       if ((lowerContent.includes('give me') || lowerContent.includes('show me') || lowerContent.includes('send me') || lowerContent.includes('get me')) && (lowerContent.includes('image') || lowerContent.includes('picture') || lowerContent.includes('photo'))) {
-        logger.info('Image request detected - using AI to refine query', {
+        logger.info('Image request detected - checking rate limit', {
           channelId,
           userId: message.author.id,
         });
+        
+        // Check rate limit (10 images per user per day)
+        const userId = message.author.id;
+        const now = Date.now();
+        const userLimit = this.imageRequestCounts.get(userId);
+        
+        if (userLimit) {
+          // Check if we need to reset (24 hours passed)
+          if (now > userLimit.resetAt) {
+            // Reset counter
+            this.imageRequestCounts.set(userId, { count: 0, resetAt: now + 24 * 60 * 60 * 1000 });
+          } else if (userLimit.count >= this.MAX_IMAGES_PER_DAY) {
+            // User exceeded limit
+            const hoursLeft = Math.ceil((userLimit.resetAt - now) / (60 * 60 * 1000));
+            return `You've reached your daily limit of ${this.MAX_IMAGES_PER_DAY} images! Try again in ${hoursLeft} hours. 📸`;
+          }
+        } else {
+          // First time user
+          this.imageRequestCounts.set(userId, { count: 0, resetAt: now + 24 * 60 * 60 * 1000 });
+        }
         
         try {
           // Use AI to extract and refine the image search query
           const aiPrompt: AIMessage[] = [
             {
               role: 'system',
-              content: 'You are a search query optimizer. Extract the main subject from the user\'s image request and return ONLY 2-4 keywords for image search. No explanations, no sentences, just keywords separated by spaces. Examples: "funny dog" → "funny dog", "give me a cat image" → "cute cat", "show me sunset" → "beautiful sunset"',
+              content: 'Extract ONLY the main subject keywords from the image request. Return 2-3 words maximum. No sentences, no descriptions, just keywords. Examples:\n"give me a funny dog image" → "funny dog"\n"show me a sunset" → "sunset"\n"cat playing" → "cat playing"\n"something cute" → "cute animal"',
             },
             {
               role: 'user',
@@ -434,14 +456,19 @@ export class AIManager {
             },
           ];
           
-          const aiResponse = await this.provider.generateResponse(aiPrompt, 20);
+          const aiResponse = await this.provider.generateResponse(aiPrompt, 15);
           let imageQuery = aiResponse.content.trim().toLowerCase();
           
-          // Clean up the AI response (remove quotes, extra punctuation)
-          imageQuery = imageQuery.replace(/['".,!?]/g, '').trim();
+          // Clean up the AI response (remove quotes, extra punctuation, newlines)
+          imageQuery = imageQuery
+            .replace(/['".,!?\n\r]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
           
-          // If AI returned empty or too long, fall back to basic extraction
-          if (!imageQuery || imageQuery.length < 2 || imageQuery.length > 50) {
+          // Validate: should be short (2-4 words max)
+          const wordCount = imageQuery.split(' ').length;
+          if (!imageQuery || imageQuery.length < 2 || wordCount > 4 || imageQuery.length > 30) {
+            // AI gave bad response, fall back to basic extraction
             imageQuery = message.content
               .toLowerCase()
               .replace(/<@!?\d+>/g, '')
@@ -450,11 +477,15 @@ export class AIManager {
               .replace(/tzbot|tz bot|@tzbot/gi, '')
               .replace(/\s+/g, ' ')
               .trim();
+            
+            // Take only first 3 words
+            const words = imageQuery.split(' ').filter(w => w.length > 0);
+            imageQuery = words.slice(0, 3).join(' ');
           }
           
           // Final fallback
           if (!imageQuery || imageQuery.length < 2) {
-            imageQuery = 'random nature';
+            imageQuery = 'nature landscape';
           }
           
           logger.info('AI refined image query', {
@@ -484,10 +515,18 @@ export class AIManager {
             // Track download (required by Unsplash API)
             await unsplash.trackDownload(image.downloadUrl);
             
+            // Increment user's image count
+            const currentLimit = this.imageRequestCounts.get(userId)!;
+            currentLimit.count++;
+            this.imageRequestCounts.set(userId, currentLimit);
+            
+            const remaining = this.MAX_IMAGES_PER_DAY - currentLimit.count;
+            
             logger.info('Image sent successfully', {
               channelId,
               userId: message.author.id,
               query: imageQuery,
+              remaining,
             });
             
             return null; // Already replied with image, don't send another message
