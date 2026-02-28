@@ -37,24 +37,31 @@
 - Cron job added: Checks every 5 minutes
 - Auto-restart on failure: Enabled
 
-## ❌ Pending - Code Deployment
+## ✅ Code Deployed and Working
 
 ### Current Situation
-The AI code exists in the **Development branch** but has NOT been deployed to production yet:
-- Current production version: **1.5.3** (no AI code)
+The AI code has been deployed to production and is working:
+- Current production version: **1.5.6** (with AI code)
 - Development branch version: **1.0.0-dev.6** (has AI code)
 
-### AI Code Status in Development Branch
-- ✅ AI Manager: `src/ai/ai-manager.ts`
-- ✅ AI Providers: `src/ai/providers/` (Ollama, OpenAI, Anthropic)
-- ✅ Search Providers: `src/ai/search/` (DuckDuckGo, SearXNG, Google)
-- ✅ Image Provider: `src/ai/image/unsplash-provider.ts`
-- ✅ Knowledge Base: `src/ai/knowledge/tzbetz-info.ts`
-- ✅ AI Commands: `src/commands/ai.commands.ts`
-- ✅ Image Commands: `src/commands/image.commands.ts`
+### AI Code Status in Production
+- ✅ AI Manager: Working (profanity filter regex fixed)
+- ✅ AI Providers: Ollama provider active and responding
+- ✅ Search Providers: Available but disabled
+- ✅ Image Provider: Available (needs Unsplash key)
+- ✅ Knowledge Base: Loaded with TZBetz info
+- ✅ AI Commands: `/ai-status`, `/ai-clear-history`, `/ai-toggle` working
+- ✅ Image Commands: Available
 - ✅ Config Validator: Updated with AI settings
 - ✅ Tests: Fixed and passing
 - ✅ Coverage: AI modules excluded (93%+ coverage maintained)
+
+### Recent Fixes
+- **2026-02-28**: Fixed regex error in profanity filter
+  - Removed censored profanity words with asterisks (f*ck, sh*t, etc.)
+  - These were causing "Nothing to repeat" regex errors
+  - Applied fix directly on VPS and committed to source
+  - Bot now responds to messages without errors
 
 ### What Needs to Happen
 
