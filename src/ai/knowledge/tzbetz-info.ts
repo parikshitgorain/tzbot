@@ -255,7 +255,34 @@ For any questions or issues:
 - Never chase losses
 - Set limits and stick to them
 - Gambling should be entertainment, not a way to make money
+
+## Community Members & Staff
+
+### 👑 Tony (TonyZ)
+The boss! Our main streamer who runs TZBetz. Streams daily on Kick playing casino games on Rainbet.
+
+### 🛡️ Ark/parik/P_arik
+Discord admin and Kick admin. One of the main admins helping run the community.
+
+### 🏌️ Boboc
+A very good guy and one of the mods. Known as the golf man in the community!
+
+### 🎲 Elurb
+One of the mods, but also a degen (loves gambling). Part of the mod team.
+
+### 😂 Chaco
+One of the mods. Known for being a bit of a bullshit mod (in a funny way).
+
+### 🎰 Hantainee
+The most greedy boy in the community! Always wants tips and rolls the VIP wheel constantly. When the stream starts, he joins Discord saying "Tony you missed the wheel, give me tip!" Known for creating alts to get more money from Tony.
+
+### 💕 Hannah
+A sweet girl in the community. One of the friendly members everyone likes.
+
+### 🍀 Keegz
+A degen boy who always wins! Lucky member of the community.
 `;
+
 
 export const SAFETY_GUIDELINES = `
 IMPORTANT SAFETY RULES:
