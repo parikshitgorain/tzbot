@@ -414,13 +414,58 @@ export class AIManager {
         return "Yes! Max wins happen every day on Rainbet slots. Every spin has a chance - good luck! 🎰";
       }
       
-      // Quick response for image requests - redirect to /image command
-      if ((lowerContent.includes('give me') || lowerContent.includes('show me') || lowerContent.includes('send me')) && (lowerContent.includes('image') || lowerContent.includes('picture') || lowerContent.includes('photo'))) {
-        logger.info('Image request detected - redirecting to /image command', {
+      // Quick response for image requests - fetch and send image directly
+      if ((lowerContent.includes('give me') || lowerContent.includes('show me') || lowerContent.includes('send me') || lowerContent.includes('get me')) && (lowerContent.includes('image') || lowerContent.includes('picture') || lowerContent.includes('photo'))) {
+        logger.info('Image request detected - fetching image', {
           channelId,
           userId: message.author.id,
         });
-        return "I can't generate or send images directly! Use the `/image` command to search for images. Example: `/image query:funny cat` 📸";
+        
+        // Extract what kind of image they want
+        const imageQuery = message.content
+          .toLowerCase()
+          .replace(/give me|show me|send me|get me/gi, '')
+          .replace(/an?|image|picture|photo/gi, '')
+          .trim();
+        
+        const searchQuery = imageQuery || 'random';
+        
+        try {
+          const { UnsplashProvider } = await import('@/ai/image/unsplash-provider.js');
+          const unsplash = new UnsplashProvider(this.config.unsplashAccessKey || '');
+          const images = await unsplash.searchImages(searchQuery, 1);
+          
+          if (images.length > 0) {
+            const image = images[0];
+            await message.reply({
+              embeds: [{
+                title: image.description || searchQuery,
+                image: { url: image.url },
+                color: 0x00d4ff,
+                footer: {
+                  text: `Photo by ${image.photographer} on Unsplash`,
+                },
+                url: image.photographerUrl,
+              }],
+            });
+            
+            // Track download (required by Unsplash API)
+            await unsplash.trackDownload(image.downloadUrl);
+            
+            logger.info('Image sent successfully', {
+              channelId,
+              userId: message.author.id,
+              query: searchQuery,
+            });
+            
+            return null; // Already replied with image
+          } else {
+            return `Couldn't find an image for "${searchQuery}". Try being more specific! 📸`;
+          }
+        } catch (error) {
+          logger.error('Failed to fetch image', { error, channelId, userId: message.author.id });
+          return "I can't fetch images right now. Use the `/image` command instead! 📸";
+        }
       }
       
       // Quick response for stream schedule questions
