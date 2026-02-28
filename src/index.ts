@@ -1908,6 +1908,159 @@ class TZBotApplication {
           }
         }
 
+        // Profanity check (runs on ALL messages, even without AI enabled)
+        if (this.aiManager) {
+          const profanityInfo = await this.aiManager.checkProfanity(message);
+          if (profanityInfo) {
+            // Record offense and apply punishment (without sending notification embeds)
+            try {
+              const { OffenseRepository } = await import('@/core/database/repositories/OffenseRepository.js');
+              const { PunishmentCalculator, PunishmentType } = await import('@/moderation/punishment-calculator.js');
+              const { getPool } = await import('@/core/database/pool.js');
+              
+              const pool = getPool();
+              const offenseRepo = new OffenseRepository(pool);
+              const punishmentCalc = new PunishmentCalculator();
+              
+              // Get bot user ID
+              const botUserId = this.discordClient.client.user?.id || 'system';
+              
+              const client = await pool.connect();
+              
+              try {
+                await client.query('BEGIN');
+                
+                // Get current offense record
+                let record = await offenseRepo.getOffenseRecord(profanityInfo.userId);
+                
+                // Check if 30-day reset is needed
+                if (record && record.last_offense_timestamp) {
+                  if (punishmentCalc.shouldResetOffenses(record.last_offense_timestamp)) {
+                    logger.info('30-day reset triggered for profanity offense', { userId: profanityInfo.userId });
+                    await offenseRepo.resetOffenses(profanityInfo.userId);
+                    record = null;
+                  }
+                }
+                
+                // Initialize record if doesn't exist
+                if (!record) {
+                  record = {
+                    user_id: profanityInfo.userId,
+                    total_offenses: 0,
+                    last_offense_timestamp: null,
+                    current_timeout_duration: 0,
+                    is_banned: false,
+                    warning_history: [],
+                  };
+                }
+                
+                // Increment offense count
+                const newOffenseCount = record.total_offenses + 1;
+                
+                // Calculate punishment
+                const punishment = punishmentCalc.calculatePunishment(
+                  newOffenseCount,
+                  record.current_timeout_duration,
+                );
+                
+                // Update record
+                record.total_offenses = newOffenseCount;
+                record.last_offense_timestamp = new Date();
+                
+                if (punishment.type === PunishmentType.TIMEOUT && punishment.duration) {
+                  record.current_timeout_duration = punishment.duration;
+                } else if (punishment.type === PunishmentType.PERMANENT_BAN) {
+                  record.is_banned = true;
+                  record.current_timeout_duration = 0;
+                }
+                
+                // Save updated record
+                await offenseRepo.saveOffenseRecord(record);
+                
+                // Add offense entry
+                await offenseRepo.addOffenseEntry(profanityInfo.userId, {
+                  timestamp: new Date(),
+                  reason: profanityInfo.reason,
+                  punishment_applied: punishment.type,
+                  moderator_id: botUserId,
+                  timeout_duration: punishment.duration,
+                });
+                
+                await client.query('COMMIT');
+                
+                logger.info('Profanity offense processed', {
+                  userId: profanityInfo.userId,
+                  offenseCount: newOffenseCount,
+                  punishmentType: punishment.type,
+                  duration: punishment.duration,
+                });
+                
+                // Apply punishment if needed
+                const member = message.member;
+                if (member) {
+                  if (punishment.type === PunishmentType.TIMEOUT && punishment.duration) {
+                    const durationMs = punishment.duration * 60 * 60 * 1000;
+                    await member.timeout(durationMs, profanityInfo.reason);
+                    logger.info('User timed out for profanity', {
+                      userId: profanityInfo.userId,
+                      duration: punishment.duration,
+                      offenseCount: newOffenseCount,
+                    });
+                  } else if (punishment.type === PunishmentType.PERMANENT_BAN) {
+                    await member.ban({ reason: profanityInfo.reason });
+                    logger.info('User banned for profanity', {
+                      userId: profanityInfo.userId,
+                      offenseCount: newOffenseCount,
+                    });
+                  }
+                }
+                
+                // Send short warning message and auto-delete
+                if ('send' in message.channel) {
+                  let warningText = `⚠️ <@${profanityInfo.userId}> Watch your language! `;
+                  
+                  if (punishment.type === PunishmentType.WARNING) {
+                    warningText += `Warning ${newOffenseCount}. Keep it friendly! 😊`;
+                  } else if (punishment.type === PunishmentType.TIMEOUT && punishment.duration) {
+                    warningText += `Timed out for ${punishment.duration} hour${punishment.duration > 1 ? 's' : ''}. Warning ${newOffenseCount}.`;
+                  } else if (punishment.type === PunishmentType.PERMANENT_BAN) {
+                    warningText += `Banned. Warning ${newOffenseCount}.`;
+                  }
+                  
+                  const warningMessage = await message.channel.send(warningText);
+                  
+                  // Auto-delete warning after 5 seconds
+                  setTimeout(async () => {
+                    try {
+                      await warningMessage.delete();
+                      logger.debug('Profanity warning auto-deleted', {
+                        channelId: message.channelId,
+                        userId: profanityInfo.userId,
+                      });
+                    } catch (error) {
+                      logger.warn('Failed to auto-delete profanity warning', {
+                        error,
+                        channelId: message.channelId,
+                      });
+                    }
+                  }, 5000);
+                }
+              } catch (error) {
+                await client.query('ROLLBACK');
+                throw error;
+              } finally {
+                client.release();
+              }
+            } catch (error) {
+              logger.error('Failed to process profanity offense', {
+                error,
+                userId: profanityInfo.userId,
+              });
+            }
+            return; // Stop processing this message
+          }
+        }
+
         // AI Auto-Reply: Check if bot should respond
         if (this.aiManager && this.aiManager.shouldRespond(message)) {
           try {

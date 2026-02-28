@@ -10,11 +10,13 @@ import { OpenAIProvider } from './providers/openai-provider.js';
 import { AnthropicProvider } from './providers/anthropic-provider.js';
 import { OllamaProvider } from './providers/ollama-provider.js';
 import { GroqProvider } from './providers/groq-provider.js';
+import { XAIProvider } from './providers/xai-provider.js';
 import { ISearchProvider } from './search/search-provider.interface.js';
 import { DuckDuckGoProvider } from './search/duckduckgo-provider.js';
 import { SearXNGProvider } from './search/searxng-provider.js';
 import { GoogleSearchProvider } from './search/google-provider.js';
 import { TZBETZ_INFO, SAFETY_GUIDELINES } from './knowledge/tzbetz-info.js';
+import { getTeamInfoForAI } from './knowledge/team-database.js';
 import { logger, logError } from '@/core/logger/logger.js';
 import { ConfigSchema } from '@/config/validator.js';
 
@@ -26,9 +28,10 @@ export class AIManager {
   private conversationHistory: Map<string, AIMessage[]> = new Map();
   private maxHistoryLength: number = 10;
   private activeConversations: Map<string, { userId: string; expiresAt: number }> = new Map();
-  private conversationTimeoutMs: number = 5 * 60 * 1000; // 5 minutes
+  private conversationTimeoutMs: number = 10000; // 10 seconds conversation window
   private imageRequestCounts: Map<string, { count: number; resetAt: number }> = new Map(); // Track image requests per user
   private readonly MAX_IMAGES_PER_DAY = 10;
+  private processedMessages: Set<string> = new Set(); // Track processed message IDs to prevent duplicates
 
   constructor(config: ConfigSchema, botUserId: string) {
     this.config = config;
@@ -95,6 +98,16 @@ export class AIManager {
 
     try {
       switch (this.config.aiProvider) {
+        case 'xai':
+          if (!this.config.aiApiKey) {
+            logger.warn('xAI is enabled but no API key provided');
+            return;
+          }
+          this.provider = new XAIProvider(
+            this.config.aiApiKey,
+            this.config.aiModelName || 'grok-beta',
+          );
+          break;
         case 'groq':
           if (!this.config.aiApiKey) {
             logger.warn('Groq is enabled but no API key provided');
@@ -153,9 +166,76 @@ export class AIManager {
   }
 
   /**
+   * Check message for profanity (runs on ALL messages, regardless of AI settings)
+   * Returns warning info if profanity detected, null otherwise
+   */
+  async checkProfanity(message: Message): Promise<{ userId: string; reason: string } | null> {
+    const lowerContent = message.content.toLowerCase();
+    
+    // Check for profanity/bad words
+    const profanityWords = [
+      // Common profanity
+      'fuck', 'shit', 'bitch', 'ass', 'damn', 'hell', 'crap',
+      'bastard', 'dick', 'pussy', 'cock', 'cunt', 'whore', 'slut',
+      // Variations and abbreviations
+      'fck', 'fuk', 'fk', 'sht', 'btch', 'dmn', 'wtf', 'stfu',
+      'motherfucker', 'mf', 'mofo', 'asshole', 'bullshit', 'bs',
+      // Slurs and offensive terms
+      'retard', 'retarded', 'fag', 'faggot', 'nigga', 'nigger',
+      // Sexual/explicit
+      'porn', 'sex', 'nude', 'naked', 'boob', 'tit', 'penis', 'vagina',
+      // Insults
+      'idiot', 'stupid', 'dumb', 'loser', 'trash', 'garbage',
+    ];
+    
+    const hasProfanity = profanityWords.some(word => {
+      // Check for exact word match with word boundaries
+      const regex = new RegExp(`\\b${word}\\b`, 'i');
+      return regex.test(lowerContent);
+    });
+    
+    if (hasProfanity) {
+      logger.info('Profanity detected in message - deleting and issuing warning', {
+        channelId: message.channelId,
+        userId: message.author.id,
+      });
+      
+      // Delete the message with profanity
+      try {
+        await message.delete();
+        logger.info('Profanity message deleted', {
+          channelId: message.channelId,
+          userId: message.author.id,
+          messageId: message.id,
+        });
+      } catch (error) {
+        logger.error('Failed to delete profanity message', {
+          error,
+          channelId: message.channelId,
+          userId: message.author.id,
+        });
+      }
+      
+      // Return warning info to be processed by moderation system
+      return {
+        userId: message.author.id,
+        reason: 'Profanity/Offensive Language',
+      };
+    }
+    
+    return null;
+  }
+
+  /**
    * Check if AI should respond to this message
    */
   shouldRespond(message: Message): boolean {
+    // Check if we've already processed this message
+    if (this.processedMessages.has(message.id)) {
+      logger.debug('AI not responding: message already processed', { messageId: message.id });
+      return false;
+    }
+
     logger.debug('AI shouldRespond check', {
       aiEnabled: this.config.aiEnabled,
       providerAvailable: !!this.provider?.isAvailable(),
@@ -191,6 +271,10 @@ export class AIManager {
     const lowerContent = message.content.toLowerCase();
     const triggerKeywords = [
       'tzbot',
+      'what time',
+      'current time',
+      'time in',
+      'time now',
       'vip badge',
       'how to get vip',
       'rainbet code',
@@ -199,20 +283,32 @@ export class AIManager {
       'bonus code',
       'leaderboard',
       'kick points',
+      'stream schedule',
+      'when tony',
+      'when stream',
     ];
     
     const hasTriggerKeyword = triggerKeywords.some(keyword => lowerContent.includes(keyword));
     
-    // Check if user has an active conversation with the bot
+    // Check if user has an active conversation (within 10 seconds)
     const conversationKey = `${message.channelId}-${message.author.id}`;
     const activeConversation = this.activeConversations.get(conversationKey);
     const hasActiveConversation = !!(activeConversation && activeConversation.expiresAt > Date.now());
     
+    // Respond if: mentioned OR trigger keyword OR active conversation
     const shouldRespond = isBotMentioned || hasTriggerKeyword || hasActiveConversation;
     
-    // If responding, start/extend the conversation
+    // If responding, start/extend the conversation and mark message as processed
     if (shouldRespond) {
+      // Start/extend conversation with 10-second window
       this.startConversation(message.channelId, message.author.id);
+      this.processedMessages.add(message.id);
+      
+      // Clean up old processed messages (keep last 100)
+      if (this.processedMessages.size > 100) {
+        const messagesToDelete = Array.from(this.processedMessages).slice(0, 50);
+        messagesToDelete.forEach(id => this.processedMessages.delete(id));
+      }
     }
     
     logger.debug('AI response decision', {
@@ -242,6 +338,7 @@ export class AIManager {
       channelId,
       userId,
       expiresAt: new Date(expiresAt).toISOString(),
+      windowSeconds: this.conversationTimeoutMs / 1000,
     });
   }
 
@@ -260,51 +357,163 @@ export class AIManager {
 
       const lowerContent = message.content.toLowerCase();
       
-      // Check for profanity/bad words FIRST (highest priority)
-      const profanityWords = [
-        // Common profanity
-        'fuck', 'shit', 'bitch', 'ass', 'damn', 'hell', 'crap',
-        'bastard', 'dick', 'pussy', 'cock', 'cunt', 'whore', 'slut',
-        // Variations and abbreviations
-        'fck', 'fuk', 'fk', 'sht', 'btch', 'dmn', 'wtf', 'stfu',
-        'motherfucker', 'mf', 'mofo', 'asshole', 'bullshit', 'bs',
-        // Slurs and offensive terms
-        'retard', 'retarded', 'fag', 'faggot', 'nigga', 'nigger',
-        // Sexual/explicit
-        'porn', 'sex', 'nude', 'naked', 'boob', 'tit', 'penis', 'vagina',
-        // Insults
-        'idiot', 'stupid', 'dumb', 'loser', 'trash', 'garbage',
-      ];
+      // Clear history for team/mod questions to get fresh responses
+      if (lowerContent.includes('who') && (lowerContent.includes('mod') || lowerContent.includes('team') || lowerContent.includes('ark') || lowerContent.includes('elurb') || lowerContent.includes('boboc') || lowerContent.includes('chaquito') || lowerContent.includes('vavr'))) {
+        history = []; // Clear history to get fresh AI response
+        logger.debug('Cleared history for team question');
+      }
       
-      const hasProfanity = profanityWords.some(word => {
-        // Check for exact word match with word boundaries
-        const regex = new RegExp(`\\b${word}\\b`, 'i');
-        return regex.test(lowerContent);
-      });
-      
-      if (hasProfanity) {
-        logger.info('Profanity detected in message - deleting and issuing warning', {
+      // PRIORITY 1: Quick response for time/date questions - provide actual time
+      if ((lowerContent.includes('what time') || lowerContent.includes('current time') || lowerContent.includes('time in') || lowerContent.includes('time now') || lowerContent.includes('time right now')) && !lowerContent.includes('rainbet') && !lowerContent.includes('tzbetz')) {
+        logger.info('Time question detected - providing current time', {
           channelId,
           userId: message.author.id,
         });
         
-        // Delete the message with profanity
-        try {
-          await message.delete();
-          logger.info('Profanity message deleted', {
-            channelId,
-            userId: message.author.id,
-            messageId: message.id,
-          });
-        } catch (error) {
-          logger.error('Failed to delete profanity message', {
-            error,
-            channelId,
-            userId: message.author.id,
-          });
-        }
+        // Extract city/timezone from the question - improved regex
+        const cityMatch = lowerContent.match(/time (?:in|at|for|now in|right now in|now at) ([a-z\s]+)/i);
+        const cityName = cityMatch ? cityMatch[1].trim() : null;
         
-        return `⚠️ **Warning** ⚠️\n\n<@${message.author.id}>, please watch your language. Profanity and offensive language are not allowed in this community.\n\n**Community Rules:**\n• Be respectful to all members\n• No toxic language or profanity\n• Keep conversations positive and welcoming\n\nRepeated violations may result in timeout or ban. Let's keep this community friendly! 😊`;
+        // Common timezone mappings
+        const timezoneMap: Record<string, string> = {
+          'kolkata': 'Asia/Kolkata',
+          'calcutta': 'Asia/Kolkata',
+          'delhi': 'Asia/Kolkata',
+          'mumbai': 'Asia/Kolkata',
+          'bombay': 'Asia/Kolkata',
+          'bangalore': 'Asia/Kolkata',
+          'bengaluru': 'Asia/Kolkata',
+          'chennai': 'Asia/Kolkata',
+          'hyderabad': 'Asia/Kolkata',
+          'pune': 'Asia/Kolkata',
+          'purulia': 'Asia/Kolkata',
+          'west bengal': 'Asia/Kolkata',
+          'india': 'Asia/Kolkata',
+          'new york': 'America/New_York',
+          'newyork': 'America/New_York',
+          'ny': 'America/New_York',
+          'nyc': 'America/New_York',
+          'london': 'Europe/London',
+          'tokyo': 'Asia/Tokyo',
+          'sydney': 'Australia/Sydney',
+          'dubai': 'Asia/Dubai',
+          'singapore': 'Asia/Singapore',
+          'los angeles': 'America/Los_Angeles',
+          'la': 'America/Los_Angeles',
+          'chicago': 'America/Chicago',
+          'paris': 'Europe/Paris',
+          'berlin': 'Europe/Berlin',
+          'moscow': 'Europe/Moscow',
+          'beijing': 'Asia/Shanghai',
+          'hong kong': 'Asia/Hong_Kong',
+          'hongkong': 'Asia/Hong_Kong',
+          'toronto': 'America/Toronto',
+          'vancouver': 'America/Vancouver',
+          'san francisco': 'America/Los_Angeles',
+          'sf': 'America/Los_Angeles',
+        };
+        
+        // Simple fuzzy matching function (Levenshtein distance)
+        const fuzzyMatch = (input: string, target: string): number => {
+          const matrix: number[][] = [];
+          const n = input.length;
+          const m = target.length;
+          
+          if (n === 0) return m;
+          if (m === 0) return n;
+          
+          for (let i = 0; i <= n; i++) {
+            matrix[i] = [i];
+          }
+          for (let j = 0; j <= m; j++) {
+            matrix[0][j] = j;
+          }
+          
+          for (let i = 1; i <= n; i++) {
+            for (let j = 1; j <= m; j++) {
+              const cost = input[i - 1] === target[j - 1] ? 0 : 1;
+              matrix[i][j] = Math.min(
+                matrix[i - 1][j] + 1,
+                matrix[i][j - 1] + 1,
+                matrix[i - 1][j - 1] + cost
+              );
+            }
+          }
+          
+          return matrix[n][m];
+        };
+        
+        try {
+          let timeString: string;
+          let locationName: string;
+          
+          if (cityName) {
+            const normalizedInput = cityName.toLowerCase().trim();
+            
+            // Try exact match first
+            let matchedCity = timezoneMap[normalizedInput];
+            let matchedCityName = normalizedInput;
+            
+            // If no exact match, try fuzzy matching
+            if (!matchedCity) {
+              let bestMatch: string | null = null;
+              let bestDistance = Infinity;
+              
+              for (const city of Object.keys(timezoneMap)) {
+                const distance = fuzzyMatch(normalizedInput, city);
+                // Allow up to 2 character differences for typos
+                if (distance <= 2 && distance < bestDistance) {
+                  bestDistance = distance;
+                  bestMatch = city;
+                }
+              }
+              
+              if (bestMatch) {
+                matchedCity = timezoneMap[bestMatch];
+                matchedCityName = bestMatch;
+                logger.info('Fuzzy matched city', { input: normalizedInput, matched: bestMatch, distance: bestDistance });
+              }
+            }
+            
+            if (matchedCity) {
+              // Get time for specific city
+              const cityTime = new Date().toLocaleString('en-US', { 
+                timeZone: matchedCity,
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+              });
+              timeString = cityTime;
+              locationName = matchedCityName.charAt(0).toUpperCase() + matchedCityName.slice(1);
+            } else {
+              // City not found
+              return `I don't know the timezone for "${cityName}". Try cities like: Kolkata, Delhi, Mumbai, New York, London, Tokyo, Dubai, Singapore. ⏰`;
+            }
+          } else {
+            // Get server time (UTC)
+            const now = new Date();
+            timeString = now.toLocaleString('en-US', { 
+              timeZone: 'UTC',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            });
+            locationName = 'UTC';
+          }
+          
+          return `It's currently ${timeString} in ${locationName}! ⏰`;
+        } catch (error) {
+          logger.error('Failed to get time', { error, cityName });
+          return "I can't check the time right now. Try asking Google or checking your device's clock! ⏰";
+        }
       }
       
       // Check for questions about other streamers or casinos FIRST (before other checks)
@@ -586,15 +795,6 @@ export class AIManager {
         return "Check Tony's stream schedule here: <https://tzbetz.com/schedule> 📅";
       }
       
-      // Quick response for time/date questions - redirect to search
-      if ((lowerContent.includes('what time') || lowerContent.includes('current time') || lowerContent.includes('time in')) && !lowerContent.includes('rainbet') && !lowerContent.includes('tzbetz')) {
-        logger.info('Time question detected - not answering', {
-          channelId,
-          userId: message.author.id,
-        });
-        return "I can't check current time or dates. Try asking Google or checking your device's clock! ⏰";
-      }
-      
       // Quick response for questions I can't answer
       if (lowerContent.includes('say me') || lowerContent.includes('tell me')) {
         const cantAnswerKeywords = ['time', 'date', 'weather', 'news', 'stock', 'score'];
@@ -636,6 +836,11 @@ export class AIManager {
 
 ${TZBETZ_INFO}
 
+TEAM KNOWLEDGE (YOU KNOW THESE PEOPLE):
+${getTeamInfoForAI()}
+
+IMPORTANT: You KNOW all the team members listed above. When asked about mods or team, use this information confidently. Don't say "I don't know" - you DO know them!
+
 ${SAFETY_GUIDELINES}
 
 HOW TO TALK - BE NATURAL AND FRIENDLY:
@@ -648,7 +853,18 @@ HOW TO TALK - BE NATURAL AND FRIENDLY:
 - When sharing links, wrap them in angle brackets like <https://tzbetz.com>
 - For "who is" questions, give ONE short sentence about them
 
+TALKING ABOUT TEAM MEMBERS (IMPORTANT):
+- When asked about mods/team, be POSITIVE and COOL about everyone
+- Highlight what makes each person special and valued
+- Never make anyone feel less important than others
+- Use friendly, uplifting language that makes everyone feel appreciated
+- Focus on their unique contributions and personality
+- Make it sound natural, not like a formal list
+
 GOOD EXAMPLES (natural and friendly):
+Q: "Who are the mods?"
+A: "We got an awesome mod team! Ark runs the tech side and keeps everything smooth, elurb is the top degen always grinding #1 on the leaderboard, BOBOC is the golf man keeping things chill, chaquito brings that degen family energy, and Vavr helps out when needed. They all keep the community friendly and fun! 🛡️"
+
 Q: "Can we win max win today?"
 A: "Yeah for sure! Max wins happen every day on Rainbet. Good luck! 🎰"
 

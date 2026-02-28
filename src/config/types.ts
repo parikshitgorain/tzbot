@@ -61,7 +61,7 @@ export interface BotConfig {
 
   // AI settings
   aiEnabled: boolean;
-  aiProvider: 'ollama' | 'openai' | 'anthropic';
+  aiProvider: 'ollama' | 'openai' | 'anthropic' | 'groq' | 'xai';
   aiApiKey?: string;
   aiModelName?: string;
   aiBaseUrl?: string;
