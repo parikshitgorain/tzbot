@@ -9,6 +9,7 @@ import { IAIProvider, AIMessage } from './ai-provider.interface.js';
 import { OpenAIProvider } from './providers/openai-provider.js';
 import { AnthropicProvider } from './providers/anthropic-provider.js';
 import { OllamaProvider } from './providers/ollama-provider.js';
+import { GroqProvider } from './providers/groq-provider.js';
 import { ISearchProvider } from './search/search-provider.interface.js';
 import { DuckDuckGoProvider } from './search/duckduckgo-provider.js';
 import { SearXNGProvider } from './search/searxng-provider.js';
@@ -92,6 +93,16 @@ export class AIManager {
 
     try {
       switch (this.config.aiProvider) {
+        case 'groq':
+          if (!this.config.aiApiKey) {
+            logger.warn('Groq is enabled but no API key provided');
+            return;
+          }
+          this.provider = new GroqProvider(
+            this.config.aiApiKey,
+            this.config.aiModelName || 'llama-3.1-8b-instant',
+          );
+          break;
         case 'ollama':
           this.provider = new OllamaProvider(
             this.config.aiBaseUrl || 'http://localhost:11434',

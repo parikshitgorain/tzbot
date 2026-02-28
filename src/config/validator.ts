@@ -56,7 +56,7 @@ const configSchema = z.object({
 
   // AI settings (optional - AI disabled if not configured)
   aiEnabled: z.boolean().default(false),
-  aiProvider: z.enum(['ollama', 'openai', 'anthropic']).default('ollama'),
+  aiProvider: z.enum(['ollama', 'openai', 'anthropic', 'groq']).default('ollama'),
   aiApiKey: z.string().optional(), // Not needed for Ollama
   aiModelName: z.string().optional(), // e.g., 'llama3.2:1b', 'phi3:mini', 'gemma2:2b'
   aiBaseUrl: z.string().optional(), // Ollama base URL (default: http://localhost:11434)
