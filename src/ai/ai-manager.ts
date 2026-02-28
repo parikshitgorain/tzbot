@@ -506,16 +506,23 @@ export class AIManager {
             const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
             const caption = `Here's your ${imageQuery} image! ${randomEmoji}`;
             
+            // Clean up the title - remove Unsplash IDs and metadata
+            let cleanTitle = image.description || imageQuery;
+            // Remove patterns like "1g35 / " or "{$M}" or other Unsplash metadata
+            cleanTitle = cleanTitle.replace(/^\d+[a-z]*\s*\/\s*/i, '').replace(/\{\$[A-Z]+\}/g, '').trim();
+            // If title is too long or looks like metadata, just use the query
+            if (cleanTitle.length > 100 || cleanTitle.includes('unsplash') || cleanTitle.includes('http')) {
+              cleanTitle = imageQuery;
+            }
+            
             await message.reply({
               content: caption,
               embeds: [{
-                title: image.description || imageQuery,
                 image: { url: image.url },
                 color: 0x00d4ff,
                 footer: {
                   text: `Photo by ${image.photographer}`,
                 },
-                url: image.photographerUrl,
               }],
             });
             
