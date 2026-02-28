@@ -355,6 +355,15 @@ export class AIManager {
       
       // Check for leaderboard questions - always redirect to website
       
+      // Quick response for Rainbet signup/code (CHECK THIS FIRST before leaderboard)
+      if (lowerContent.includes('rainbet signup') || lowerContent.includes('rainbet sign up') || lowerContent.includes('signup link') || lowerContent.includes('sign up link') || lowerContent.includes('rainbet link') || lowerContent.includes('rainbet code') || lowerContent.includes('bonus code') || lowerContent.includes('affiliate code')) {
+        logger.info('Rainbet signup/code question detected', {
+          channelId,
+          userId: message.author.id,
+        });
+        return "Use code 'tzbetz' on Rainbet! 🎰 Sign up here: <https://rainbet.com/?r=tzbetz>";
+      }
+      
       // Check for Kick Points leaderboard (stream watchers)
       const kickPointsKeywords = ['kick points', 'stream watcher', 'watch', 'viewer', 'watching'];
       const isKickPointsQuestion = kickPointsKeywords.some(keyword => lowerContent.includes(keyword)) && 
@@ -368,25 +377,23 @@ export class AIManager {
         return "I don't have access to live Kick Points data. Check the current rankings here: <https://tzbetz.com/leaderboards/kick> 🏆";
       }
       
-      // Check for Rainbet leaderboard (wagerers)
-      const rainbetKeywords = ['leaderboard', 'top wagerer', 'who is top', 'wager', 'ranking', 'position', 'rank', 'who is first', 'who is 1st', 'who won', 'rainbet'];
-      const isRainbetQuestion = rainbetKeywords.some(keyword => lowerContent.includes(keyword));
+      // Check for Rainbet leaderboard (wagerers) - ONLY if asking about leaderboard/rankings
+      const isRainbetLeaderboardQuestion = lowerContent.includes('leaderboard') || 
+                                           lowerContent.includes('top wagerer') || 
+                                           lowerContent.includes('who is top') || 
+                                           lowerContent.includes('ranking') || 
+                                           lowerContent.includes('position') || 
+                                           lowerContent.includes('rank') || 
+                                           lowerContent.includes('who is first') || 
+                                           lowerContent.includes('who is 1st') || 
+                                           lowerContent.includes('who won');
       
-      if (isRainbetQuestion) {
+      if (isRainbetLeaderboardQuestion && lowerContent.includes('rainbet')) {
         logger.info('Rainbet leaderboard question detected - redirecting to website', {
           channelId,
           userId: message.author.id,
         });
         return "I don't have access to live leaderboard data. Check the current rankings here: <https://tzbetz.com/leaderboards/rainbet> 🏆";
-      }
-      
-      // Quick response for Rainbet code
-      if (lowerContent.includes('rainbet code') || lowerContent.includes('bonus code') || lowerContent.includes('affiliate code') || lowerContent.includes('rainbet signup')) {
-        logger.info('Rainbet code question detected', {
-          channelId,
-          userId: message.author.id,
-        });
-        return "Use code 'tzbetz' on Rainbet! 🎰 Sign up here: <https://rainbet.com/?r=tzbetz>";
       }
       
       // Quick response for VIP badge
