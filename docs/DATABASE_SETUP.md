@@ -71,7 +71,7 @@ npx neonctl branches create --name dev
 Make sure your `.env` file contains:
 
 ```env
-DATABASE_URL=postgresql://neondb_owner:npg_sjStPEF6Cr3L@ep-blue-hill-aenvo7td.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require
+DATABASE_URL=postgresql://your_db_user:your_db_password@your_db_host/your_db_name?sslmode=require
 DATABASE_MAX_CONNECTIONS=20
 ```
 
